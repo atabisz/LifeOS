@@ -1,5 +1,10 @@
 // Configuration for bug bounty tracker
 
+import { homedir } from 'os';
+import { join } from 'path';
+
+const BOUNTY_ROOT = join(homedir(), '.claude', 'skills', 'hacking', 'bug-bounties');
+
 export const CONFIG = {
   // GitHub repository
   repo: {
@@ -18,10 +23,10 @@ export const CONFIG = {
 
   // Local paths
   paths: {
-    root: '~/.claude/skills/hacking/bug-bounties',
-    state: '~/.claude/skills/hacking/bug-bounties/state.json',
-    cache: '~/.claude/skills/hacking/bug-bounties/cache',
-    logs: '~/.claude/skills/hacking/bug-bounties/logs',
+    root: BOUNTY_ROOT,
+    state: join(BOUNTY_ROOT, 'state.json'),
+    cache: join(BOUNTY_ROOT, 'cache'),
+    logs: join(BOUNTY_ROOT, 'logs'),
   },
 
   // GitHub API
