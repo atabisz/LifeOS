@@ -84,10 +84,16 @@ SCRIPT_DIR="$SCRIPT_DIR_BANNER"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
+# PAI_OS is the normalized platform the rest of this script branches on.
+# uname -s under Git Bash returns "MINGW64_NT-…" (also MSYS_NT / CYGWIN_NT),
+# so match the prefix rather than an exact string. Native Windows users who
+# don't have Git Bash should run install.ps1 instead — it bootstraps the same
+# TypeScript wizard (main.ts --mode cli) without any POSIX shell dependency.
 case "$OS" in
-  Darwin) info "Platform: macOS ($ARCH)" ;;
-  Linux)  info "Platform: Linux ($ARCH)" ;;
-  *)      error "Unsupported platform: $OS"; exit 1 ;;
+  Darwin)               PAI_OS="macos";   info "Platform: macOS ($ARCH)" ;;
+  Linux)                PAI_OS="linux";   info "Platform: Linux ($ARCH)" ;;
+  MINGW*|MSYS*|CYGWIN*) PAI_OS="windows"; info "Platform: Windows / Git Bash ($ARCH)" ;;
+  *)                    error "Unsupported platform: $OS"; exit 1 ;;
 esac
 
 # ─── Check curl ───────────────────────────────────────────
@@ -157,7 +163,10 @@ fi
 # default PATH so /usr/bin/env can find it without any shell config,
 # (2) add the export to .zshenv (which IS sourced for non-interactive zsh)
 # and .zprofile (login shells).
-if [ -x "$HOME/.bun/bin/bun" ]; then
+# Windows has no /usr/local/bin and hooks don't read .zshenv — bun reachability
+# there is handled by the Git-Bash PATH conversion (bash-env.sh, install seam 1),
+# not by symlinks or rc writes. Skip this whole Unix-only block on Windows.
+if [ "$PAI_OS" != "windows" ] && [ -x "$HOME/.bun/bin/bun" ]; then
   # System-wide symlink. Try writable target first; sudo only if needed.
   for target in /usr/local/bin /opt/homebrew/bin; do
     if [ -d "$target" ] && [ -w "$target" ] && [ ! -e "$target/bun" ]; then
@@ -270,7 +279,11 @@ INSTALL_EXIT=$?
 #    nothing happened (the bug Daniel hit on server.baylander.lan).
 if [ "$INSTALL_EXIT" -eq 0 ]; then
   echo ""
-  if [ -r /dev/tty ]; then
+  if [ "$PAI_OS" = "windows" ]; then
+    # No zsh on Windows. The wizard skips the Unix shell alias, so there's
+    # nothing to `source`; tell the user the direct launch command instead.
+    info "Install complete. To start pai, run:  ${BOLD}cd ~/.claude && claude${RESET}"
+  elif [ -r /dev/tty ]; then
     info "Launching pai..."
     exec zsh -i -c 'source ~/.zshrc && pai' < /dev/tty
   else

@@ -153,6 +153,10 @@ function summariseExistingUserContent(content: ExistingUserContentDetection): st
  * Fixes: https://github.com/danielmiessler/Personal_AI_Infrastructure/issues/954
  */
 function deduplicateBunShellEntries(): void {
+  // No zsh/bash login profile to dedupe on Windows — skip cleanly. A Windows
+  // PATH/alias mechanism is part of the bootstrap follow-on, not this layer.
+  if (process.platform === "win32") return;
+
   const home = homedir();
   const shell = process.env.SHELL || "/bin/zsh";
 
@@ -847,6 +851,13 @@ export async function runPrerequisites(
       } else {
         await emit({ event: "message", content: "Please install Git: xcode-select --install" });
       }
+    } else if (det.os.platform === "win32") {
+      // Do not attempt a Unix package-manager install on Windows. Point the
+      // user at Git for Windows / winget rather than running apt-get/yum.
+      await emit({
+        event: "message",
+        content: "Git was not found. Please install Git for Windows: run 'winget install --id Git.Git -e' or download from https://git-scm.com/download/win, then re-run the installer.",
+      });
     } else {
       // Linux
       const pkgMgr = tryExec("which apt-get") ? "apt-get" : tryExec("which yum") ? "yum" : null;
@@ -1519,25 +1530,35 @@ export async function runConfiguration(
     }
   }
 
-  // Set up shell alias (detect bash/zsh/fish)
-  await emit({ event: "progress", step: "configuration", percent: 80, detail: "Setting up shell alias..." });
-
-  const userShell = process.env.SHELL || "/bin/zsh";
-  const rcFile = userShell.includes("bash") ? ".bashrc" : userShell.includes("fish") ? ".config/fish/config.fish" : ".zshrc";
-  const rcPath = join(homedir(), rcFile);
-  const aliasLine = `alias pai='bun ${join(paiDir, "PAI", "TOOLS", "pai.ts")}'`;
-  const marker = "# PAI alias";
-
-  if (existsSync(rcPath)) {
-    let content = readFileSync(rcPath, "utf-8");
-    // Remove any existing pai alias (old CORE or PAI paths, any marker variant)
-    content = content.replace(/^#\s*(?:PAI|CORE)\s*alias.*\n.*alias pai=.*\n?/gm, "");
-    content = content.replace(/^alias pai=.*\n?/gm, "");
-    // Add fresh alias
-    content = content.trimEnd() + `\n\n${marker}\n${aliasLine}\n`;
-    writeFileSync(rcPath, content);
+  // Set up shell alias (detect bash/zsh/fish). There is no zsh/bash login
+  // profile on Windows, so skip cleanly — the Windows `pai` alias mechanism is
+  // part of the bootstrap follow-on, not this layer. Do not write a .zshrc on
+  // Windows.
+  if (process.platform === "win32") {
+    await emit({
+      event: "message",
+      content: "Skipping Unix shell alias on Windows. Run PAI with: bun " + join(paiDir, "PAI", "TOOLS", "pai.ts"),
+    });
   } else {
-    writeFileSync(rcPath, `${marker}\n${aliasLine}\n`);
+    await emit({ event: "progress", step: "configuration", percent: 80, detail: "Setting up shell alias..." });
+
+    const userShell = process.env.SHELL || "/bin/zsh";
+    const rcFile = userShell.includes("bash") ? ".bashrc" : userShell.includes("fish") ? ".config/fish/config.fish" : ".zshrc";
+    const rcPath = join(homedir(), rcFile);
+    const aliasLine = `alias pai='bun ${join(paiDir, "PAI", "TOOLS", "pai.ts")}'`;
+    const marker = "# PAI alias";
+
+    if (existsSync(rcPath)) {
+      let content = readFileSync(rcPath, "utf-8");
+      // Remove any existing pai alias (old CORE or PAI paths, any marker variant)
+      content = content.replace(/^#\s*(?:PAI|CORE)\s*alias.*\n.*alias pai=.*\n?/gm, "");
+      content = content.replace(/^alias pai=.*\n?/gm, "");
+      // Add fresh alias
+      content = content.trimEnd() + `\n\n${marker}\n${aliasLine}\n`;
+      writeFileSync(rcPath, content);
+    } else {
+      writeFileSync(rcPath, `${marker}\n${aliasLine}\n`);
+    }
   }
 
   // Fix permissions
@@ -1579,6 +1600,46 @@ async function isPulseRunning(): Promise<boolean> {
 async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<boolean> {
   const pulseDir = join(paiDir, "PAI", "PULSE");
   const manageScript = join(pulseDir, "manage.sh");
+
+  // launchd/manage.sh is macOS-specific. On Windows, Pulse autostarts via a
+  // per-user Startup-folder launcher instead, installed by the PowerShell
+  // counterpart install-pulse-autostart.ps1. That script registers the Startup
+  // entry, starts Pulse, and health-checks :31337 — it exits 0 only when Pulse
+  // is actually bound, so we trust its exit code exactly like `manage.sh install`.
+  if (process.platform === "win32") {
+    const autostartScript = join(pulseDir, "install-pulse-autostart.ps1");
+    if (!existsSync(autostartScript)) {
+      await emit({ event: "message", content: "Pulse Windows autostart installer not found. Voice notifications will be unavailable." });
+      return false;
+    }
+
+    await emit({ event: "progress", step: "voice", percent: 20, detail: "Installing Pulse autostart (voice + dashboard + observability)..." });
+
+    const installOk = await new Promise<boolean>((resolve) => {
+      const child = spawn(
+        "powershell.exe",
+        ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", autostartScript],
+        { cwd: pulseDir, stdio: ["ignore", "pipe", "pipe"] }
+      );
+      // 30s ceiling covers the script's own 10s :31337 health-check plus startup.
+      const timer = setTimeout(() => { child.kill(); resolve(false); }, 30000);
+      child.on("close", (code) => { clearTimeout(timer); resolve(code === 0); });
+      child.on("error", () => { clearTimeout(timer); resolve(false); });
+    });
+
+    if (installOk) {
+      await emit({ event: "message", content: "Pulse installed and running on port 31337, auto-starting at login (voice + dashboard + observability)." });
+      return true;
+    }
+    await emit({
+      event: "message",
+      content:
+        "Pulse autostart install did not confirm :31337 within 30s. Start it manually with: " +
+        "powershell -ExecutionPolicy Bypass -File " + autostartScript +
+        " — see " + join(pulseDir, "pulse-server.log.err") + " for details.",
+    });
+    return false;
+  }
 
   if (!existsSync(manageScript)) {
     await emit({ event: "message", content: "Pulse not found in installation. Voice notifications will be unavailable." });

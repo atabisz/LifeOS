@@ -246,22 +246,34 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
     critical: false,
   });
 
-  // 8. Zsh alias configured
-  const zshrcPath = join(homedir(), ".zshrc");
-  let aliasConfigured = false;
-  if (existsSync(zshrcPath)) {
-    try {
-      const zshContent = readFileSync(zshrcPath, "utf-8");
-      aliasConfigured = zshContent.includes("# PAI alias") && zshContent.includes("alias pai=");
-    } catch {}
-  }
+  // 8. Zsh alias configured. There is no .zshrc on Windows, so reporting it as
+  // a failed critical check would be misleading — mark it not-applicable and
+  // non-critical there. The Windows alias mechanism is a bootstrap follow-on.
+  const platform = state.detection?.os.platform ?? process.platform;
+  if (platform === "win32") {
+    checks.push({
+      name: "Shell alias (pai)",
+      passed: true,
+      detail: "Not applicable on Windows (no .zshrc) — alias handled by the Windows bootstrap",
+      critical: false,
+    });
+  } else {
+    const zshrcPath = join(homedir(), ".zshrc");
+    let aliasConfigured = false;
+    if (existsSync(zshrcPath)) {
+      try {
+        const zshContent = readFileSync(zshrcPath, "utf-8");
+        aliasConfigured = zshContent.includes("# PAI alias") && zshContent.includes("alias pai=");
+      } catch {}
+    }
 
-  checks.push({
-    name: "Shell alias (pai)",
-    passed: aliasConfigured,
-    detail: aliasConfigured ? "Configured in .zshrc" : "Not found — run: source ~/.zshrc",
-    critical: true,
-  });
+    checks.push({
+      name: "Shell alias (pai)",
+      passed: aliasConfigured,
+      detail: aliasConfigured ? "Configured in .zshrc" : "Not found — run: source ~/.zshrc",
+      critical: true,
+    });
+  }
 
   // 9. SecurityPipeline smoke test — runs the actual hook with a benign Bash
   // payload. Catches the v5.0 fail-closed regression where PATTERNS.yaml was
