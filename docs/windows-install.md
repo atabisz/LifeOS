@@ -52,9 +52,9 @@ It is idempotent by construction: after conversion there is no `;` or `\` left, 
 On Unix the hooks rely on the `#!/usr/bin/env bun` shebang. Windows does not honor shebangs, so the hook commands in `settings.json` name the interpreter explicitly and pass the script as an argument:
 
 - TypeScript hooks run through Bun by absolute path - `"$HOME/.bun/bin/bun.exe" "$HOME/.claude/hooks/SessionMeta.hook.ts"` (settings.json line 159; the same pattern repeats for every `.hook.ts`).
-- JavaScript hooks run through Node by absolute path - `"C:/Program Files/nodejs/node.exe" "$HOME/.claude/hooks/gsd-check-update.js"` (settings.json line 151).
+- JavaScript hooks run through Node, invoked by bare name - `node "$HOME/.claude/hooks/gsd-check-update.js"` (settings.json line 151). This originally named Node by absolute path (`C:/Program Files/nodejs/node.exe`); it was de-hardcoded on 2026-06-30 (see Technical debt).
 
-`$HOME` is expanded at hook-execution time, so the Bun path stays portable across users. The Node path is hardcoded to the default Program Files location (see Technical debt).
+`$HOME` is expanded at hook-execution time, so the Bun path stays portable across users. The bare `node` invocation depends on `node` resolving on the converted `PATH` from seam 1 - which it does, because Git Bash's `cygpath` conversion places `C:\Program Files\nodejs` on the POSIX `PATH` (verified: `which node` returns `/c/Program Files/nodejs/node`).
 
 A related pattern shows up wherever code shells out to a sibling tool: on Windows a bare name like `codex` or `fallow` will not resolve, because Node's executable check does not apply `PATHEXT`. So the cross-platform helpers try a candidate list. `ForgeProgress.ts` builds `[".exe", ".cmd", ".bat", ""]` candidates when `process.platform === "win32"`, and the get-shit-done `fallow-runner.cjs` does the same. The npm-invoking workers (`gsd-check-update-worker.js`, `shell-command-projection.cjs`) set `shell: process.platform === 'win32'` so `child_process` routes through `cmd.exe` and resolves `npm.cmd` via `PATHEXT`.
 
@@ -99,7 +99,12 @@ Both helpers, [play-mp3.ps1](file:///C:/Users/AlexTabisz/.claude/PAI/PULSE/Voice
 
 ## Seam 7: the batch entry points
 
-For interactive use there are batch launchers at the install root. [~/.claude/start-pai.bat](file:///C:/Users/AlexTabisz/.claude/start-pai.bat) loads `.env`, health-checks the voice server on its port, starts it minimized if it is down (`start "PAI Voice Server" /MIN "%USERPROFILE%\.bun\bin\bun.exe" run ...VoiceServer\server.ts`), then `cd /d %USERPROFILE%\.claude` and `call claude`. `stop-pai.bat` stops the server. These are the convenience front door; the Startup-folder VBS (seam 4) is what keeps Pulse alive across logins independent of any terminal.
+For interactive use there are batch launchers at the install root. [~/.claude/start-pai.bat](file:///C:/Users/AlexTabisz/.claude/start-pai.bat) loads `.env`, health-checks Pulse on its port, starts it hidden if it is down, then `cd /d %USERPROFILE%\.claude` and `call claude`. `stop-pai.bat` stops Pulse. These are the convenience front door; the Startup-folder VBS (seam 4) is what keeps Pulse alive across logins independent of any terminal.
+
+These two launchers were realigned to Pulse on 2026-06-30. Before that they targeted the retired standalone voice server on port 8888 - now superseded by Pulse on 31337 (seams 4-5) - which made them dead weight at best and dangerous at worst:
+
+- `start-pai.bat` health-checked `http://localhost:8888/health` and, if down, started `VoiceServer\server.ts` minimized; it also sourced `%USERPROFILE%\.config\PAI\.env`, a path that does not exist on this machine (the real env file is `~/.claude/.env`). Both were silent no-ops. It now health-checks `http://localhost:31337/api/pulse/health`, starts Pulse via the canonical hidden launcher [start-pulse-hidden.ps1](file:///C:/Users/AlexTabisz/.claude/PAI/PULSE/start-pulse-hidden.ps1) if down, and loads `~/.claude/.env`.
+- `stop-pai.bat` ran `taskkill /F /IM bun.exe /T`. Because Pulse *is* a `bun.exe` process, that command killed the live Pulse daemon and every other Bun process on the box - not a "voice server" that no longer exists. It now resolves the PID bound to `:31337` (`netstat -ano | findstr :31337`) and issues a port-scoped `taskkill /F /PID <pid>`, matching the cleaner PowerShell `stop-voice.ps1` pattern.
 
 ## How to verify it is working
 
@@ -119,17 +124,19 @@ Both return success against the running install.
 
 ## Technical debt and known issues
 
-Documented honestly so a future re-install or an upstream PR knows where the rough edges are:
+Documented honestly so a future re-install or an upstream PR knows where the rough edges are. A 2026-06-30 cleanup pass resolved four of these on the live machine; the resolved items are kept here (struck through) for history rather than deleted.
 
-- **Hardcoded Node path.** `settings.json` names `C:/Program Files/nodejs/node.exe` directly. It breaks if Node lives elsewhere; a `PATH`/env lookup would be more portable.
-- **Dual launcher ecosystem.** Pulse has both a VBS and a PowerShell launcher doing the same job. This is deliberate (the Intune machine's WSH reliability is uncertain), but it is two things to maintain.
-- **Coarse stop.** `stop-pai.bat` uses `taskkill /F /IM bun.exe`, which kills every Bun process, not just the voice server. The PowerShell stop scripts are port-scoped and cleaner.
-- **Installer has no win32 case.** `PAI/PAI-Install/engine/detect.ts` defaults unknown platforms to `"linux"` rather than detecting `win32` - fine here because the install was placed by hand, but it means the upstream installer still cannot do this natively.
+- **~~Hardcoded Node path.~~** ~~`settings.json` names `C:/Program Files/nodejs/node.exe` directly. It breaks if Node lives elsewhere; a `PATH`/env lookup would be more portable.~~ **Resolved 2026-06-30** - all six `gsd-*.js` hook commands now invoke `node` by bare name, resolved through the seam-1 `PATH` (see Seam 2). The six `.ts` hooks that run through `$HOME/.bun/bin/bun.exe` were already portable and were left unchanged.
+- **Dual launcher ecosystem.** Pulse has both a VBS and a PowerShell launcher doing the same job. This is deliberate (the Intune machine's WSH reliability is uncertain), but it is two things to maintain. *(Kept by design - not changed.)*
+- **~~Coarse stop.~~** ~~`stop-pai.bat` uses `taskkill /F /IM bun.exe`, which kills every Bun process, not just the voice server.~~ **Resolved 2026-06-30** - this was more than coarse: with Pulse running as `bun.exe`, the command killed the live Pulse daemon and every Bun process. `stop-pai.bat` is now port-scoped to `:31337` (see Seam 7).
+- **Installer has no win32 case.** `PAI/PAI-Install/engine/detect.ts` defaults unknown platforms to `"linux"` rather than detecting `win32` - fine here because the install was placed by hand, but it means the upstream installer still cannot do this natively. *(Upstream-facing - left for a PR, not patched on the live machine.)*
 
-Two stale documents to ignore or fix:
+Two formerly-stale documents, both addressed on 2026-06-30:
 
-- **The "31337 returns 404" note is out of date.** `VoiceServer/AUTOSTART-README.md` warns that `:31337/notify` is served by the dashboard and 404s. As of this report, `POST http://localhost:31337/notify` returns `{"status":"success","message":"Notification sent"}` - Pulse now owns that route and voice works on 31337. The standalone voice server on 8888 described in that file is a separate, older path.
-- **README-WINDOWS.md is a v4.0.3 relic.** The `~/.claude/README-WINDOWS.md` quick-start says "PAI Version 4.0.3, Algorithm v3.7.0, Voice Port 8888." The live system is PAI 5.0.0 / Algorithm v6.4.9 with voice on 31337. Treat it as historical.
+- **~~The "31337 returns 404" note is out of date.~~** `VoiceServer/AUTOSTART-README.md` warned that `:31337/notify` was served by the dashboard and 404'd. `POST http://localhost:31337/notify` returns `{"status":"success","message":"Notification sent"}` - Pulse owns that route and voice works on 31337. **Corrected 2026-06-30**: that note was rewritten to describe the working 31337 path; the rest of the file (which documents the still-present 8888 launcher scripts) was left intact.
+- **~~README-WINDOWS.md is a v4.0.3 relic.~~** The `~/.claude/README-WINDOWS.md` quick-start said "PAI Version 4.0.3, Algorithm v3.7.0, Voice Port 8888," contradicting the live PAI 5.0.0 / Algorithm v6.4.9 / voice-on-31337 system on every fact. **Deleted 2026-06-30** (it had zero references anywhere in the tree; this `docs/windows-install.md` is the authoritative account).
+
+> **Note on scope.** The edits above were made in the live `~/.claude` tree (git-tracked to `atabisz/claude-config`) and were left uncommitted pending review at the time of writing. This document is the repo-side record of what changed.
 
 ## The core insight
 
