@@ -121,6 +121,13 @@ async function main() {
     console.error(`input not found: ${args.input}`);
     process.exit(2);
   }
+  // Preflight: ImageMagick's `magick` must be on PATH. Bun.which resolves
+  // PATH+PATHEXT on every OS. Warn visibly rather than let the raw spawn error
+  // surface — a missing binary should read as "install ImageMagick", not a crash.
+  if (Bun.which("magick") === null) {
+    console.error(`magick not found on PATH. Install ImageMagick: https://imagemagick.org (macOS: brew install imagemagick · Windows: winget install ImageMagick)`);
+    process.exit(2);
+  }
   const full = await getDimensions(args.input);
   const bgColor = args.bgColor === "auto" ? await detectBgColor(args.input) : args.bgColor;
   console.log(`📐 input: ${full.w}x${full.h}  bg-color: ${bgColor}  fuzz: ${args.fuzz}%`);
