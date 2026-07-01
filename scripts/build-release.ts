@@ -461,7 +461,9 @@ function collectPruneTargets(destRoot: string, sourceRelPaths: Set<string>, only
 }
 
 function runSelfTest(): number {
-  const seeded = Buffer.from("C:\\Users\\AlexTabisz\\secret", "utf8");
+  // Generic fixture (no real username baked into this public tool): a user-home path with a
+  // non-placeholder segment must hard-fail, and the current runtime username must hit.
+  const seeded = Buffer.from("C:\\Users\\notarealperson\\secret", "utf8");
   const runtime = Buffer.from(`user=${USERNAME}`, "utf8");
   const seededHit = scanBytes("self-test.txt", seeded).hit;
   const runtimeHit = scanBytes("runtime-user.txt", runtime).hit;

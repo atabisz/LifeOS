@@ -72,11 +72,17 @@ Why these four together: items 1-3 are the minimum that makes the system run; it
 
 This is the one real strategic decision left, and it is the council's only point of dissent (see below).
 
-1. **Generate the release from the canonical tree.** A documented build step (e.g. `scripts/build-release.ts`) with a single entry point and no hand-copying. The live-vs-release drift the audit calls out — fixes the field report declares done but that never reach the snapshot — is a *structural* guarantee of a hand-maintained snapshot, not a discipline failure. A build step is the only durable fix.
-2. **Collapse the duplicate Packs.** Fold `Packs/Utilities/` and `Packs/Media/` duplicate copies back to a single source in the same pipeline pass. Same un-DRY-source bug class.
-3. **Add a `windows-latest` CI job** running the Step 2 smoke test, once it's proven manually.
+> **Step 4.1 SHIPPED 2026-07-01** (committed `55d6644` on `docs/windows-install`). `scripts/build-release.ts` exists: an allowlist-driven, dry-run-by-default, leak-scanned generator that regenerates the release snapshot from the canonical live `~/.claude` tree. The drift fix the skeptics wanted in initial scope is now real, not deferred. First artifact proven *through* it: the Step 3.3 `voice.ts` back-port (see above). ISA: `~/.claude/PAI/MEMORY/WORK/windows-step4-build-release/ISA.md` (40/40 ISCs).
+>
+> **The generator is a PII boundary, not a copy tool** — the load-bearing design lesson. Release `USER/` + `MEMORY/` are sanitized public templates that deliberately differ from the live personal data, so a naive live→release copy would leak real identity/TELOS/health into the public repo. The script is allowlist-only for code/system zones, hard-denylists personal zones, and runs a **fail-closed** leak scanner (username, `sk-`/PEM/named secrets, user-home paths incl. UNC; binary/NUL and UTF-16 files scanned not skipped; realpath containment refuses symlinks *and* Windows junctions). Hardened through **two rounds of cross-vendor (GPT-5.4) audit** — 3 critical + several high findings closed, re-proven by a 16/16 adversarial battery.
+>
+> **Full-tree regen is intentionally blocked** until Step 3 sanitizes 3 real-PII files the scanner correctly refuses: `PAI/PULSE/lib.ts`, `PAI/PULSE/start-pulse-hidden.vbs` (hardcoded username), and a misfiled memory file under a literal `${HOME}/` dir in `PULSE/Observability`. The scanner refusing them is the feature working, not a failure. `--only <subpath> --apply` works today (that's how the voice slice shipped).
 
-Gate the public **"Windows supported"** label on Step 4 — not on the first productive install.
+1. **Generate the release from the canonical tree.** ✅ **DONE — `scripts/build-release.ts`** (see box above). A single documented entry point, no hand-copying. The live-vs-release drift the audit calls out — fixes the field report declares done but that never reach the snapshot — is a *structural* guarantee of a hand-maintained snapshot, not a discipline failure. A build step is the only durable fix, and it now exists.
+2. **Collapse the duplicate Packs.** Fold `Packs/Utilities/` and `Packs/Media/` duplicate copies back to a single source in the same pipeline pass. Same un-DRY-source bug class. *(Still open.)*
+3. **Add a `windows-latest` CI job** running the Step 2 smoke test, once it's proven manually. *(Still open.)*
+
+Gate the public **"Windows supported"** label on Step 4 — not on the first productive install. **4.1 (the generator) is done; 4.2 (Packs collapse) and 4.3 (CI) remain, plus the Step 3 PII sanitization that unblocks full-tree regen.**
 
 ## The one decision Alex owns
 
@@ -86,6 +92,8 @@ All four council members agree the drift is real and the build-from-canonical-tr
 - **Vance / Quill (skeptics):** A hand-maintained snapshot gets *worse* with time, not better. The build step belongs in initial scope, and the risk of "fast-follow" is that "release verification pending" quietly becomes permanent.
 
 The resolution both sides accept: don't gate the *first install* on Step 4, but **commit a date and an owner** for it, and don't apply the "supported" label until it ships. The lint rule (Step 1) running across the whole tree is what makes that deferral safe rather than negligent.
+
+> **Resolved 2026-07-01 in the skeptics' favour — the build step landed in scope, not as deferred fast-follow.** `scripts/build-release.ts` shipped (Step 4.1 box above), so the "fast-follow becomes permanent" risk Vance/Quill flagged never materialized. What remains of Step 4 (Packs collapse, CI job) is genuinely lower-risk than the generator itself. The "Windows supported" label still waits on 4.2/4.3 + the Step 3 PII sanitization.
 
 ## Sequencing rationale
 
