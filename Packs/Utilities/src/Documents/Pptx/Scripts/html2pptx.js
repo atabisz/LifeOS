@@ -28,6 +28,7 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const sharp = require('sharp');
+const os = require('os');
 
 const PT_PER_PX = 0.75;
 const PX_PER_IN = 96;
@@ -895,7 +896,7 @@ async function extractSlideData(page) {
 
 async function html2pptx(htmlFile, pres, options = {}) {
   const {
-    tmpDir = process.env.TMPDIR || '/tmp',
+    tmpDir = process.env.TMPDIR || os.tmpdir(),
     slide = null
   } = options;
 

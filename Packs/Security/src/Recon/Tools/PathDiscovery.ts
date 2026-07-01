@@ -14,6 +14,7 @@
  */
 
 import { $ } from "bun";
+import { homedir } from "os";
 
 interface PathDiscoveryOptions {
   wordlist?: string;
@@ -60,7 +61,7 @@ const DEFAULT_WORDLISTS = [
   "/opt/homebrew/share/seclists/Discovery/Web-Content/raft-medium-directories.txt",
   "/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt",
   "/opt/seclists/Discovery/Web-Content/raft-medium-directories.txt",
-  `${process.env.HOME}/wordlists/raft-medium-directories.txt`,
+  `${process.env.HOME ?? process.env.USERPROFILE ?? homedir()}/wordlists/raft-medium-directories.txt`,
 ];
 
 async function findWordlist(customPath?: string): Promise<string | null> {
