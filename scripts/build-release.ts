@@ -369,7 +369,18 @@ function findRealUserPath(text: string): string | null {
   for (const [label, re] of matchers) {
     for (const m of text.matchAll(re)) {
       const seg = m[1];
-      if (/^[<${%]/.test(seg)) continue; // <name>, ${USER}, %USERNAME%
+      // A real home-dir username segment begins with a filesystem-legal name char: a letter
+      // or digit of ANY script (Unicode `\p{L}`/`\p{N}` — so `/home/Иван`, `C:\Users\Ómar`,
+      // `/Users/张伟` for real non-Latin-named people are still caught), or `.`/`_`/`-`.
+      // Anything starting with other punctuation is a template (<name>, ${USER}, %USERNAME%),
+      // a REST route param (:id, *slug — e.g. a Bun `/api/users/:id` example), or JSON/code
+      // punctuation — never a valid leaking home path. This first-char allowlist kills the
+      // `/api/users/:id` false-positive class without narrowing detection of any real user path.
+      // (Forge cross-family audit 2026-07-01: a `/^[<${%:*]/` blocklist checked only seg[0] so a
+      // punctuation-cloaked name could slip; an ASCII-only `[A-Za-z0-9._-]` allowlist then dropped
+      // non-ASCII usernames — a false-negative for the third-party names this gate protects. The
+      // Unicode-property allowlist is the form that is neither too loose nor too tight.)
+      if (!/^[\p{L}\p{N}._-]/u.test(seg)) continue;
       const lower = seg.toLowerCase();
       if (PLACEHOLDER_SEGMENTS.has(lower)) continue;
       if (REVIEWED_EXAMPLE_NAMES.has(lower)) continue; // vetted public teaching examples
