@@ -22,7 +22,7 @@ The remaining ~70 files share three mechanical patterns (HOME with no fallback, 
 
 Everything a Windows user needs to get productive lands in this step. The rest is invisible until it does.
 
-> **Shipped 2026-07-01** (uncommitted, scoped to `Releases/v5.0.0/.claude/` + repo-root `Tools/`). All four sub-tasks landed; 38/38 ISCs verified. ISA: `~/.claude/PAI/MEMORY/WORK/windows-step1-unlock/ISA.md`.
+> **Shipped 2026-07-01** (committed `0f47a22` on `docs/windows-install`, scoped to `Releases/v5.0.0/.claude/` + repo-root `Tools/`). All four sub-tasks landed; 38/38 ISCs verified. ISA: `~/.claude/PAI/MEMORY/WORK/windows-step1-unlock/ISA.md`.
 >
 > **Key divergence from the original plan:** sub-task 1 is **not** a verbatim back-port of the live tree's `"$HOME/.bun/bin/bun.exe"` prefix. Alex confirmed the release must stay installable on **macOS, Linux, and Windows** (not personal-only), and that absolute `.exe` path would kill every hook on Unix. Instead the **installer rewrites hook interpreter prefixes per-OS** at config-generation time — an extension-driven (`.ts`/`.js`→bun, `.sh`→bash), allowlist-gated (from the pristine *bundle* template, so a user's custom hooks are never touched on re-install), Windows-add-only + Unix-byte-identical-no-op, idempotent normalization. See `PAI/PAI-Install/engine/actions.ts` (`normalizeHookCommand` / `normalizePaiHookCommands` / `collectTemplateHookAllowlist`), fixture `actions.normalize.test.ts` (23 tests green).
 >
@@ -37,7 +37,7 @@ Why these four together: items 1-3 are the minimum that makes the system run; it
 
 ### Step 2 — Verify on real Windows ✅ DONE (2026-07-01)
 
-> **Shipped 2026-07-01** (uncommitted). Tool: `Tools/smoke-hook-launch.ts`. Fix: `Releases/v5.0.0/.claude/PAI/PAI-Install/engine/validate.ts` (`checkSecurityHookSmoke` + caller). ISA: `~/.claude/PAI/MEMORY/WORK/windows-step2-smoke/ISA.md` (22/22 ISCs). Forge cross-family audit ran; 5 false-green/false-red findings fixed + regression-tested.
+> **Shipped 2026-07-01** (committed `e519d47` on `docs/windows-install`). Tool: `Tools/smoke-hook-launch.ts`. Fix: `Releases/v5.0.0/.claude/PAI/PAI-Install/engine/validate.ts` (`checkSecurityHookSmoke` + caller). ISA: `~/.claude/PAI/MEMORY/WORK/windows-step2-smoke/ISA.md` (22/22 ISCs). Forge cross-family audit ran; 5 false-green/false-red findings fixed + regression-tested.
 >
 > **Live Windows result:** `41 FIRED, 2 RAN, 0 LAUNCH-FAIL, 0 SKIPPED (+0 http)` against `C:\Users\AlexTabisz\.claude\settings.json` (43 command hooks across 8 events). SecurityPipeline (×3), LoadContext, KVSync, SessionMeta all FIRED. The 2 RAN are the async `claude`-subprocess hooks (`PromptProcessing`, `SatisfactionCapture`) — they *launched* fine; nonzero-on-synthetic-stdin is correct RAN (launch parity holds, behavior is out of scope). Exit 0. Broken-fixture and `--self-test` both go RED (exit 1), proving the tool can fail.
 >
@@ -52,12 +52,21 @@ Why these four together: items 1-3 are the minimum that makes the system run; it
 
 ### Step 3 — Skills sweep and graceful degradation
 
+> **Down-payment landed 2026-07-01 — the extensionless-binary-path bug class.** A distinct Windows binary-resolution bug class was found and fixed ahead of the full Step 3 sweep: a tool hardcodes an **extensionless** binary path (`~/.bun/bin/<tool>`, `~/.local/bin/<tool>`), then `existsSync`/`spawn`s it. On Windows the real file is `<tool>.exe` (or a `.cmd`/`.bat` shim), so the check false-negatives ("not installed") and the spawn fails — `existsSync`/`CreateProcess` do **not** append PATHEXT for an explicit path, only shell PATH resolution does. This is NOT the `which`/`command -v` gate sub-class below; it is the hardcoded-path sibling.
+>
+> **Codebase sweep result** (whole `~/.claude` tree, pattern-scoped on spawn/resolve call sites, not string-scoped): the class existed in exactly two commands.
+> - **codex** — `PAI/TOOLS/CrossVendorAudit.ts` (`resolveCodexBin`) + `PAI/TOOLS/ForgeProgress.ts` (`preflightCodex`). Fixed earlier (live tree); the canonical fix pattern.
+> - **rembg** — fixed this pass. Repo copy `Packs/Art/src/Tools/Generate.ts` committed + pushed (signed `0243a62`, `docs/windows-install`). Live copies `~/.claude/skills/Art/Tools/Generate.ts` + `~/.claude/PAI/TOOLS/RemoveBg.ts` fixed (uncommitted). `Packs/Media/Art/Tools/Generate.ts` looked like a third site but uses the remove.bg **HTTP API** (no binary) — no bug.
+>
+> **Fix shape** (mirrors `resolveCodexBin`): on `win32`, probe `[.exe, .cmd, .bat, bare]` and take the first that exists (fallback `.exe` so the not-found message names the Windows file); preserve the `REMBG_BIN`/env override; leave mac/linux on the bare path unchanged; a resolved `.cmd`/`.bat` needs `shell:true` to spawn. **Classified safe, deliberately not touched:** `Bun.which(...)` sites (Bun.which emulates shell PATH+PATHEXT), and bare-name PATH spawns of true `.exe` targets (`bun`/`git`/`ffmpeg`/`trufflehog`/`claude` — CreateProcess appends `.exe`, but *only* `.exe`, never `.cmd`/`.bat`; a bare-name spawn of a Node-CLI `.cmd` shim would be a sibling — none exist in this tree today). ISA: `~/.claude/PAI/MEMORY/WORK/windows-exe-path-audit/ISA.md`.
+
 1. **Finish the HOME sweep** across the remaining files the lint rule now flags.
 2. **Per-tool binary decisions:**
    - `Prompting/Tools/RenderTemplate.ts` — `Bun.spawnSync(['ls', dir])` → `fs.readdirSync`. Trivial, do first.
-   - `which` / `command -v` gates → `where` or a PATH probe (`Webdesign/Tools/*`, `AudioEditor/Tools/Transcribe.ts`, `hooks/lib/tab-setter.ts`).
+   - **Extensionless-path binaries (hardcoded `~/.bun/bin` / `~/.local/bin`) → per-OS candidate probe.** ✅ **rembg DONE** (see down-payment note above). The general rule: any hardcoded extensionless binary path needs the `resolveCodexBin` `.exe/.cmd/.bat/bare` probe on win32, not a bare `existsSync`.
+   - `which` / `command -v` gates → `where` or a PATH probe (`Webdesign/Tools/*`, `AudioEditor/Tools/Transcribe.ts`, `hooks/lib/tab-setter.ts`). *(Distinct sub-class from the extensionless-path one above — still open.)*
    - Heavy external binaries (whisper, ffmpeg, magick, interceptor, GNU `timeout`) → **graceful-degrade with a visible console warning**. Never silent. A silent audio or transcription failure makes the system look broken with no explanation; a one-line warning tells the user exactly what's missing.
-3. **Back-port `voice.ts`.** Bring the live tree's Piper TTS + `play-mp3.ps1`/`play-wav.ps1` + Windows notification branch into the release. **Verified live 2026-06-30:** the live `voice.ts` already has a real `win32` branch (`powershell.exe -File play-mp3.ps1`/`play-wav.ps1`), the Piper provider, `tmpdir()` instead of `/tmp`, and an `osascript` notification that early-returns off-darwin — suitable as-is, so this is a clean back-port. ElevenLabs TTS is already portable `fetch`; only local playback and the `osascript` notification were broken in the release.
+3. **Back-port `voice.ts`.** ✅ **DONE 2026-07-01 — and done *through* the new build script (Step 4.1), not by hand.** `bun scripts/build-release.ts --only PAI/PULSE/VoiceServer --apply` copied the live `voice.ts` + `play-mp3.ps1` + `play-wav.ps1` verbatim into `Releases/v5.0.0/.claude/`. Verified in the release copy: `win32` branch present, both `.ps1` referenced, 26 Piper markers, `tmpdir()` (0 bare `/tmp/voice-` literals), both helpers on disk, all three byte-identical to source. This was the deliberate first proof of the generator. **Verified live 2026-06-30:** the live `voice.ts` already had the real `win32` branch, Piper provider, and `tmpdir()`; ElevenLabs TTS is already portable `fetch`, so only local playback + the `osascript` notification were broken in the release.
 
 ### Step 4 — Structural drift fix (fast-follow: scheduled, owned, dated)
 
