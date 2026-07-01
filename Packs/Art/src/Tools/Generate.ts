@@ -561,9 +561,19 @@ async function addBackgroundColor(inputPath: string, outputPath: string, hexColo
 async function removeBackground(imagePath: string): Promise<string> {
   const home = process.env.HOME;
   if (!home) throw new CLIError("HOME not set; cannot resolve rembg binary");
-  const rembgBin = process.env.REMBG_BIN || resolve(home, ".local/bin/rembg");
-
   const { existsSync } = await import("node:fs");
+  const rembgBin: string = (() => {
+    if (process.env.REMBG_BIN) return process.env.REMBG_BIN;
+    const base = resolve(home, ".local/bin/rembg");
+    if (process.platform === "win32") {
+      const candidates: string[] = [`${base}.exe`, `${base}.cmd`, `${base}.bat`, base];
+      for (const candidate of candidates) {
+        if (existsSync(candidate)) return candidate;
+      }
+      return `${base}.exe`;
+    }
+    return base;
+  })();
   if (!existsSync(rembgBin)) {
     throw new CLIError(
       `rembg not found at ${rembgBin}. Install: pipx install rembg (or set REMBG_BIN env var to override path).`
@@ -583,7 +593,12 @@ async function removeBackground(imagePath: string): Promise<string> {
 
   const { spawn } = await import("node:child_process");
   await new Promise<void>((resolveFn, rejectFn) => {
-    const proc = spawn(rembgBin, ["i", imagePath, tempPath], { stdio: ["ignore", "ignore", "pipe"] });
+    const useShell = /\.(cmd|bat)$/i.test(rembgBin);
+    const spawnTarget = useShell ? `"${rembgBin}"` : rembgBin;
+    const proc = spawn(spawnTarget, ["i", imagePath, tempPath], {
+      stdio: ["ignore", "ignore", "pipe"],
+      shell: useShell,
+    });
     let stderr = "";
     proc.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
     proc.on("error", (err) => rejectFn(new CLIError(`Failed to launch rembg: ${err.message}`)));
