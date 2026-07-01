@@ -48,8 +48,13 @@ export interface DaemonState {
 }
 
 // ── Env Var Resolution ──
-
-function resolveEnvVars(value: string): string {
+//
+// Resolves ${VAR} / $VAR against process.env. Single source — used for job
+// commands AND module config path fields (voice piper paths, observability
+// dashboard_dir) so a shared PULSE.toml stays machine-portable. Keeping one
+// resolver avoids divergent copies (a path that expands in one place but not
+// another is the class of bug that hardcoded a real username into a shared config).
+export function resolveEnvVars(value: string): string {
   return value.replace(/\$\{?([A-Z_][A-Z0-9_]*)\}?/g, (_, name) => process.env[name] ?? "")
 }
 
@@ -253,7 +258,7 @@ export async function spawnScript(command: string, timeoutMs = 60_000): Promise<
   const proc = Bun.spawn(["bash", "-c", command], {
     stdout: "pipe",
     stderr: "pipe",
-    cwd: join(HOME, ".claude", "PAI", "PULSE"),
+    cwd: join(HOME, ".claude", "PAI", "Pulse"),
     env: { ...process.env },
   })
 

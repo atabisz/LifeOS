@@ -56,7 +56,8 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
 function main(): void {
   let input: HookInput;
   try {
-    input = JSON.parse(readFileSync("/dev/stdin", "utf-8"));
+    // fd 0, not "/dev/stdin" — the latter throws ENOENT on Windows. See SmartApprover.hook.ts.
+    input = JSON.parse(readFileSync(0, "utf-8"));
   } catch {
     // No stdin or invalid JSON — skip silently
     process.exit(0);

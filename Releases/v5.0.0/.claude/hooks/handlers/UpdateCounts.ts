@@ -1,23 +1,30 @@
 /**
- * UpdateCounts.ts - Update settings.json with fresh system counts
+ * UpdateCounts.ts - Update the counts cache with fresh system counts
  *
  * PURPOSE:
- * Updates the counts section of settings.json at the end of each session.
- * Banner and statusline then read from settings.json (instant, no execution).
+ * Updates PAI/MEMORY/STATE/counts-cache.json at the end of each session.
+ * Banner and statusline then read from that cache (instant, no execution).
  *
  * ARCHITECTURE:
- * SessionEnd hook → UpdateCounts → settings.json
- * Session start → Banner reads settings.json (instant)
- * Session start → Statusline reads settings.json (instant)
+ * SessionEnd hook → UpdateCounts → MEMORY/STATE/counts-cache.json
+ * Session start → Banner reads the cache (instant)
+ * Session start → Statusline reads the cache (instant)
  *
  * This design ensures:
  * - No spawning/execution at session start
  * - Counts are always available (no waiting)
- * - Single source of truth in settings.json
+ * - Single source of truth in counts-cache.json
+ *
+ * WHY A SEPARATE CACHE (not settings.json): counts mutate every session
+ * (sessions, ratings, signals, updatedAt …). Writing them into the tracked
+ * settings.json made every machine's working tree drift, forcing a stash
+ * before every git pull. MEMORY/STATE/ is gitignored, so the cache stays
+ * machine-local and settings.json no longer churns. Readers fall back to a
+ * legacy settings.counts block (if present) then 0, so the split is safe.
  */
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, statSync } from 'fs';
+import { join, dirname } from 'path';
 import { execSync } from 'child_process';
 import { getPaiDir, getSettingsPath, getClaudeDir } from '../lib/paths';
 
@@ -270,7 +277,7 @@ async function refreshUsageCache(paiDir: string): Promise<void> {
  */
 export async function handleUpdateCounts(): Promise<void> {
   const paiDir = getPaiDir();
-  const settingsPath = getSettingsPath();
+  const countsCachePath = join(paiDir, 'MEMORY/STATE/counts-cache.json');
 
   try {
     // Run counts + usage refresh in parallel
@@ -279,18 +286,9 @@ export async function handleUpdateCounts(): Promise<void> {
       refreshUsageCache(paiDir),
     ]);
 
-    // Read current settings
-    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
-
-    // Update counts section
-    settings.counts = counts;
-
-    // v6.2.0+: settings.pai.algorithmVersion was removed; LATEST is the single source
-    // of truth and Banner / statusline / ArchitectureSummaryGenerator read it directly.
-    // The CLAUDE.md → settings.json sync that lived here is no longer needed.
-
-    // Write back
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+    // Write counts to the gitignored cache (NOT settings.json — see file header).
+    mkdirSync(dirname(countsCachePath), { recursive: true });
+    writeFileSync(countsCachePath, JSON.stringify(counts, null, 2) + '\n');
     console.error(`[UpdateCounts] Updated: SK:${counts.skillsPublic}pu/${counts.skillsPrivate}pv WF:${counts.workflows} HK:${counts.hooks} SIG:${counts.signals} F:${counts.files} W:${counts.work} SESS:${counts.sessions} RES:${counts.research} RAT:${counts.ratings}`);
   } catch (error) {
     console.error('[UpdateCounts] Failed to update counts:', error);

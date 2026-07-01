@@ -1132,6 +1132,18 @@ await Promise.race([readPromise, timeoutPromise]);
 
 ## Troubleshooting
 
+### Is It Even PAI? — Safe Mode Bisect (try this first)
+
+When a session misbehaves and you don't yet know whether a hook, skill, CLAUDE.md, or MCP server is the cause, bisect it in one step. `--safe-mode` boots Claude Code with **all** customizations disabled — CLAUDE.md, plugins, skills, hooks, and MCP servers:
+
+```bash
+claude --safe-mode
+# or, to force it via environment:
+CLAUDE_CODE_SAFE_MODE=1 claude
+```
+
+If the problem vanishes in safe mode, it's one of your customizations — re-enable groups until it returns. If it persists, the bug is upstream of PAI. This is the fastest first move for PAI's hook-heavy stack: with ~25 wired hooks (several carrying known Windows footguns — `read(0)`/fd0 stdin handling, `BASH_ENV` PATH rewrites), safe mode tells you in one launch whether to debug your own config or look elsewhere. Added in Claude Code v2.1.169.
+
 ### Hook Not Running
 
 **Check:**

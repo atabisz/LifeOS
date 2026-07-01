@@ -7,7 +7,17 @@
 import { readFileSync } from "fs";
 import { paiPath } from './lib/paths';
 
-const input = JSON.parse(readFileSync("/dev/stdin", "utf-8"));
+// Read stdin via fd 0, not the path "/dev/stdin" — the latter is ENOENT on
+// Windows (bun throws), which is why this hook crashed as an orphan. fd 0 is
+// the same pattern the wired hooks (e.g. ISASync) use. Fail open on any parse error.
+let input: any;
+try {
+  const raw = readFileSync(0, "utf-8");
+  if (!raw.trim()) process.exit(0);
+  input = JSON.parse(raw);
+} catch {
+  process.exit(0);
+}
 const filePath: string = input?.toolInput?.file_path ?? input?.filePath ?? "";
 
 // Key files that should trigger alerts when modified

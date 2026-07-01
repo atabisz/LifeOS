@@ -6,7 +6,7 @@
 
 import { execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
-import { homedir, release, version } from "os";
+import { homedir } from "os";
 import { join } from "path";
 import type { DetectionResult, ExistingUserContentDetection } from "./types";
 
@@ -20,84 +20,27 @@ function tryExec(cmd: string): string | null {
   }
 }
 
-const IS_WINDOWS = process.platform === "win32";
-
-/**
- * Resolve a bare tool name to an absolute path on Windows, where `which` is
- * not guaranteed to exist. Mirrors the documented ForgeProgress.ts resolution
- * pattern: try each PATHEXT candidate (driven by process.env.PATHEXT when
- * present, falling back to the literal list) against each directory in
- * process.env.PATH (split on ";"). Returns the first existing hit.
- */
-function resolveWindowsTool(name: string): string | null {
-  const fallbackExts = [".exe", ".cmd", ".bat", ".com"];
-  const pathExt = (process.env.PATHEXT || "")
-    .split(";")
-    .map((ext) => ext.trim().toLowerCase())
-    .filter((ext) => ext.length > 0);
-  // "" lets a name that already carries its extension (or an extensionless
-  // binary) resolve too.
-  const exts = [...new Set([...(pathExt.length ? pathExt : fallbackExts), ""])];
-
-  const dirs = (process.env.PATH || "").split(";").filter((d) => d.length > 0);
-  for (const dir of dirs) {
-    for (const ext of exts) {
-      const candidate = join(dir, `${name}${ext}`);
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-  return null;
-}
-
-/**
- * Resolve a tool's absolute path. On non-Windows uses `which` (unchanged
- * behaviour). On Windows scans PATH + PATHEXT since `which` is not guaranteed.
- */
-export function resolveToolPath(name: string): string | null {
-  return IS_WINDOWS ? resolveWindowsTool(name) : tryExec(`which ${name}`);
-}
-
 function detectOS(): DetectionResult["os"] {
-  const platform: DetectionResult["os"]["platform"] =
-    process.platform === "darwin"
-      ? "darwin"
-      : process.platform === "win32"
-        ? "win32"
-        : "linux";
+  const platform = process.platform === "darwin" ? "darwin" : "linux";
   const arch = process.arch;
 
-  let osVersion = "";
+  let version = "";
   let name = "";
 
   if (platform === "darwin") {
     const swVers = tryExec("sw_vers -productVersion");
-    osVersion = swVers || "";
-    name = `macOS ${osVersion}`;
-  } else if (platform === "win32") {
-    // Use the os module (release/version) rather than a shelled uname — uname
-    // is not present on a bare Windows shell. release() is the NT kernel
-    // version; version() is the human-readable OS string when available.
-    osVersion = release() || "";
-    const human = typeof version === "function" ? version() : "";
-    name = human ? `Windows (${human})` : `Windows ${osVersion}`.trim();
+    version = swVers || "";
+    name = `macOS ${version}`;
   } else {
-    const osRelease = tryExec("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'");
-    name = osRelease || "Linux";
-    osVersion = tryExec("uname -r") || "";
+    const release = tryExec("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'");
+    name = release || "Linux";
+    version = tryExec("uname -r") || "";
   }
 
-  return { platform, arch, version: osVersion, name };
+  return { platform, arch, version, name };
 }
 
 function detectShell(): DetectionResult["shell"] {
-  if (IS_WINDOWS) {
-    // $SHELL is unset on Windows; fall back to ComSpec (cmd.exe). cmd has no
-    // `--version`, so leave version empty rather than shelling a failing probe.
-    const shellPath = process.env.ComSpec || "cmd.exe";
-    const shellName = shellPath.split(/[/\\]/).pop() || "cmd.exe";
-    return { name: shellName, version: "", path: shellPath };
-  }
-
   const shellPath = process.env.SHELL || "/bin/sh";
   const shellName = shellPath.split("/").pop() || "sh";
   const version = tryExec(`${shellPath} --version 2>&1 | head -1`) || "";
@@ -109,7 +52,7 @@ function detectTool(
   name: string,
   versionCmd: string
 ): { installed: boolean; version?: string; path?: string } {
-  const path = resolveToolPath(name);
+  const path = tryExec(`which ${name}`);
   if (!path) return { installed: false };
 
   const versionOutput = tryExec(versionCmd);
@@ -178,7 +121,6 @@ export function scanApiKeys(
     join(home, ".profile"),
     join(configDir, ".env"),
     join(configDir, "credentials.env"),
-    join(home, ".claude", ".env"), // real env-file location on Windows installs; harmless on Unix
     join(home, ".config", "PAI", ".env"),
     join(home, ".config", "PAI", "credentials.env"),
   ];
@@ -351,7 +293,7 @@ export function detectExistingUserContent(paiUserDir: string): ExistingUserConte
  * Order of preference: git config (most explicit) → macOS RealName → $USER.
  */
 function detectPrincipal(): DetectionResult["principal"] {
-  const username = process.env.USER || process.env.LOGNAME || process.env.USERNAME || "user";
+  const username = process.env.USER || process.env.LOGNAME || "user";
 
   const gitName = tryExec("git config --global user.name");
   const gitEmail = tryExec("git config --global user.email");
@@ -406,12 +348,10 @@ export function detectSystem(): DetectionResult {
       git: detectTool("git", "git --version"),
       claude: detectTool("claude", "claude --version 2>&1"),
       node: detectTool("node", "node --version"),
-      brew: (() => {
-        // brew is macOS/Linux-only; resolveToolPath returns null on Windows
-        // (correct: brew absent). Resolve once instead of shelling twice.
-        const brewPath = resolveToolPath("brew");
-        return { installed: brewPath !== null, path: brewPath || undefined };
-      })(),
+      brew: {
+        installed: tryExec("which brew") !== null,
+        path: tryExec("which brew") || undefined,
+      },
     },
     existing: detectExisting(home, paiDir, configDir),
     principal: detectPrincipal(),

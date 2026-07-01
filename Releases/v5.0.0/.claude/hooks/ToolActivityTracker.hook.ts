@@ -35,6 +35,9 @@ const ACTIVITY_FILE = join(OBS_DIR, 'tool-activity.jsonl');
 // Tools that mutate filesystem state — capture extra ground truth.
 const WRITE_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
 const BASH_TOOLS = new Set(['Bash']);
+// Delegation tools — capture which agent/model ran so the dashboard can
+// attribute per-agent model cost (Forge/Anvil/Cato/researchers vs Claude-family).
+const AGENT_TOOLS = new Set(['Agent', 'Task']);
 
 async function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -82,6 +85,15 @@ function captureGroundTruth(toolName: string, input: Record<string, unknown>, re
     }
     const gs = gitSnapshot(process.cwd());
     if (gs) gt.git = gs;
+  }
+
+  if (AGENT_TOOLS.has(toolName)) {
+    // subagent_type / model live in tool_input; field names vary by harness
+    // version, so probe a few aliases. Each is optional — capture what's present.
+    const subagentType = input.subagent_type ?? input.subagentType ?? input.agentType;
+    if (typeof subagentType === 'string') gt.subagent_type = subagentType;
+    if (typeof input.model === 'string') gt.model = input.model;
+    if (typeof input.description === 'string') gt.agent_description = truncate(input.description, 200);
   }
 
   if (BASH_TOOLS.has(toolName) && typeof input.command === 'string') {

@@ -5,6 +5,7 @@ import { parse as parseYaml } from 'yaml';
 import type { Inspector, InspectionContext, InspectionResult } from '../types';
 import { ALLOW, deny, requireApproval, alert } from '../types';
 import { paiPath } from '../../lib/paths';
+import { stripEnvVarPrefix, commandPositionViews } from '../command-normalize';
 
 // ── Types ──
 
@@ -63,14 +64,11 @@ function loadPatterns(): PatternsConfig | null {
   }
 }
 
-// ── Command Normalization ──
-
-function stripEnvVarPrefix(command: string): string {
-  return command.replace(
-    /^\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s]*)\s+)*/,
-    ''
-  );
-}
+// Command normalization is provided by the shared `command-normalize` module
+// (fixed-point strip of assignment prefixes AND the `env` binary launcher) so
+// PatternInspector and EgressInspector can never diverge. The previous inline
+// copy here only handled assignment prefixes, so `env FOO=bar rm -rf /` slipped
+// past the recursive-delete block.
 
 // ── Pattern Matching ──
 
@@ -80,6 +78,28 @@ function matchesBashPattern(command: string, pattern: string): boolean {
   } catch {
     return command.toLowerCase().includes(pattern.toLowerCase());
   }
+}
+
+// Dual-clause match (closes shell-quote/escape evasion without fabricating false
+// positives on quoted argument data). A pattern matches if EITHER:
+//   1. it matches the historical `normalized` view ANYWHERE (preserves every
+//      prior match exactly — this clause can only keep behavior, never lose it), OR
+//   2. it matches a fully-dequoted command SEGMENT anchored at the segment start
+//      (so `"rm" -rf /` → `rm -rf /` is caught in command position, while
+//      `echo rm -rf /` / `grep "rm -rf /"` is NOT — the segment's command word
+//      is echo/grep, and an anchored match won't fire mid-segment).
+// The anchored clause prepends `^\s*` to the pattern. A pattern already starting
+// with `^` is used as-is against the segment.
+function matchesBashViews(
+  views: { normalized: string; segments: string[] },
+  pattern: string
+): boolean {
+  if (matchesBashPattern(views.normalized, pattern)) return true;
+  const anchored = pattern.startsWith('^') ? pattern : `^\\s*${pattern}`;
+  for (const seg of views.segments) {
+    if (matchesBashPattern(seg, anchored)) return true;
+  }
+  return false;
 }
 
 function expandTilde(p: string): string {
@@ -133,23 +153,25 @@ function extractCommand(input: Record<string, unknown> | string): string {
 // ── Inspection Logic ──
 
 function inspectBash(command: string, config: PatternsConfig): InspectionResult {
-  const normalized = stripEnvVarPrefix(command);
-  if (!normalized) return ALLOW;
+  const views = commandPositionViews(command);
+  if (!views.normalized) return ALLOW;
 
+  // Trusted is matched on the historical view only — trusting a dequoted segment
+  // could let a crafted arg trip a trusted allow; keep trust conservative.
   for (const p of (config.bash.trusted || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return ALLOW;
+    if (matchesBashPattern(views.normalized, p.pattern)) return ALLOW;
   }
 
   for (const p of (config.bash.blocked || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return deny(p.reason);
+    if (matchesBashViews(views, p.pattern)) return deny(p.reason);
   }
 
   for (const p of (config.bash.confirm || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return requireApproval(p.reason);
+    if (matchesBashViews(views, p.pattern)) return requireApproval(p.reason);
   }
 
   for (const p of (config.bash.alert || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return alert(p.reason);
+    if (matchesBashViews(views, p.pattern)) return alert(p.reason);
   }
 
   return ALLOW;

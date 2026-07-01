@@ -25,6 +25,8 @@
  *   --auto-state                   v3.24 P5: Auto-synthesize state from current ISA + recent activity (advisor mode only, 2 positional args: task, question)
  *   --json                         Expect and parse JSON response
  *   --timeout <ms>                 Custom timeout (default varies by level)
+ *   --fallback-model <list>        Comma-separated model chain passed to the CLI's
+ *                                  native --fallback-model (retries next on overload)
  *
  * DEFAULTS BY LEVEL:
  *   fast:     model=haiku,   timeout=15s
@@ -71,6 +73,23 @@ export interface InferenceOptions {
    * are prepended to the user prompt as @-references so Claude reads them as
    * image attachments. Routes through subscription like all other inference. */
   imagePaths?: string[];
+  /** Optional model-fallback chain. When non-empty, passed to the `claude` CLI's
+   * native `--fallback-model` flag (CLI v2.1.x+): the CLI auto-retries on the
+   * next model when the default is overloaded or unavailable, re-trying the
+   * primary at the start of each turn. Comma-joined into a single flag value.
+   * Empty/absent → no flag emitted (existing callers behave identically). The
+   * native flag is the correct mechanism for a CLI subprocess; the server-side
+   * `fallbacks` API body param does not apply here. */
+  fallbackModels?: string[];
+  /** Opt-in refusal detection. When true, the CLI is run with
+   * `--output-format json` (instead of text) so the result envelope's
+   * `stop_reason` is visible; `result.refused` is set when `stop_reason` is
+   * `"refusal"`, and `result.stopReason` carries the raw value. Default (false/
+   * absent) keeps the text-output path byte-identical for existing callers —
+   * text mode genuinely cannot see `stop_reason`, so detection is opt-in rather
+   * than always-on. When combined with `expectJson`, the JSON extraction runs
+   * against the envelope's `result` text. */
+  detectRefusal?: boolean;
 }
 
 export interface InferenceResult {
@@ -80,6 +99,12 @@ export interface InferenceResult {
   error?: string;
   latencyMs: number;
   level: InferenceLevel;
+  /** True when the model refused (CLI `stop_reason === "refusal"`). Only ever
+   * populated when the call opted into `detectRefusal`; undefined otherwise. */
+  refused?: boolean;
+  /** Raw CLI `stop_reason` (e.g. "end_turn", "refusal", "max_tokens"). Only
+   * populated under `detectRefusal`. */
+  stopReason?: string;
 }
 
 // Level configurations
@@ -117,11 +142,21 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
     delete env.ANTHROPIC_AUTH_TOKEN;
 
     const hasImages = options.imagePaths && options.imagePaths.length > 0;
+    // Native CLI model-fallback (claude-code v2.1.x+): comma-separated chain,
+    // CLI auto-retries the next model on overload/unavailability. Only emitted
+    // when the caller opts in, so existing callers' arg lists are unchanged.
+    // Trim then drop blanks so a non-empty-but-all-whitespace array (e.g. ["  "])
+    // collapses to the no-flag path instead of emitting `--fallback-model "  "`.
+    const fallbackChain = (options.fallbackModels ?? []).map((m) => m.trim()).filter(Boolean);
+    // Refusal detection needs the JSON envelope (stop_reason lives there);
+    // otherwise keep text output so existing callers are byte-identical.
+    const useJsonEnvelope = options.detectRefusal === true;
     const args = [
       '--print',
       '--model', config.model,
+      ...(fallbackChain.length > 0 ? ['--fallback-model', fallbackChain.join(',')] : []),
       ...(hasImages ? ['--allowedTools', 'Read'] : ['--tools', '']),
-      '--output-format', 'text',
+      '--output-format', useJsonEnvelope ? 'json' : 'text',
       '--exclude-dynamic-system-prompt-sections',  // v3.23 C2: cache-friendly prompt prefix (claude-code v2.1.98+)
       '--setting-sources', '',
       '--system-prompt', options.systemPrompt,
@@ -178,7 +213,40 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
         return;
       }
 
-      const output = stdout.trim();
+      // Refusal detection: the CLI was run with --output-format json, so stdout
+      // is the result envelope. Unwrap it — read stop_reason, surface a refusal
+      // as a distinct signal, and replace the working text with the envelope's
+      // `result` so the downstream expectJson/text logic is unchanged.
+      let refused: boolean | undefined;
+      let stopReason: string | undefined;
+      let working = stdout;
+      if (useJsonEnvelope) {
+        try {
+          // Named `envelope` (not `env`) to avoid shadowing the scrubbed
+          // process-env at line ~132 — they are unrelated values.
+          const envelope = JSON.parse(stdout);
+          stopReason = typeof envelope.stop_reason === 'string' ? envelope.stop_reason : undefined;
+          refused = stopReason === 'refusal' || envelope.subtype === 'error_refusal';
+          working = typeof envelope.result === 'string' ? envelope.result : stdout;
+          if (refused) {
+            resolve({
+              success: false,
+              output: working.trim(),
+              error: `Model refused (stop_reason: ${stopReason ?? envelope.subtype})`,
+              latencyMs,
+              level,
+              refused: true,
+              stopReason,
+            });
+            return;
+          }
+        } catch {
+          // Envelope didn't parse — fall through treating stdout as raw text.
+          // refused stays undefined (unknown), not a false-negative claim.
+        }
+      }
+
+      const output = working.trim();
 
       // Parse JSON if requested
       if (options.expectJson) {
@@ -200,6 +268,7 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
               parsed,
               latencyMs,
               level,
+              ...(useJsonEnvelope ? { refused, stopReason } : {}),
             });
             return;
           } catch { /* try next candidate */ }
@@ -210,6 +279,7 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
           error: 'Failed to parse JSON response',
           latencyMs,
           level,
+          ...(useJsonEnvelope ? { refused, stopReason } : {}),
         });
         return;
       }
@@ -219,6 +289,7 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
         output,
         latencyMs,
         level,
+        ...(useJsonEnvelope ? { refused, stopReason } : {}),
       });
     });
 
@@ -358,6 +429,11 @@ export interface AdvisorOptions {
   question: string;
   autoSynthesize?: boolean;
   timeout?: number;
+  /** Optional model-fallback chain forwarded to inference() → the CLI's native
+   * `--fallback-model`. The advisor is a high-value resilience target: a
+   * commitment-boundary review that fails on a transient overload would block
+   * `phase: complete`. Empty/absent → no fallback (back-compat). */
+  fallbackModels?: string[];
 }
 
 export async function advisor(options: AdvisorOptions): Promise<InferenceResult> {
@@ -401,6 +477,7 @@ export async function advisor(options: AdvisorOptions): Promise<InferenceResult>
     userPrompt,
     level: 'smart',
     timeout: options.timeout ?? ADVISOR_TIMEOUT_MS,
+    fallbackModels: options.fallbackModels,
   });
 }
 
@@ -416,6 +493,7 @@ async function main() {
   let level: InferenceLevel = 'standard';
   let mode: 'inference' | 'advisor' = 'inference';
   let autoState = false;  // v3.24 P5
+  let fallbackModels: string[] | undefined;
   const positionalArgs: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -423,6 +501,10 @@ async function main() {
       expectJson = true;
     } else if (args[i] === '--auto-state') {
       autoState = true;
+    } else if ((args[i] === '--fallback-model' || args[i] === '--fallback') && args[i + 1]) {
+      // Native CLI fallback chain — comma-separated list of model aliases.
+      fallbackModels = args[i + 1].split(',').map((s) => s.trim()).filter(Boolean);
+      i++;
     } else if (args[i] === '--mode' && args[i + 1]) {
       const requestedMode = args[i + 1].toLowerCase();
       if (requestedMode === 'advisor' || requestedMode === 'inference') {
@@ -457,7 +539,7 @@ async function main() {
         process.exit(1);
       }
       const [task, question] = positionalArgs;
-      const advisoryResult = await advisor({ task, question, autoSynthesize: true, timeout });
+      const advisoryResult = await advisor({ task, question, autoSynthesize: true, timeout, fallbackModels });
       if (advisoryResult.success) {
         console.log(advisoryResult.output);
       } else {
@@ -472,7 +554,7 @@ async function main() {
       process.exit(1);
     }
     const [task, state, question] = positionalArgs;
-    const advisoryResult = await advisor({ task, state, question, timeout });
+    const advisoryResult = await advisor({ task, state, question, timeout, fallbackModels });
     if (advisoryResult.success) {
       console.log(advisoryResult.output);
     } else {
@@ -483,7 +565,7 @@ async function main() {
   }
 
   if (positionalArgs.length < 2) {
-    console.error('Usage: bun Inference.ts [--level fast|standard|smart] [--json] [--timeout <ms>] <system_prompt> <user_prompt>');
+    console.error('Usage: bun Inference.ts [--level fast|standard|smart] [--json] [--timeout <ms>] [--fallback-model <m1,m2>] <system_prompt> <user_prompt>');
     process.exit(1);
   }
 
@@ -495,6 +577,7 @@ async function main() {
     level,
     expectJson,
     timeout,
+    fallbackModels,
   });
 
   if (result.success) {

@@ -64,21 +64,15 @@ Hooks are TypeScript scripts that execute at specific lifecycle events in Claude
 │                ├──► ISASync (ISA → work.json + KV sync)             │
 │                └──► ContentScanner (injection detection)            │
 │                                                                     │
-│  PermissionRequest ──► SmartApprover (trusted/read=approve)         │
-│                                                                     │
 │  PostToolUseFailure ──► ToolFailureTracker (error logging)          │
 │                                                                     │
 │  Stop ──┬──► LastResponseCache (cache response for ratings)         │
 │         ├──► ResponseTabReset (tab title/color reset)              │
 │         ├──► VoiceCompletion (TTS voice line)                      │
-│         ├──► DocIntegrity (cross-refs + arch summary regen)        │
-│         └──► StopNotify (push notification)                        │
+│         └──► DocIntegrity (cross-refs + arch summary regen)        │
 │                                                                     │
 │  PreToolUse:Agent  ──► AgentInvocation (subagent_start, capture type)│
 │  PostToolUse:Agent ──► AgentInvocation (subagent_stop, duration)    │
-│  TeammateIdle ───► TeammateIdle (idle event logging)                │
-│                                                                     │
-│  ConfigChange ──► ConfigAudit (security audit trail)                │
 │                                                                     │
 │  SessionEnd ──┬──► WorkCompletionLearning (insight extraction)      │
 │               ├──► SessionCleanup (work completion + state clear)   │
@@ -104,8 +98,6 @@ Hooks are TypeScript scripts that execute at specific lifecycle events in Claude
 | `Stop` | Claude responds | Voice feedback, tab updates, doc integrity |
 | `SubagentStart` | Subagent spawned | Agent start tracking, timing |
 | `SubagentStop` | Subagent finishes | Duration calculation, hung agent detection |
-| `TeammateIdle` | Teammate goes idle | Idle event logging |
-| `ConfigChange` | Settings modified | Security audit trail |
 | `SessionEnd` | Session terminates | Summary, learning, counts, integrity checks |
 
 ### Event Payload Structure
@@ -203,20 +195,6 @@ Subagent lifecycle is tracked via `AgentInvocation.hook.ts` on `PreToolUse:Agent
 
 Outputs: `subagent-events.jsonl` (start + stop events), correlated by `session_id + description`.
 
-### TeammateIdle Hooks
-
-| Hook | Purpose | Blocking | Dependencies |
-|------|---------|----------|--------------|
-| `TeammateIdle.hook.ts` | Log teammate idle events for observability | No | `MEMORY/OBSERVABILITY/` |
-
-Outputs: `teammate-events.jsonl`.
-
-### ConfigChange Hooks
-
-| Hook | Purpose | Blocking | Dependencies |
-|------|---------|----------|--------------|
-| `ConfigAudit.hook.ts` | Security audit trail for config changes | No | `MEMORY/OBSERVABILITY/` |
-
 ### SessionEnd Hooks
 
 | Hook | Purpose | Blocking | Dependencies |
@@ -295,7 +273,6 @@ SecurityPipeline ─► InspectorPipeline
     └─► deny ─────────────────► Hard block (exit 2)
 
 PostToolUse ─► ContentScanner ─► InjectionInspector (WebFetch/WebSearch only)
-PermissionRequest ─► SmartApprover ─► trusted/read=approve
 UserPromptSubmit ─► PromptGuard ─► PromptInspector (95) heuristic-only
 
 All events logged to: MEMORY/SECURITY/YYYY/MM/
@@ -359,7 +336,6 @@ Stop hooks:
 │  SessionAnalysis ─────────────────────────► session-names.json │
 │  ToolFailureTracker ──────────────────────► OBSERVABILITY/     │
 │  AgentInvocation ─────────────────────────► OBSERVABILITY/     │
-│  ConfigAudit ─────────────────────────────► OBSERVABILITY/     │
 │  WorkCompletionLearning ────────────────────► LEARNING/          │
 │  SessionCleanup ────────────────────────────► WORK/ + state      │
 │                                                                  │
@@ -560,5 +536,5 @@ Use this checklist when adding or modifying hooks:
 
 ---
 
-*Last updated: 2026-04-04*
-*Events: 9 | Shared libs: 15 | Hook count: auto-computed by UpdateCounts.ts*
+*Last updated: 2026-05-25*
+*Events: 7 (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, Stop, SessionEnd) | Shared libs: 15 | Hook count: auto-computed by UpdateCounts.ts*

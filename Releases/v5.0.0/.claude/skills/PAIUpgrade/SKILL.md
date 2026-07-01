@@ -1,6 +1,6 @@
 ---
 name: PAIUpgrade
-description: "Generate prioritized PAI upgrade recommendations via 4 parallel threads: Thread 0 (prior-work audit — reads current Algorithm, PATTERNS.yaml, hooks, settings, recent ISAs, and KNOWLEDGE to assign Prior Status tags), Thread 1 (user context — TELOS goals, active projects, PAI system state), Thread 2 (source collection — Anthropic releases, YouTube channels, GitHub trending, custom sources), Thread 3 (internal reflections — Algorithm execution Q1/Q2 patterns). Output format: Discoveries table ranked by interestingness, then tiered Recommendations (CRITICAL/HIGH/MEDIUM/LOW) each with Prior Status (NEW/PARTIAL/DISCUSSED/REJECTED/DONE), then full Technique Details with before/after code. Every recommendation cites file:line evidence from Thread 0 — already-implemented items go to Skipped, never re-surfaced. Workflows: Upgrade, MineReflections, AlgorithmUpgrade, ResearchUpgrade, FindSources, TwitterBookmarks. USE WHEN upgrade, system upgrade, check Anthropic, new Claude features, algorithm upgrade, PAI upgrade, check bookmarks, scan bookmarks, twitter bookmarks, X bookmarks, bookmarks for upgrades, what have I bookmarked, mine reflections."
+description: "Generate prioritized PAI upgrade recommendations via 4 parallel threads: Thread 0 (prior-work audit — reads current Algorithm, PATTERNS.yaml, hooks, settings, recent ISAs, and KNOWLEDGE to assign Prior Status tags), Thread 1 (user context — TELOS goals, active projects, PAI system state), Thread 2 (source collection — Anthropic releases, YouTube channels, GitHub trending, custom sources), Thread 3 (internal reflections — Algorithm execution Q1/Q2 patterns). Output format: Discoveries table ranked by interestingness, then tiered Recommendations (CRITICAL/HIGH/MEDIUM/LOW) each with Prior Status (NEW/PARTIAL/DISCUSSED/REJECTED/DONE), then full Technique Details with before/after code. Every recommendation cites file:line evidence confirmed by a fresh emit-time live probe — already-implemented items go to Skipped, never re-surfaced. Workflows: Upgrade, MineReflections, AlgorithmUpgrade, ResearchUpgrade, FindSources, TwitterBookmarks. USE WHEN upgrade, system upgrade, check Anthropic, new Claude features, algorithm upgrade, PAI upgrade, check bookmarks, scan bookmarks, twitter bookmarks, X bookmarks, bookmarks for upgrades, what have I bookmarked, mine reflections."
 effort: high
 ---
 
@@ -69,6 +69,7 @@ Section order: Discoveries → Recommendations → Technique Details → Interna
 2. **Quote or code-block the actual content** — show exactly what was said/written.
 3. **Map to PAI components** — every technique connects to a specific file, skill, workflow, or system component.
 4. **Verify Prior State (Thread 0 gate)** — Before emitting ANY recommendation, confirm against Thread 0 inventory: is it already in Algorithm / PATTERNS.yaml / hooks / SKILL files / KNOWLEDGE / prior ISAs? Assign a Prior Status emoji and cite evidence. Items that are ✅ DONE go to Skipped, not Recommendations.
+   - **Emit-time live probe (MANDATORY for every 🆕 NEW and 🔶 PARTIAL row).** Thread 0 is a *summary* and summaries over-claim — a 🔶 PARTIAL is a conjecture that the delta is real (Gate E applies to the audit's own output). Before the row ships, run a fresh `grep`/`Read` against the actual target file for the specific concept/symbol/field, and cite the result (`file:line` found, or "no match → confirmed absent") in the Evidence column. A 🔶 PARTIAL with no probe showing the present-vs-missing split, or a 🆕 NEW with no probe showing absence, is INVALID — downgrade to ✅ DONE (→ Skipped) or fix the tag. In the 2026-06-25 cycle three "🔶 PARTIAL" rows (SymbolCensus gate, proof-of-fire precondition, Gate E blast-radius) were all already ✅ DONE — the synthesis trusted the Thread-0 summary instead of grepping the live doctrine, and this probe is what catches that.
 5. **Two mandatory description fields, ≤2 sentences each, concrete and specific:**
    - **What It Is:** the technique itself — what it does, how it works, what capability it provides
    - **How It Helps PAI:** the specific benefit — which component improves, what gap it fills
@@ -133,7 +134,7 @@ These output patterns are **FAILURES**:
 | Recommendations at the bottom | Actionable items buried after technique dump | 🔥 Recommendations section appears SECOND, technique details third |
 | **Recommending something already implemented** | Wastes user trust | Move to Skipped with file:line evidence |
 | **Re-surfacing rejected ideas without new context** | Drift from prior decisions | Only re-recommend if reason has changed; say what changed |
-| **Missing Prior Status column** | Bypasses Thread 0 gate | Every recommendation row cites evidence from Thread 0's inventory |
+| **Missing Prior Status column** | Bypasses Thread 0 gate | Every recommendation row cites evidence confirmed by a fresh emit-time live probe (not the Thread-0 summary alone) |
 
 **The test:** if you can say "show me the technique" and there's nothing to show, you've failed.
 
@@ -150,6 +151,7 @@ These output patterns are **FAILURES**:
 - **Check ALL sources in parallel** — Anthropic blog, changelog, YouTube channels, GitHub releases. Don't check sequentially.
 - **Upgrades must not break existing skills or workflows.** Verify backward compatibility before applying.
 - **Full upgrade check can take 5-7 minutes.** Use `run_in_background: true` for the outer agent.
+- **Schema-probe every claude-code-guide field-name/value claim before scoping or applying.** The freshness agent (claude-code-guide) confidently invents field names and defaults. In the 2026-06-17 cycle it got four wrong: `maxSkillDescriptionChars` (real: `skillListingMaxDescChars`=1536), `pai.algorithmVersion` (removed in v6.2.0), `skillListingBudgetFraction` default direction, and `hookSpecificOutput.displayContent` (real MessageDisplay content field: top-level `delta`). Treat its specific identifiers as conjecture — confirm against the live settings schema, a real hook payload, or `grep` of the actual code before any recommendation row or edit depends on them.
 
 ## Execution Log
 

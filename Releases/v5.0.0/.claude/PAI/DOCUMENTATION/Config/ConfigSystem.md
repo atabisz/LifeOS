@@ -11,6 +11,10 @@ PAI uses directly-edited configuration files. There is no template rendering or 
 | `PAI/PAI_SYSTEM_PROMPT.md` | Constitutional rules (system prompt layer) | Tracked |
 | `PAI/USER/Config/PAI_CONFIG.yaml` | Credentials store for private skills (HOMEBRIDGE, etc.) | Gitignored |
 
+## Runtime Floors
+
+- **claude-code: `>= 2.1.148`** — avoid `2.1.147` (Bash tool returned exit 127 on every command; regression fixed in 2.1.148). Every PAI hook that shells out (RTK, SecurityPipeline, gsd-validate-commit, ToolActivityTracker) breaks under the regression.
+
 ## How It Works
 
 **Edit directly.** When you need to change hooks, identity, permissions, or any runtime behavior, edit `settings.json` directly. When you need to change operational rules or context routing, edit `CLAUDE.md`. When you need to change constitutional rules, edit `PAI/PAI_SYSTEM_PROMPT.md`.

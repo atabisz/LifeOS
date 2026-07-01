@@ -30,7 +30,9 @@ async function main(): Promise<void> {
 
   try {
     const { readFileSync } = await import('fs');
-    const raw = readFileSync('/dev/stdin', 'utf-8');
+    // fd 0, not '/dev/stdin' — the latter throws ENOENT on Windows and fails
+    // open (prompt-injection scan skipped). See SmartApprover.hook.ts.
+    const raw = readFileSync(0, 'utf-8');
     if (!raw.trim()) return;
     input = JSON.parse(raw);
   } catch {

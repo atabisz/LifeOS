@@ -23,7 +23,7 @@ import { homedir } from "os"
 
 const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const PAI_DIR = join(HOME, ".claude", "PAI")
-const PULSE_DIR = join(PAI_DIR, "PULSE")
+const PULSE_DIR = join(PAI_DIR, "Pulse")
 
 const envPath = join(HOME, ".claude", ".env")
 try {

@@ -45,7 +45,7 @@ interface HookInput {
 
 interface RatingEntry {
   timestamp: string;
-  rating: number;
+  rating: number | null;  // null = inference failed/errored; excluded from rating averages
   session_id: string;
   comment?: string;
   source?: 'implicit' | 'explicit';
@@ -419,7 +419,12 @@ async function main() {
         systemPrompt: buildSatisfactionPrompt(),
         userPrompt,
         expectJson: true,
-        timeout: 15000,
+        // 30s: this hook runs async (background), so a longer budget costs zero
+        // user-perceived latency. The cold `claude --print` spawn often can't
+        // finish in 15s under multi-hook contention on busy days (warm call ~4s),
+        // which caused ~36% of captures to time out. Harness timeout (settings.json,
+        // SatisfactionCapture) must stay above this + the 2s stagger above.
+        timeout: 30000,
         level: 'fast',
       });
 
@@ -463,27 +468,27 @@ async function main() {
       } else {
         // Inference failed — default to 5 (neutral)
         const errorReason = result.error || 'unknown';
-        console.error(`[SatisfactionCapture] Inference failed: ${errorReason} — defaulting to 5`);
+        console.error(`[SatisfactionCapture] Inference failed: ${errorReason} — recording null (excluded from averages)`);
         writeRating({
           timestamp: getISOTimestamp(),
-          rating: 5,
+          rating: null,
           session_id: sessionId,
           source: 'implicit',
           sentiment_summary: `Inference failed: ${errorReason.slice(0, 80)}`,
-          confidence: 0.3,
+          confidence: 0,
         });
       }
     } catch (err) {
-      // Inference errored — default to 5 (neutral)
+      // Inference errored — record null (excluded from averages), not a fake neutral 5
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[SatisfactionCapture] Inference error: ${errMsg} — defaulting to 5`);
+      console.error(`[SatisfactionCapture] Inference error: ${errMsg} — recording null (excluded from averages)`);
       writeRating({
         timestamp: getISOTimestamp(),
-        rating: 5,
+        rating: null,
         session_id: sessionId,
         source: 'implicit',
         sentiment_summary: `Inference error: ${errMsg.slice(0, 80)}`,
-        confidence: 0.3,
+        confidence: 0,
       });
     }
 

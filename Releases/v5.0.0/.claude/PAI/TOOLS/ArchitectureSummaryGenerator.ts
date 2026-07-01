@@ -319,8 +319,26 @@ function generate(): string {
 // Commands
 // ============================================================================
 
+/** Strip the volatile `> Generated: <timestamp>` line so two runs over the same
+ * source compare equal. That line changes every run and would defeat the gate. */
+function stableContent(markdown: string): string {
+  return markdown.replace(/^> Generated:.*$/m, "> Generated: <ts>");
+}
+
 function cmdGenerate(): void {
   const summary = generate();
+
+  // Content-hash gate: if the new summary is byte-identical to what's on disk
+  // (ignoring the timestamp line), skip the write entirely. Prevents per-Stop
+  // churn — the file's mtime only advances when content actually changed.
+  if (fs.existsSync(SUMMARY_OUTPUT)) {
+    const existing = fs.readFileSync(SUMMARY_OUTPUT, "utf-8");
+    if (stableContent(existing) === stableContent(summary)) {
+      console.log(`Unchanged ${SUMMARY_OUTPUT} (content identical — skipped write)`);
+      return;
+    }
+  }
+
   fs.writeFileSync(SUMMARY_OUTPUT, summary);
   console.log(`Generated ${SUMMARY_OUTPUT}`);
   console.log(`  ${summary.split("\n").length} lines`);

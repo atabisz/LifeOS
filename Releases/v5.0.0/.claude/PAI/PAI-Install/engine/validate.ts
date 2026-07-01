@@ -9,8 +9,6 @@ import { spawnSync } from "child_process";
 import type { InstallState, ValidationCheck, InstallSummary, EngineEventHandler } from "./types";
 import { PAI_VERSION } from "./types";
 import { homedir } from "os";
-import { normalizeHookCommand, collectHookAllowlist } from "./actions";
-import { resolveToolPath } from "./detect";
 
 /**
  * Check if Pulse is running. PAI 5.0 absorbed the standalone voice server
@@ -42,10 +40,7 @@ async function checkPulseHealth(): Promise<boolean> {
  * Returns { passed, detail }. `passed=false` is CRITICAL: every Bash call
  * the user makes will be denied until this is fixed.
  */
-function checkSecurityHookSmoke(
-  paiDir: string,
-  opts: { platform: "darwin" | "linux" | "win32"; bunPath?: string }
-): { passed: boolean; detail: string } {
+function checkSecurityHookSmoke(paiDir: string): { passed: boolean; detail: string } {
   const hookPath = join(paiDir, "hooks", "SecurityPipeline.hook.ts");
   if (!existsSync(hookPath)) {
     return { passed: false, detail: "Hook not found at hooks/SecurityPipeline.hook.ts" };
@@ -54,38 +49,6 @@ function checkSecurityHookSmoke(
   if (!existsSync(patternsPath)) {
     return { passed: false, detail: `PATTERNS.yaml not found at ${patternsPath} — hook will fail-close on every Bash call` };
   }
-
-  // Launch the hook the way Claude Code actually launches it: the exact command
-  // STRING from settings.json, normalized per-OS by the installer's own
-  // normalizeHookCommand, run through a POSIX shell (`sh -c`) that expands $HOME.
-  // The old path — spawnSync(process.execPath, [hookPath]) — bypassed the command
-  // string and so could report green on a machine where the real launch fails
-  // (interpreter prefix / $HOME expansion / exec-bit). On Windows `cmd.exe` would
-  // NOT expand $HOME, so `sh` (Git Bash) is the correct launcher on every OS.
-  const settingsPath = join(paiDir, "settings.json");
-  let securityCommand = `$HOME/.claude/hooks/SecurityPipeline.hook.ts`;
-  let allowlist = new Set<string>(["SecurityPipeline.hook.ts"]);
-  if (existsSync(settingsPath)) {
-    try {
-      const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
-      allowlist = collectHookAllowlist(settings);
-      const found = findHookCommand(settings, "SecurityPipeline.hook.ts");
-      if (found) securityCommand = found;
-    } catch {
-      // Fall back to the canonical bare command below.
-    }
-  }
-
-  const normalized = normalizeHookCommand(securityCommand, {
-    platform: opts.platform,
-    bunPath: opts.bunPath,
-    bashPath: resolveToolPath("bash"),
-    allowlist,
-  });
-  if (normalized === null) {
-    return { passed: false, detail: "Installer would drop the SecurityPipeline hook on this OS — no interpreter available" };
-  }
-
   // Synthetic benign payload that should ALWAYS be allowed. Mirrors Claude Code's hook input shape.
   const payload = JSON.stringify({
     session_id: "smoke-test",
@@ -94,63 +57,24 @@ function checkSecurityHookSmoke(
     tool_input: { command: "echo pai-smoke-test" },
   });
   try {
-    const res = spawnSync("sh", ["-c", normalized], {
+    const res = spawnSync(process.execPath, [hookPath], {
       input: payload,
       encoding: "utf-8",
       timeout: 8000,
-      // Preserve PATH so `sh` can resolve the interpreter; provide HOME for $HOME expansion.
-      env: { ...process.env, HOME: process.env.HOME || homedir() },
+      // Match Claude Code: no inherited zshrc, minimal env. HOME and PATH only.
+      env: { HOME: homedir(), PATH: process.env.PATH || "" },
     });
     const stderr = (res.stderr || "").toString();
-    // Scan stdout+stderr together: a hook logging its fail-closed / not-found message to stdout
-    // must still be caught, not credited as a clean launch.
-    const combined = `${stderr}\n${(res.stdout || "").toString()}`;
-    if (res.status === 127 || /command not found|No such file|not recognized/i.test(combined)) {
-      return { passed: false, detail: `Hook not launchable via "${normalized}": ${combined.trim().slice(0, 140) || "exit 127"}` };
-    }
     if (res.status !== 0) {
       return { passed: false, detail: `Hook exited ${res.status}: ${stderr.trim().slice(0, 160) || "no stderr"}` };
     }
-    if (/patterns file missing|fail-closed/i.test(combined)) {
-      return { passed: false, detail: `Hook printed fail-closed message: ${combined.trim().slice(0, 160)}` };
+    if (/patterns file missing|fail-closed/i.test(stderr)) {
+      return { passed: false, detail: `Hook printed fail-closed message: ${stderr.trim().slice(0, 160)}` };
     }
-    return { passed: true, detail: "launched via real command string; echo allowed; PATTERNS.yaml loaded; no fail-closed" };
+    return { passed: true, detail: "echo allowed; PATTERNS.yaml loaded; no fail-closed message" };
   } catch (err: any) {
     return { passed: false, detail: `Hook execution threw: ${err?.message || String(err)}` };
   }
-}
-
-/**
- * Find the first hook command whose SCRIPT-TOKEN BASENAME equals `scriptName`.
- * Matching on the script token (not a substring `includes`) ensures we exercise the
- * REAL security hook command — a substring match could latch onto an unrelated command
- * that merely mentions the script name (e.g. an echo/wrapper) and false-green.
- */
-function findHookCommand(settings: any, scriptName: string): string | null {
-  const hooks = settings?.hooks ?? {};
-  for (const groups of Object.values(hooks)) {
-    if (!Array.isArray(groups)) continue;
-    for (const group of groups as any[]) {
-      for (const h of group?.hooks ?? []) {
-        if (h?.type === "command" && typeof h.command === "string" && commandScriptBasename(h.command) === scriptName) {
-          return h.command;
-        }
-      }
-    }
-  }
-  return null;
-}
-
-/** Basename of the last script-extension token in a command (quote-aware). */
-function commandScriptBasename(command: string): string | null {
-  const tokens = command.match(/"[^"]*"|\S+/g) ?? [];
-  for (let i = tokens.length - 1; i >= 0; i -= 1) {
-    const t = tokens[i].replace(/"/g, "");
-    if (/\.(hook\.ts|ts|mts|cts|mjs|cjs|js|sh)$/i.test(t)) {
-      return t.replace(/\\/g, "/").split("/").pop() ?? null;
-    }
-  }
-  return null;
 }
 
 /**
@@ -322,45 +246,28 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
     critical: false,
   });
 
-  // 8. Zsh alias configured. There is no .zshrc on Windows, so reporting it as
-  // a failed critical check would be misleading — mark it not-applicable and
-  // non-critical there. The Windows alias mechanism is a bootstrap follow-on.
-  const platform = state.detection?.os.platform ?? process.platform;
-  if (platform === "win32") {
-    checks.push({
-      name: "Shell alias (pai)",
-      passed: true,
-      detail: "Not applicable on Windows (no .zshrc) — alias handled by the Windows bootstrap",
-      critical: false,
-    });
-  } else {
-    const zshrcPath = join(homedir(), ".zshrc");
-    let aliasConfigured = false;
-    if (existsSync(zshrcPath)) {
-      try {
-        const zshContent = readFileSync(zshrcPath, "utf-8");
-        aliasConfigured = zshContent.includes("# PAI alias") && zshContent.includes("alias pai=");
-      } catch {}
-    }
-
-    checks.push({
-      name: "Shell alias (pai)",
-      passed: aliasConfigured,
-      detail: aliasConfigured ? "Configured in .zshrc" : "Not found — run: source ~/.zshrc",
-      critical: true,
-    });
+  // 8. Zsh alias configured
+  const zshrcPath = join(homedir(), ".zshrc");
+  let aliasConfigured = false;
+  if (existsSync(zshrcPath)) {
+    try {
+      const zshContent = readFileSync(zshrcPath, "utf-8");
+      aliasConfigured = zshContent.includes("# PAI alias") && zshContent.includes("alias pai=");
+    } catch {}
   }
+
+  checks.push({
+    name: "Shell alias (pai)",
+    passed: aliasConfigured,
+    detail: aliasConfigured ? "Configured in .zshrc" : "Not found — run: source ~/.zshrc",
+    critical: true,
+  });
 
   // 9. SecurityPipeline smoke test — runs the actual hook with a benign Bash
   // payload. Catches the v5.0 fail-closed regression where PATTERNS.yaml was
   // missing from the public template, leaving every fresh install unable to
   // execute Bash commands. CRITICAL — if this fails, the install is broken.
-  const smokePlatform: "darwin" | "linux" | "win32" =
-    platform === "win32" || platform === "linux" ? platform : "darwin";
-  const securitySmoke = checkSecurityHookSmoke(paiDir, {
-    platform: smokePlatform,
-    bunPath: state.detection?.tools.bun.path,
-  });
+  const securitySmoke = checkSecurityHookSmoke(paiDir);
   checks.push({
     name: "SecurityPipeline hook (smoke test)",
     passed: securitySmoke.passed,

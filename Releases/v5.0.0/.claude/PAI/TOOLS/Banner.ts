@@ -148,13 +148,24 @@ function getStats(): SystemStats {
     }
   } catch {}
 
+  // Counts cache: written each SessionEnd by hooks/handlers/UpdateCounts.ts to
+  // MEMORY/STATE/counts-cache.json (gitignored). Falls back to the legacy
+  // settings.counts block for machines that haven't run the new hook yet.
   try {
-    const settings = JSON.parse(readFileSync(join(CLAUDE_DIR, "settings.json"), "utf-8"));
-    if (settings.counts) {
-      workflows = settings.counts.workflows || 0;
-      hooks = settings.counts.hooks || 0;
-      learnings = settings.counts.signals || 0;
-      userFiles = settings.counts.files || 0;
+    const paiDir = process.env.PAI_DIR || join(CLAUDE_DIR, "PAI");
+    const cachePath = join(paiDir, "MEMORY/STATE/counts-cache.json");
+    let counts: Record<string, number> | null = null;
+    if (existsSync(cachePath)) {
+      counts = JSON.parse(readFileSync(cachePath, "utf-8"));
+    } else {
+      const settings = JSON.parse(readFileSync(join(CLAUDE_DIR, "settings.json"), "utf-8"));
+      counts = settings.counts || null;
+    }
+    if (counts) {
+      workflows = counts.workflows || 0;
+      hooks = counts.hooks || 0;
+      learnings = counts.signals || 0;
+      userFiles = counts.files || 0;
     }
   } catch {}
 

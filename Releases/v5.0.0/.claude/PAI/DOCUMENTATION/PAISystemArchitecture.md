@@ -8,7 +8,7 @@ PAI targets **AS3** on the [PAI Maturity Model](https://example.com/blog/persona
 
 **Canonical thesis:** `PAI/DOCUMENTATION/LifeOs/LifeOsThesis.md` — read this first when any framing question comes up. This architecture doc describes *how* the OS is built; the thesis doc describes *what* the OS is for.
 
-**Version:** PAI 5.0.0 | Algorithm v6.3.0 | Memory v7.6
+**Version:** PAI 5.0.0 | Algorithm v6.4.9 | Memory v7.6
 
 ---
 
@@ -179,11 +179,11 @@ Each subsystem has its own detailed documentation. This section provides orienta
 
 Transitions from CURRENT STATE to IDEAL STATE via verifiable Ideal State Criteria (ISC): Observe -> Think -> Plan -> Build -> Execute -> Verify -> Learn. Supports three execution modes: interactive (human-in-the-loop), loop (autonomous), and optimize (hill-climbing against a metric). The Algorithm is versioned independently and self-improves through accumulated learning signals.
 
-- **Version:** v6.3.0
-- **Location:** `PAI/ALGORITHM/` (canonical pointer: `LATEST` → `v6.3.0.md`)
+- **Version:** v6.4.9 (canonical: read `PAI/ALGORITHM/LATEST`)
+- **Location:** `PAI/ALGORITHM/` (canonical pointer: `LATEST` → `v{VERSION}.md`)
 - **CLI:** `bun PAI/TOOLS/algorithm.ts`
 - **Full doc:** `PAI/DOCUMENTATION/Algorithm/AlgorithmSystem.md`
-- **Doctrine highlights (v6.3.0):** twelve-section ISA in fixed order; closed enumeration of thinking capabilities (IterativeDepth, ApertureOscillation, FeedbackMemoryConsult, Advisor, ReReadCheck, FirstPrinciples, SystemsThinking, RootCauseAnalysis, Council, RedTeam, Science, BeCreative, Ideate, BitterPillEngineering, Evals, WorldThreatModel, Fabric patterns, ContextSearch, ISA); Capability-Name Audit Gate (phantom names = CRITICAL FAILURE); ID-stability rule (ISC IDs never re-number on edit); Cato cross-vendor audit MANDATORY at E4/E5 in VERIFY (Rule 2a)
+- **Doctrine highlights (current through v6.4.9):** Delegation Digest Gate (v6.4.9, EXECUTE/VERIFY) — consume a spawned agent's output lean: take a structured digest (verdict + findings + diff/artifact path) not the raw transcript, review the diff not the tree, batch related asks, and let the agent write its own files; reading a worker's full transcript collapses the conductor's prompt cache (consumption discipline, not a delegation floor); Gate F count-provenance (v6.4.8, OBSERVE) — a count is a derived fact, not an observation: before quoting any aggregate (pass/fail tally, item count, benchmark score, percentage, mean) success-filter the underlying runs, record each contributing run's source, and state the denominator; a count quoted before the filter is a conjecture; Contract-Capture Reflex (v6.4.7, BUILD) — before the first edit on a change carrying a behavioral or positional contract, capture it first: run/read the covering test (or write a characterization test) for code, and `grep` for positional back-references (`Rule N`/`ISC-N`/`Gate X`/section ordinals) before renumbering doctrine; the cheap general-edit complement to the Security-Surface proof-of-fire; Loop & Batch Control (v6.4.6) — iterate-until-good loops declare a termination contract (max-iters + no-progress-after-2 + budget cap) at PLAN, and recoverable mid-run events self-continue with N-loss accounting rather than halt a viable batch; Preflight Gate H — Deletion-Risk Census (`SymbolCensus.ts`, run at OBSERVE recon; covers symbol deletes, shared-model loosening, and constant/path moves; `--symbols` batch for whole-module prunes); seed auditor adversarial cases as ISC sub-criteria at OBSERVE (v6.4.5); Gate G — Config-as-Behavior/Blast-Radius (v6.4.2); Gate F — Provenance-at-OBSERVE (v6.4.1); Rule 2a cross-vendor audit (Cato) MANDATORY at E4/E5 and correctness-critical E3 (v6.4.2); Security-Surface Edit Gate (HARD, BUILD) — proof-of-fire precedes editing `hooks/security/**`/`command-normalize.ts`/`PATTERNS.yaml`, delegated at E3+, never self-certified; Preflight Gate E (OBSERVE) — external report/changelog/audit claims are conjectures, live-probe before scoping; installed-runtime probe + convention-files first-batch read (v6.4.3); auto-extract shared helper on second consumer; (v6.3.0) twelve-section ISA in fixed order; closed enumeration of thinking capabilities (IterativeDepth, ApertureOscillation, FeedbackMemoryConsult, Advisor, ReReadCheck, FirstPrinciples, SystemsThinking, RootCauseAnalysis, Council, RedTeam, Science, BeCreative, Ideate, BitterPillEngineering, Evals, WorldThreatModel, Fabric patterns, ContextSearch, ISA); Capability-Name Audit Gate (phantom names = CRITICAL FAILURE); ID-stability rule (ISC IDs never re-number on edit)
 
 ### Skill System
 
@@ -444,7 +444,7 @@ System file inventory by pipeline. When you modify a file, trace its pipeline to
 | Pipeline | Key Files |
 |----------|-----------|
 | **Security** | `hooks/SecurityPipeline.hook.ts`, `hooks/security/pipeline.ts`, `hooks/security/inspectors/{Pattern,Egress,Rules,Prompt,Injection}Inspector.ts`, `USER/SECURITY/PATTERNS.yaml` |
-| **Algorithm** | `Algorithm/LATEST` → `Algorithm/v{VERSION}.md` (currently v6.3.0), `Algorithm/capabilities.md`, `Algorithm/mode-detection.md`, `hooks/ISASync.hook.ts` → `MEMORY/WORK/{slug}/ISA.md`, `skills/ISA/` (canonical Scaffold/Append/Reconcile workflows) |
+| **Algorithm** | `Algorithm/LATEST` → `Algorithm/v{VERSION}.md` (currently v6.4.9), `Algorithm/capabilities.md`, `Algorithm/mode-detection.md`, `hooks/ISASync.hook.ts` → `MEMORY/WORK/{slug}/ISA.md`, `skills/ISA/` (canonical Scaffold/Append/Reconcile workflows) |
 | **Memory** | `hooks/WorkCompletionLearning.hook.ts`, `hooks/SatisfactionCapture.hook.ts`, `hooks/RelationshipMemory.hook.ts`, `Tools/KnowledgeHarvester.ts` → `MEMORY/KNOWLEDGE/`, `MEMORY/LEARNING/`; `Tools/SessionHarvester.ts --mine` → `KNOWLEDGE/_harvest-queue/`; `Tools/MemoryRetriever.ts` (BM25 retrieval), `Tools/KnowledgeGraph.ts` (graph navigation) — read-only |
 | **Hooks** | `hooks/*.hook.ts`, `hooks/handlers/*.ts`, `hooks/lib/*.ts`, `settings.json` |
 | **Observability** | `hooks/ToolActivityTracker.hook.ts`, `hooks/ToolFailureTracker.hook.ts`, `hooks/lib/observability-transport.ts` → `MEMORY/OBSERVABILITY/*.jsonl` |

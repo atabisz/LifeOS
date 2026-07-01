@@ -28,7 +28,7 @@ Four parallel threads, then synthesize:
 4. **Synthesize:** filter discoveries against Thread 0 inventory; assign Prior Status; emit deltas only.
 5. **Output:** prioritized upgrade report — every recommendation row carries Prior Status with file:line evidence.
 
-Thread 0 output gates synthesis. No recommendation may be emitted without a Prior Status tag citing evidence from Thread 0.
+Thread 0 output gates synthesis. No recommendation may be emitted without a Prior Status tag citing evidence — and for every 🆕/🔶 row that evidence must include a fresh emit-time live probe of the target file, not the Thread-0 summary alone (Step 5.0).
 
 ---
 
@@ -49,9 +49,10 @@ Extract: every pattern category (name + regex summary + action), inspector cover
 Return: inventory with file:line evidence; flag what's present AND what's missing.
 
 **Agent 0c — Hooks & Settings**
-Read: `~/.claude/settings.json` (hooks, env, permissions, pai sections); list `~/.claude/hooks/*.hook.ts`.
-Extract: hook inventory by event (SessionStart, PreToolUse, PostToolUse, Stop, PreCompact, etc.), orphaned hooks (on disk but unwired), empty event arrays, notable env/permission/pai values.
-Return: inventory with file:line evidence; flag wiring gaps.
+FIRST run the standing drift linter — it is the authoritative orphan/wiring signal, not a manual diff: `bun ~/.claude/PAI/Tools/WiringDriftLinter.ts` (read-only; exit 0 = every orphan has a recorded disposition, exit 1 = UNDECLARED DRIFT, exit 2 = setup error). Use its `on disk / wired / orphaned` counts and per-orphan disposition groups (`wire-candidate`, `needs-user-decision`, `unsafe`, `superseded`, `platform-no-op`, `defer`) as the inventory's hook section.
+Then read: `~/.claude/settings.json` (hooks, env, permissions, pai sections) for env/permission/pai values the linter doesn't cover.
+Extract: hook inventory by event (SessionStart, PreToolUse, PostToolUse, Stop, PreCompact, etc.), orphaned hooks grouped by disposition (from the linter), empty event arrays, notable env/permission/pai values.
+Return: inventory with file:line evidence. **If the linter exited 1, flag every UNDECLARED-DRIFT hook prominently — that is a new hook on disk with no disposition, the one condition this audit must surface.** Never recommend wiring a `needs-user-decision` orphan without explicit user sign-off (they are session-breaking exit-2 guards the user already declined).
 
 **Agent 0d — Recent Decisions & Feedback Memory**
 Scan: top 20 most-recent `~/.claude/PAI/MEMORY/WORK/` dirs (skim ISAs), `MEMORY/KNOWLEDGE/`, `MEMORY/LEARNING/`, `~/.claude/projects/-$(whoami)--claude/memory/feedback_*.md`, `project_*.md`.
@@ -152,13 +153,15 @@ For each discovery from Thread 2 (and candidate from Thread 3):
 - Explicit rejection → 🚫 **REJECTED** → skip unless context warrants revisit; name what changed.
 - Not found → 🆕 **NEW**.
 
+**Emit-time live probe (MANDATORY, Gate E on our own output):** Thread 0 is a summary and summaries over-claim. Before any 🆕 NEW or 🔶 PARTIAL row ships, run a FRESH `grep`/`Read` of the actual target file for the specific concept/symbol/field — do not trust the Thread-0 inventory line alone. Cite the probe result in Evidence (`file:line` found, or "no match → confirmed absent"). If the probe shows the concept is fully present, re-tag ✅ **DONE** → Skipped. In the 2026-06-25 cycle, SymbolCensus-gate / proof-of-fire-precondition / Gate-E-blast-radius all rode in as 🔶 PARTIAL but were already ✅ DONE in `v6.4.3.md` — the probe is what catches that before the report ships.
+
 **1. Relevance check** — does this relate to user's tech stack / goals / projects?
 **2. Score relevance** (1-10), **impact** (1-10), **effort** (1-10, 10=easy).
 **3. Priority** = (relevance × 2) + impact + effort.
 
 Filter out relevance < 3. Filter out ✅ DONE (move to Skipped with file:line evidence).
 
-**Mandatory before emitting:** every recommendation row has a Prior Status tag AND file:line evidence from Thread 0.
+**Mandatory before emitting:** every recommendation row has a Prior Status tag AND file:line evidence — sourced from Thread 0 but, for every 🆕/🔶 row, confirmed by a fresh emit-time live probe per Step 0 (Thread 0's summary is not sufficient on its own).
 
 ### Step 6: Generate Prioritized Recommendations
 
@@ -238,7 +241,7 @@ Scan `~/.claude/projects/-$(whoami)--claude/memory/MEMORY.md` and each reference
 | Valid project/user/reference, still current | Keep — update if needed |
 
 **Version pointer check:**
-- `settings.json pai.algorithmVersion` matches `Algorithm/LATEST`.
+- `Algorithm/LATEST` is the SINGLE source of truth for the algorithm version. `settings.pai.algorithmVersion` was removed in v6.2.0 (see `hooks/handlers/UpdateCounts.ts` + `PAI/TOOLS/Banner.ts`) — do NOT check for or re-add it; consumers read `LATEST` directly.
 - `CLAUDE.md` Algorithm path matches `Algorithm/LATEST`.
 - `SYSTEM-README.md` latest version reference matches `Algorithm/LATEST`.
 

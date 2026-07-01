@@ -62,9 +62,14 @@ function validUrl(flag: string, value: string): string {
 }
 function homeDir(): string { const home = process.env.HOME; if (!home) throw new Error("HOME is not set"); return home; }
 function preflightCodex(home: string): string | null {
-  const codexPath = join(home, ".bun", "bin", "codex");
-  try { accessSync(codexPath, constants.X_OK); return codexPath; }
-  catch (_error: unknown) { return null; } // Safe: caller emits the exact unavailable JSON.
+  const base = join(home, ".bun", "bin", "codex");
+  // Windows installs the binary as codex.exe (or .cmd); Node's accessSync — unlike the shell — does not auto-append PATHEXT.
+  const candidates = process.platform === "win32" ? [`${base}.exe`, `${base}.cmd`, `${base}.bat`, base] : [base];
+  for (const candidate of candidates) {
+    try { accessSync(candidate, constants.X_OK); return candidate; }
+    catch (_error: unknown) { /* try next candidate */ }
+  }
+  return null; // Safe: caller emits the exact unavailable JSON.
 }
 async function ensureSlugDir(home: string, slug: string): Promise<Paths> {
   const slugDir = join(home, ".claude", "PAI", "MEMORY", "WORK", slug);

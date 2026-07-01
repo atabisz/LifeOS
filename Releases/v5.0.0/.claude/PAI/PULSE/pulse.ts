@@ -17,10 +17,10 @@
 import { join } from "path"
 import { readFileSync, existsSync } from "fs"
 import { parse } from "smol-toml"
-import { homedir } from "os"
 
 // ── Load .env before anything else ──
 
+import { homedir } from "os"
 const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const PAI_DIR = join(HOME, ".claude", "PAI")
 const PULSE_DIR = join(PAI_DIR, "PULSE")
@@ -64,6 +64,7 @@ import {
   isSentinel,
   spawnScript,
   spawnClaude,
+  resolveEnvVars,
 } from "./lib"
 
 import { startHooks, handleHooksRequestAsync, hooksHealth } from "./modules/hooks"
@@ -170,13 +171,35 @@ async function loadPulseConfig(): Promise<PulseConfig> {
 
   const daemonConfig = await loadConfig(PULSE_DIR)
 
+  // Resolve ${VAR}/$VAR in path-bearing config fields so a PULSE.toml shared
+  // across machines stays portable (no hardcoded username). Uses the same
+  // resolveEnvVars as job commands — single source, no divergent copy.
+  const resolvePaths = <T extends Record<string, unknown> | undefined>(section: T, keys: string[]): T => {
+    if (!section) return section
+    for (const k of keys) {
+      if (typeof section[k] === "string") {
+        (section as Record<string, unknown>)[k] = resolveEnvVars(section[k] as string)
+      }
+    }
+    return section
+  }
+
+  const voice = resolvePaths(
+    (parsed.voice as PulseConfig["voice"]) ?? { enabled: true },
+    ["piper_binary", "piper_voice_model", "pronunciations_path"],
+  )
+  const observability = resolvePaths(
+    (parsed.observability as PulseConfig["observability"]) ?? { enabled: true },
+    ["dashboard_dir"],
+  )
+
   return {
     port: (parsed.port as number) ?? parseInt(process.env.PULSE_PORT || "31337", 10),
     tls: (parsed.tls as PulseConfig["tls"]) ?? undefined,
-    voice: (parsed.voice as PulseConfig["voice"]) ?? { enabled: true },
+    voice,
     telegram: (parsed.telegram as PulseConfig["telegram"]) ?? { enabled: false },
     imessage: (parsed.imessage as PulseConfig["imessage"]) ?? { enabled: false },
-    observability: (parsed.observability as PulseConfig["observability"]) ?? { enabled: true },
+    observability,
     performance: (parsed.performance as PulseConfig["performance"]) ?? { enabled: true },
     syslog: (parsed.syslog as PulseConfig["syslog"]) ?? { enabled: false, port: 5514 },
     hooks: (parsed.hooks as PulseConfig["hooks"]) ?? { enabled: true },

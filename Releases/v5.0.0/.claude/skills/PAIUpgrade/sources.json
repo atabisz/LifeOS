@@ -155,7 +155,7 @@
     },
     {
       "name": "MCP Specification",
-      "url": "https://spec.modelcontextprotocol.io",
+      "url": "https://modelcontextprotocol.io/specification",
       "priority": "HIGH",
       "type": "docs"
     },

@@ -1,6 +1,6 @@
 ---
 name: Delegation
-description: "Parallelize work via six patterns: built-in agents (Engineer/Architect/Algorithm/Explore/Plan via Task), worktree-isolated agents (conflict-free parallel file edits), background agents (run_in_background: true, non-blocking), custom agents (ComposeAgent via Agents skill → Task general-purpose), agent teams (TeamCreate + TaskCreate + SendMessage for multi-turn peer coordination), and parallel task dispatch (N identical operations). Two-tier delegation: lightweight (haiku, max_turns=3, one-shot extraction/classification) vs full (multi-step, tool use, iteration). Decision rule — agents need to talk to each other or share state → Teams; independent one-shot work → Subagents. Auto-invoked by Algorithm when 3+ independent workstreams exist at Extended+ effort. USE WHEN 3+ workstreams, parallel execution, agent specialization, agent team, swarm, spawn agents, create team, fan out, divide and conquer, multi-agent, coordinate agents. NOT FOR single-agent custom personality composition (use Agents skill)."
+description: "Parallelize work via six patterns: built-in agents (Engineer/Architect/Algorithm/Explore/Plan via Task), worktree-isolated agents (conflict-free parallel file edits), background agents (run_in_background: true, non-blocking), custom agents (ComposeAgent via Agents skill → Task general-purpose), agent teams (implicit per-session under CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1: spawn via Agent + TaskCreate + SendMessage for multi-turn peer coordination), and parallel task dispatch (N identical operations). Two-tier delegation: lightweight (haiku, max_turns=3, one-shot extraction/classification) vs full (multi-step, tool use, iteration). Decision rule — agents need to talk to each other or share state → Teams; independent one-shot work → Subagents. Auto-invoked by Algorithm when 3+ independent workstreams exist at Extended+ effort. USE WHEN 3+ workstreams, parallel execution, agent specialization, agent team, swarm, spawn agents, create team, fan out, divide and conquer, multi-agent, coordinate agents. NOT FOR single-agent custom personality composition (use Agents skill)."
 effort: medium
 ---
 
@@ -13,11 +13,11 @@ effort: medium
 | the user Says | System | Tool | What Happens |
 |-------------|--------|------|-------------|
 | "**custom agents**", "**specialized agents**", "spin up agents", "launch agents" | **Agents Skill** (ComposeAgent) | `Task(subagent_type="general-purpose", prompt=<ComposeAgent output>)` | Unique personalities, voices, colors via trait composition |
-| "**create an agent team**", "**agent team**", "**swarm**" | **Claude Code Teams** | `TeamCreate` → `TaskCreate` → `SendMessage` | Persistent team with shared task list, message coordination, multi-turn collaboration |
+| "**create an agent team**", "**agent team**", "**swarm**" | **Claude Code Teams** (implicit, one per session under `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) | `Agent` (spawn teammates) → `TaskCreate` → `SendMessage` | Persistent team with shared task list, message coordination, multi-turn collaboration |
 
 **These are NOT the same thing:**
 - **Custom agents** = one-shot parallel workers with unique identities, launched via `Task()`, no shared state
-- **Agent teams** = persistent coordinated teams with shared task lists, messaging, and multi-turn collaboration via `TeamCreate`
+- **Agent teams** = persistent coordinated teams with shared task lists, messaging, and multi-turn collaboration. Teams are implicit (one per session) under `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`; the standalone `TeamCreate`/`TeamDelete` tools were removed in Claude Code v2.1.178 and `team_name` is now ignored.
 
 ## When the Algorithm Should Use This Skill
 
@@ -26,7 +26,7 @@ effort: medium
 - **Specialized expertise** needed (architecture design, implementation, ISC optimization)
 - **Large codebase changes** spanning 5+ files benefit from parallel workers
 - **Research + execution** can proceed simultaneously
-- **"Create an agent team"** — use TeamCreate for persistent coordinated teams
+- **"Create an agent team"** — spawn teammates via `Agent` under `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` for persistent coordinated teams
 - **Unattended autonomous work where auditability matters more than speed** — spawn an Observer team (Agents skill → SPAWNOBSERVERS) alongside the primary agent, reading the tool-activity audit log, voting continue/halt/escalate. ONLY use when BOTH (a) time is not a constraint and (b) auditability is the primary requirement. Never for interactive or time-sensitive work. See Agents/SKILL.md "Observer Team Archetype" for shape and guardrails.
 
 ## Delegation Patterns
@@ -99,22 +99,22 @@ Task(subagent_type="general-purpose", prompt=<ComposeAgent JSON .prompt field>)
 - Never use built-in agent types (Engineer, Architect) for custom work
 - Ideal for: domain experts, adversarial reviewers, creative brainstormers, parallel analysis
 
-### 5. Agent Teams (via TeamCreate)
+### 5. Agent Teams (implicit, per-session)
 
 **Trigger:** "create an agent team", "agent team", "swarm", "team of agents"
-**Action:** Use `TeamCreate` tool → `TaskCreate` → spawn teammates via `Task(team_name=...)` → coordinate via `SendMessage`
+**Prerequisite:** `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` must be set in the session env. Every session then has one implicit team — no creation step. The standalone `TeamCreate`/`TeamDelete` tools were removed in Claude Code v2.1.178; `team_name` is now ignored.
+**Action:** `TaskCreate` (shared task list) → spawn teammates via `Agent` with a `name` → assign via `TaskUpdate` → coordinate via `SendMessage`
 
 ```
-1. TeamCreate(team_name="my-project")           # Creates team + task list
-2. TaskCreate(subject="Implement auth module")   # Create team tasks
-3. Task(subagent_type="Engineer", team_name="my-project", name="auth-engineer")  # Spawn teammate
-4. TaskUpdate(taskId="1", owner="auth-engineer") # Assign task
-5. SendMessage(type="message", recipient="auth-engineer", content="...")  # Coordinate
+1. TaskCreate(subject="Implement auth module")        # Create a task on the shared list
+2. Agent(subagent_type="Engineer", name="auth-engineer", prompt="...")  # Spawn a named teammate
+3. TaskUpdate(taskId="1", owner="auth-engineer")      # Assign the task
+4. SendMessage(to="auth-engineer", content="...")     # Coordinate / wake by id or name
 ```
 
 **This is a COMPLETELY DIFFERENT system from custom agents:**
 - **Custom agents** (Agents skill) = fire-and-forget parallel workers, no shared state
-- **Agent teams** (TeamCreate) = persistent coordinated teams with shared task lists, messaging, multi-turn
+- **Agent teams** (implicit under `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) = persistent coordinated teams with shared task lists, messaging, multi-turn
 
 **Team Guidelines:**
 - Use for 3+ independently workable criteria at Extended+
@@ -125,7 +125,7 @@ Task(subagent_type="general-purpose", prompt=<ComposeAgent JSON .prompt field>)
 
 ### When to Use Teams vs Subagents (Decision Matrix)
 
-| Factor | Subagents (Task) | Agent Teams (TeamCreate) |
+| Factor | Subagents (Task) | Agent Teams (implicit) |
 |--------|------------------|--------------------------|
 | **Communication** | Fire-and-forget, no peer messaging | Persistent messaging between teammates |
 | **Context** | Fresh context each spawn, limited window | Full context window per teammate, preserved across turns |
@@ -149,6 +149,48 @@ For N identical operations (e.g., updating 10 files with the same pattern):
 1. Create N `Task()` calls in a single message (parallel launch)
 2. Each agent gets one unit of work
 3. Results collected when all complete
+
+### 7. CLI Subprocess via `claude agents` (Reproducible Fan-Out)
+
+**Trigger:** "benchmark", "reproducible run", "spawn N independent claude sessions", "fan out with explicit model/effort settings"
+**Action:** Shell out to `claude agents` with explicit per-spawn flags so each child is configured independently of the parent session's settings.
+
+Available since claude-code v2.1.142. Distinct from subagents (which inherit parent settings) and Teams (which share state) — these are *isolated child Claude Code processes* with their own settings/MCP/permissions.
+
+```bash
+claude agents \
+  --model claude-opus-4-8 \
+  --effort high \
+  --mcp-config .mcp.json \
+  --permission-mode acceptEdits \
+  --add-dir ./benchmark-target \
+  --plugin-dir ./plugins \
+  --settings ./benchmark-settings.json \
+  --prompt "$(cat task.md)"
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--model` | Pin the model explicitly (e.g. `claude-opus-4-8`) — eliminates parent-effort drift across runs |
+| `--effort` | Pin reasoning tier (`fast|standard|high|xhigh|max`) |
+| `--mcp-config` | Per-run MCP servers, isolated from parent |
+| `--permission-mode` | `acceptEdits` for hands-off, `bypassPermissions` only with caution |
+| `--add-dir` | Working directory the child can read/write |
+| `--settings` | Per-run settings.json — different hooks, env vars, etc. |
+| `--dangerously-skip-permissions` | Last resort for fully sandboxed CI |
+
+**When to use:**
+- **Benchmarking** — N identical task spawns where parent settings would contaminate the comparison
+- **Reproducibility** — explicit model/effort recorded in the launch command itself
+- **CI integration** — invoke from a script/pipeline rather than from inside an active Claude session
+- **Cross-account or cross-config testing** — different `--settings` files per run
+
+**When NOT to use:**
+- Inside an active Algorithm phase — use subagents (Pattern 1) so parent context flows
+- For coordinated multi-agent work — use Teams (Pattern 5)
+- For one-shot extraction — use lightweight delegation
+
+**Decision rule vs subagents:** Need different settings.json / MCP / model than the parent? → CLI. Same parent context, just parallel work? → subagent.
 
 ## Effort-Level Scaling
 
@@ -214,7 +256,7 @@ Task(subagent_type="general-purpose", prompt="...")  # or specialized agent type
 
 ## Gotchas
 
-- **Delegation uses Claude Code's built-in TeamCreate** — NOT the Agents skill's ComposeAgent. These are different systems.
+- **Delegation uses Claude Code's built-in implicit teams** (env flag `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`; `TeamCreate`/`TeamDelete` removed in v2.1.178) — NOT the Agents skill's ComposeAgent. These are different systems.
 - **3+ independent workstreams warrant delegation.** For 1-2 tasks, direct work is faster than team coordination overhead.
 - **Agent teams share a task list.** Use TaskCreate/TaskUpdate for coordination, not ad-hoc messages.
 - **Teams overkill for single-file tasks.** (Mar 2026 reflection: "one agent that can both read code and write JSX is better than three specialists who can't coordinate")
@@ -224,8 +266,8 @@ Task(subagent_type="general-purpose", prompt="...")  # or specialized agent type
 **Example 1: Parallel implementation**
 ```
 User: "build the frontend and backend in parallel"
-→ Creates team via TeamCreate
-→ Spawns frontend and backend agents
+→ Uses the implicit session team (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1)
+→ Spawns frontend and backend agents via Agent
 → Shared task list for coordination
 → Agents work independently, merge results
 ```

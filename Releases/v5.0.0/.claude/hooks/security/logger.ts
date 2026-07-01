@@ -6,6 +6,7 @@
  */
 
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { dirname } from 'path';
 import { paiPath } from '../lib/paths';
 import type { SecurityEvent } from './types';
 
@@ -36,7 +37,10 @@ export function logSecurityEvent(event: SecurityEvent): void {
     const summary = slugify(event.reason || event.target || 'unknown');
     const filename = `security-${event.eventType}-${summary}-${ts.stamp}.jsonl`;
     const logPath = paiPath('MEMORY', 'SECURITY', ts.year, ts.month, filename);
-    const dir = logPath.substring(0, logPath.lastIndexOf('/'));
+    // dirname(), not lastIndexOf('/') — paiPath returns backslash paths on
+    // Windows, so a '/'-only search returned -1 → dir='' → mkdir('') ENOENT,
+    // silently dropping EVERY security event on Windows. dirname handles both.
+    const dir = dirname(logPath);
 
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
