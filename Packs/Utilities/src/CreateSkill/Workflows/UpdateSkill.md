@@ -5,7 +5,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the UpdateSkill workflow in the CreateSkill skill to modify existing skill"}' \
   > /dev/null 2>&1 &
@@ -62,7 +62,7 @@ touch ~/.claude/skills/[SkillName]/Workflows/[WorkflowName].md
 
 Example:
 ```bash
-touch ~/.claude/skills/YourSkill/Workflows/UpdatePublicRepo.md
+touch ~/.claude/skills/_DAEMON/Workflows/UpdatePublicRepo.md
 ```
 
 3. **Add entry to `## Workflow Routing` section in SKILL.md:**

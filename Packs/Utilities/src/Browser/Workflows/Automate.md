@@ -3,7 +3,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Automate workflow in the Browser skill to execute a recipe template"}' \
   > /dev/null 2>&1 &
@@ -36,7 +36,7 @@ Load a parameterized recipe template, resolve its parameters, and execute it thr
 ### 1. Find Recipe
 
 ```
-Glob: skills/Utilities/Browser/Recipes/*.md
+Glob: skills/Browser/Recipes/*.md
 ```
 
 Match the user's input against recipe filenames. If ambiguous, list available recipes and ask.
@@ -68,23 +68,23 @@ From recipe frontmatter `tool` field:
 
 | Tool Value | Execution Method |
 |-----------|-----------------|
-| `playwright-cli` | Execute steps as sequential `playwright-cli` Bash commands |
+| `agent-browser` | Execute steps as sequential `agent-browser` Bash commands |
 | `BrowserAgent` | Spawn `Task(subagent_type="BrowserAgent", prompt=resolved_template)` |
 | `UIReviewer` | Spawn `Task(subagent_type="UIReviewer", prompt=resolved_template)` |
 
-Default: `playwright-cli` if `tool` field is missing.
+Default: `agent-browser` if `tool` field is missing.
 
 ### 5. Execute
 
 Run the resolved template through the selected tool:
 
-- **playwright-cli:** Parse the numbered steps into CLI commands and execute sequentially
+- **agent-browser:** Parse the numbered steps into CLI commands and execute sequentially
 - **BrowserAgent/UIReviewer:** Pass the full resolved template as the agent prompt
 
 ### 6. Return Results
 
 Report the execution results:
-- For `playwright-cli`: command outputs, screenshot paths, any errors
+- For `agent-browser`: command outputs, screenshot paths, any errors
 - For agents: the agent's full response including screenshots and reports
 
 ## Design Decisions

@@ -397,7 +397,7 @@ yt is a command that uses the YouTube API to pull transcripts, pull user comment
 
 usage: yt [-h] [--duration] [--transcript] [url]
 
-vm (video meta) extracts metadata about a video, such as the transcript and the video's duration. By {PRINCIPAL.NAME} Miessler.
+vm (video meta) extracts metadata about a video, such as the transcript and the video's duration. By {{PRINCIPAL_FULL_NAME}}.
 
 positional arguments:
   url           YouTube video URL

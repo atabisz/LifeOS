@@ -1,8 +1,10 @@
-# Step 4.2 — Packs collapse: scoping memo (decision pending)
+# Step 4.2 — Packs collapse: decision + execution record
 
-**Status:** scoped, not executed. Awaiting Alex's source-of-truth decision.
+**Status:** ✅ EXECUTED 2026-07-02. Alex approved the standalone-as-source recommendation; `scripts/build-bundles.ts` was written and run `--apply`.
 **Date:** 2026-07-02
-**Context:** Windows-support plan Step 4.2 (`docs/WINDOWS-SUPPORT-PLAN.md`). This memo exists so the decision can be made with full detail; nothing in the tree was changed to produce it.
+**Context:** Windows-support plan Step 4.2 (`docs/WINDOWS-SUPPORT-PLAN.md`).
+
+> **⚠️ This memo's original census undercounted — corrected on execution.** The scoping pass below measured only **3 pairs** (Art/Remotion/AudioEditor). The full **12-pair** census run at execution found bidirectional drift and one only-in-bundle dir a naive mirror would have deleted. See "Execution record" at the bottom for the corrected numbers; the recommendation held, the scope was 4× larger.
 
 ## The premise the plan corrected
 
@@ -48,3 +50,24 @@ Windows engineering is complete regardless of 4.2 — this is drift-hygiene. Bot
 2. Write a `build-bundles.ts` (or extend `build-release.ts`) that materializes `Packs/Utilities/src/<Skill>` and `Packs/Media/src/<Skill>` from `Packs/<Skill>/src`, treating the bundle-only trio as native.
 3. Reconcile the 9 AudioEditor content diffs (confirm standalone is newer for each) before first generation, so generation doesn't clobber a bundle-only fix.
 4. Wire a check so the bundle copies can't drift again (CI diff, or generation-on-commit).
+
+## Execution record (2026-07-02)
+
+Built `scripts/build-bundles.ts` (overlay generator, dry-run default) and ran it `--apply`.
+
+**Corrected census — 12 shared mappings, not 3:**
+
+| Bundle | Sub-skills projected from standalone |
+|--------|--------------------------------------|
+| `Utilities/src` | Aphorisms, AudioEditor, Browser, CreateCLI, CreateSkill, Delegation, Evals, Fabric, PAIUpgrade, Prompting |
+| `Media/src` | Art, Remotion |
+
+- **Drift was bidirectional and the bundle was stale:** bundle `Browser` was `v3.3.0` (Playwright, committed 2026-03-15) vs standalone `v10.0.0` (agent-browser, 2026-05-01). The March-vs-May gap is why standalone is authoritative — confirmed before any overwrite.
+- **One only-in-bundle dir** across all 12 pairs: `PAIUpgrade/State/` (runtime `last-check.json` + `youtube-videos.json`). A destructive mirror would have deleted it — the generator is an **overlay** that never deletes bundle-only files, so it survived.
+- **159 files converged** (creates = newer standalone source: Art example-image libraries + `FillFrame.ts`, Evals scenario feature + its `package.json`, CreateSkill workflows, PAIUpgrade `References/`, Remotion `Ref-*` docs; updates = drift like Browser).
+- **Denylist held:** no `Results/`, `bun.lock`, or `.cursor/` leaked into any bundle; the bundle-only trio (Cloudflare/Documents/Parser) was never touched; no standalone file was modified.
+- **`package.json` kept, `bun.lock` denied** — consistent with the bundle's existing convention (it already carries 3 sub-skill `package.json` files and no root manifest); the pulled-in `ScenarioRunner.ts` needs its manifest.
+- **Drift guard:** `bun scripts/build-bundles.ts --check` exits nonzero on any future drift (exits 0 now). `--self-test` proves the tool can go RED. Wiring `--check` into CI is an optional follow-up.
+- **Reviewed:** Forge adversarial pass on the write path — all data-loss vectors refuted; one conditional dst-side symlink write vector hardened with a fail-closed `assertNoSymlinkInPath` guard.
+
+ISA: `~/.claude/PAI/MEMORY/WORK/windows-step4-packs-collapse/ISA.md`.

@@ -5,7 +5,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the ValidateSkill workflow in the CreateSkill skill to validate skill structure"}' \
   > /dev/null 2>&1 &
@@ -20,7 +20,7 @@ Running the **ValidateSkill** workflow in the **CreateSkill** skill to validate 
 **REQUIRED FIRST:** Read the canonical structure:
 
 ```
-~/.claude/PAI/SkillSystem.md
+~/.claude/PAI/DOCUMENTATION/Skills/SkillSystem.md
 ```
 
 ---
@@ -123,6 +123,54 @@ User: "[Request]"
 
 **Check:** Examples section required (WRONG if missing)
 
+### Gotchas Section
+```markdown
+## Gotchas
+
+[Known failure modes, API quirks, common mistakes]
+```
+
+**Check:** Gotchas section required (WRONG if missing). This is the highest information density in any skill — Anthropic's internal best practice.
+
+### Negative Triggers (for skills with confusable neighbors)
+
+**Check:** If the skill shares vocabulary with other skills, description should include `NOT FOR` clause:
+```yaml
+description: ... USE WHEN [triggers]. NOT FOR [what this ISN'T for (use SkillName instead)].
+```
+
+Common confusable pairs to check: research-style skills (Research vs investigation skills), security-style skills (assessment vs reconnaissance), publishing-style skills (blog vs newsletter)
+
+---
+
+## Step 5a-prelude: Public Release Readiness Check
+
+Every skill ships with the PAI public release. Verify the skill is clean of personal/sensitive content:
+
+```bash
+rg -i "danielmiessler|unsupervised|ULAdmin|thesurface|human3|ul\.live|/Users/[a-z]+/" ~/.claude/skills/[SkillName]/
+```
+
+**Check for violations:**
+- Hardcoded secrets, API keys, tokens, bearer credentials (zero tolerance)
+- Author name or first-person war stories ("the user reports", "the April 2026 incident...")
+- Specific project names baked into prose (<product>, <subproduct>, <brand>, etc.) — these belong in `SKILLCUSTOMIZATIONS/`
+- User-specific absolute paths (`/Users/<name>/...`) — use `~/` instead
+- Personal domain names (<author>.example, <product>.example, <brand>.example) — unless the skill is specifically about operating that domain
+
+**Zero matches = PASS.** Any match = FAIL, recommend moving to `~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/<SkillName>/` or rewriting in generic language.
+
+---
+
+## Step 5a: BPE Compliance Check
+
+Apply the bitter lesson test to the skill's instructions:
+
+- [ ] Each instruction provides knowledge Claude can't derive on its own
+- [ ] No instructions compensating for model limitations (format enforcement, CoT scaffolding)
+- [ ] Deterministic scripts used where possible instead of prompt-based workarounds
+- [ ] SKILL.md is under 500 lines (large skills should use References/ or root context files)
+
 ---
 
 ## Step 6: Check Workflow Files
@@ -187,7 +235,7 @@ grep -l "Intent-to-Flag" ~/.claude/skills/[SkillName]/Workflows/*.md
 | (default) | `--model sonnet` | Balanced |
 ```
 
-**Reference:** `~/.claude/PAI/CliFirstArchitecture.md`
+**Reference:** `~/.claude/PAI/DOCUMENTATION/Tools/CliFirstArchitecture.md`
 
 ---
 
@@ -210,12 +258,27 @@ grep -l "Intent-to-Flag" ~/.claude/skills/[SkillName]/Workflows/*.md
 
 ### Markdown Body
 - [ ] `## Workflow Routing` section present
+- [ ] `## Gotchas` section present with known failure modes
 - [ ] `## Examples` section with 2-3 patterns
 - [ ] All workflows have routing entries
+- [ ] SKILL.md under 500 lines
+
+### Content Quality (Anthropic Best Practices)
+- [ ] Description includes `NOT FOR` clause if confusable with other skills
+- [ ] Instructions focus on what breaks Claude's defaults (not stating the obvious)
+- [ ] No instructions compensating for model limitations (BPE check)
+- [ ] Appropriate degrees of freedom (specific for fragile tasks, flexible for safe ones)
+
+### Public Release Readiness
+- [ ] No sensitive content (API keys, tokens, credentials, private URLs)
+- [ ] No personal references (author name, project names, personal domains, user-specific absolute paths)
+- [ ] Pre-flight grep for personal refs returns zero matches
+- [ ] Personal/user-specific content (if any) lives in `SKILLCUSTOMIZATIONS/`, not the skill body
 
 ### Structure
-- [ ] `tools/` directory exists
+- [ ] `Tools/` directory exists
 - [ ] No `backups/` inside skill
+- [ ] `References/` used appropriately for large skills
 
 ### CLI-First Integration (for skills with CLI tools)
 - [ ] CLI tools expose configuration via flags (not hardcoded)

@@ -37,14 +37,14 @@ Read the pattern's system.md file:
 
 ```bash
 PATTERN_NAME="[selected_pattern]"
-PATTERN_PATH="$HOME/.claude/skills/Utilities/Fabric/Patterns/$PATTERN_NAME/system.md"
+PATTERN_PATH="$HOME/.claude/skills/Fabric/Patterns/$PATTERN_NAME/system.md"
 
 if [ -f "$PATTERN_PATH" ]; then
   cat "$PATTERN_PATH"
 else
   echo "Pattern not found: $PATTERN_NAME"
   echo "Available patterns:"
-  ls ~/.claude/skills/Utilities/Fabric/Patterns/ | head -20
+  ls ~/.claude/skills/Fabric/Patterns/ | head -20
 fi
 ```
 
@@ -83,6 +83,57 @@ The `-y` flag extracts the transcript automatically.
 fabric -u "URL" -p [pattern_name]
 ```
 Use when native URL fetching fails.
+
+### Step 4b: Auto-Harvest (summarize-family patterns)
+
+**Trigger:** When the selected pattern is a member of the **summarize-family** AND the input is either a URL or text ≥200 characters, fire `_HARVEST` on the SAME input as a side-effect of the summary. Two outputs from one action: the summary in chat, the KNOWLEDGE note on disk.
+
+**Summarize-family patterns** (extend as new ones land):
+
+- `summarize`
+- `create_5_sentence_summary`
+- `create_micro_summary`
+- `summarize_paper`
+- `summarize_lecture`
+- `summarize_newsletter`
+- `summarize_meeting`
+- `summarize_debate`
+- `youtube_summary`
+
+**Invocation** — run in the BACKGROUND so it does not block the summary:
+
+```bash
+bun ~/.claude/skills/_HARVEST/Tools/harvest.ts "<the same input the user sent into summarize>"
+```
+
+Use `Bash` with `run_in_background: true`. The CLI handles source detection (URL / YouTube / text), body fetch, Arbol classification, and executor dispatch — never re-implement the writer here.
+
+**Input-type gate:**
+
+- URL (article or YouTube) → fire harvest.
+- Raw text ≥200 characters → fire harvest with `--type text`.
+- Raw text <200 characters → SKIP harvest (too thin for a KNOWLEDGE note).
+
+**Output reporting** — alongside the summary, surface the harvest result block:
+
+```
+--- HARVEST ---
+arbol.id:       <id>
+classification: <ideas|research|people|companies>
+KNOWLEDGE path: MEMORY/KNOWLEDGE/<Type>/<slug>.md   (or "duplicate — not re-written")
+```
+
+**Failure isolation:**
+
+- Harvest errors MUST NOT suppress the summary. If `harvest.ts` exits non-zero, print the summary as normal AND surface the harvest error as a warning block — never swallow it, never replace summary output with the error.
+- Summary errors MUST NOT block harvest. Harvest is the persistence layer; it runs independently.
+
+**Auth & write boundary:**
+
+- Auth comes from `~/.config/arbol/config.yaml`. Do not introduce a new token path or env var.
+- This workflow MUST NOT write to `MEMORY/KNOWLEDGE/` directly. The single canonical writer is `HarvestExecutor.ts`, invoked transitively by `harvest.ts`.
+
+**Idempotency:** re-running summarize on the same URL returns `arbol.status: duplicate` from the harvest CLI; no second KNOWLEDGE note is created. Surface the duplicate status to the user so they know the source was already captured.
 
 ### Step 5: Format Output
 
@@ -139,6 +190,9 @@ User Request
     │   ├─ "5 sentence" → create_5_sentence_summary
     │   ├─ "micro" or "tldr" → create_micro_summary
     │   └─ Default → summarize
+    │   *(auto-harvest side-effect: any summarize-family pattern with a URL or
+    │    text ≥200 chars also fires `~/.claude/skills/_HARVEST/Tools/harvest.ts`
+    │    in the background — see Step 4b)*
     │
     ├─ Contains "threat model"?
     │   ├─ "stride" → create_stride_threat_model
@@ -196,7 +250,7 @@ User Request
 
 **Pattern not found:**
 ```
-Pattern '[name]' not found in ~/.claude/skills/Utilities/Fabric/Patterns/
+Pattern '[name]' not found in ~/.claude/skills/Fabric/Patterns/
 
 Similar patterns:
 - [suggestion 1]

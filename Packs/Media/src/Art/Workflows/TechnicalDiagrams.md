@@ -5,7 +5,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the TechnicalDiagrams workflow in the Art skill to create diagrams"}' \
   > /dev/null 2>&1 &
@@ -35,10 +35,37 @@ Technical diagrams for system architectures, process flows, and board presentati
 4. **Strategic color** — Purple #4A148C for key elements, Teal #00796B for flows
 5. **White primary** — 80% of elements in grey/black colors, color is accent only
 
+### 🚨🚨🚨 MANDATORY: BOLD / HIGH-CONTRAST / SATURATED 🚨🚨🚨
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  Nano Banana Pro DEFAULTS to thin/pastel — REJECTED by the user. ⚠️
+⚠️  You MUST push the prompt HARD for bold, saturated, crisp.     ⚠️
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Every technical-diagram prompt MUST repeat the following directives (multiple times if needed) or the output will come back bleached and rejected:
+
+- **BOLD BLACK INK** (#000000 or near-black) for primary linework — like a **thick drafting pen or black sharpie**, NOT a light pencil
+- **DEEP SATURATED royal purple #4A148C** — must read as rich royal purple, NOT lilac, NOT lavender, NOT pastel
+- **DEEP SATURATED teal #00796B** — rich teal, NOT pale seafoam, NOT washed blue-green
+- **HIGH CONTRAST** between ink and cream paper — the image should feel **CRISP**, not soft
+- **LARGE BOLD UPPERCASE labels** — must be readable at thumbnail size without squinting
+- **THICK, CONFIDENT arrowheads** — no hesitation, no faint lines
+- **Professional technical illustration quality** — Tufte precision, architect's drafting plate, NOT a rough student sketch
+- Hand-drawn imperfection is OK but strokes MUST be **BOLD and DELIBERATE**, never thin and uncertain
+- Explicitly **reject** the words "light", "faint", "pastel", "thin", "sketchy", "rough" from the prompt — they bias the model toward washed-out output
+
+When a diagram comes back bleached, thin, or pastel: regenerate immediately with stronger directives. For stubborn cases, switch to `--model flux` — Flux tends to produce crisper, more finished technical illustration than nano-banana-pro.
+
+### Title/Subtitle Rule
+
+The workflow template below includes a title + subtitle block. **Override this when the diagram is being used as a blog header where the page already has the title.** For blog headers specifically, remove the title and subtitle from the prompt entirely — the image is visual only. For standalone diagrams (slides, presentations, social images), include title + subtitle as the template specifies.
+
 
 # Example image
 # Ignore for now
-# ~/.claude/skills/Media/Art/WorkflowExamples/TechnicalDiagrams/example.png
+# ~/.claude/skills/Art/WorkflowExamples/TechnicalDiagrams/example.png
 
 ---
 
@@ -204,7 +231,7 @@ All the art components, labels, and such should mostly look hand-drawn, similar 
 ### Generate Command
 
 ```bash
-bun run ~/.claude/skills/art/Tools/Generate.ts \
+bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --model [SELECTED_MODEL] \
   --prompt "[PROMPT]" \
   --size [SELECTED_SIZE] \

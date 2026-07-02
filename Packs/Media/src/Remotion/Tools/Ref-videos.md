@@ -84,10 +84,23 @@ Use the `style` prop to control size and position:
     position: "absolute",
     top: 100,
     left: 50,
-    objectFit: "cover",
   }}
 />
 ```
+
+## `objectFit` prop (v4.0.442+)
+
+`objectFit` is now a first-class prop on `<Video>` — use it directly instead of via `style`. Valid values: `"cover" | "contain" | "fill" | "scale-down" | "none"`.
+
+```tsx
+<Video
+  src={staticFile("video.mp4")}
+  objectFit="cover"
+  style={{ width: 1920, height: 1080 }}
+/>
+```
+
+Use when overlaying source footage whose aspect ratio doesn't match the composition — `cover` fills and crops, `contain` letterboxes.
 
 ## Volume
 

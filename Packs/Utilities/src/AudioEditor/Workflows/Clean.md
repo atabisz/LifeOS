@@ -5,7 +5,7 @@ Clean, edit, and polish audio files by removing filler words, stutters, false st
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Clean workflow in the AudioEditor skill to clean audio"}' \
   > /dev/null 2>&1 &
@@ -36,7 +36,7 @@ Map the user's request to Pipeline.ts flags:
 ## Step 3: Run the Pipeline
 
 ```bash
-bun ~/.claude/skills/Utilities/AudioEditor/Tools/Pipeline.ts \
+bun ~/.claude/skills/AudioEditor/Tools/Pipeline.ts \
   "<audio-file-path>" \
   [FLAGS_FROM_INTENT_MAPPING] \
   --output "<output-path>"
@@ -63,14 +63,14 @@ For debugging or partial workflows, individual tools can be run standalone:
 
 ```bash
 # Transcription only
-bun ~/.claude/skills/Utilities/AudioEditor/Tools/Transcribe.ts <file>
+bun ~/.claude/skills/AudioEditor/Tools/Transcribe.ts <file>
 
 # Analysis only (requires transcript)
-bun ~/.claude/skills/Utilities/AudioEditor/Tools/Analyze.ts <transcript.json>
+bun ~/.claude/skills/AudioEditor/Tools/Analyze.ts <transcript.json>
 
 # Edit only (requires audio + edits)
-bun ~/.claude/skills/Utilities/AudioEditor/Tools/Edit.ts <file> <edits.json>
+bun ~/.claude/skills/AudioEditor/Tools/Edit.ts <file> <edits.json>
 
 # Polish only (requires CLEANVOICE_API_KEY)
-bun ~/.claude/skills/Utilities/AudioEditor/Tools/Polish.ts <file>
+bun ~/.claude/skills/AudioEditor/Tools/Polish.ts <file>
 ```

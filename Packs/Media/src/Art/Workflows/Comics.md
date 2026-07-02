@@ -1,11 +1,11 @@
 # Hand-Drawn Comics Workflow
 
-**Comic strips in brand editorial illustration style, NOT cartoonish.**
+**Comic strips in UL editorial illustration style, NOT cartoonish.**
 
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Comics workflow in the Art skill to create comic strips"}' \
   > /dev/null 2>&1 &
@@ -15,7 +15,7 @@ Running **Comics** in **Art**...
 
 ---
 
-Creates **EDITORIAL COMICS** — 3-4 panel storytelling with sophisticated hand-drawn aesthetic, maintaining brand flat color and black linework.
+Creates **EDITORIAL COMICS** — 3-4 panel storytelling with sophisticated hand-drawn aesthetic, maintaining UL flat color and black linework.
 
 ---
 
@@ -39,7 +39,7 @@ Editorial comics use sequential panels to explain concepts, tell stories, or ill
 
 ### Core Characteristics
 1. **Multi-panel** — 3-4 panels telling sequential story
-2. **Editorial style** — Maintains brand flat color, black linework aesthetic
+2. **Editorial style** — Maintains UL flat color, black linework aesthetic
 3. **Simplified figures** — Characters stylized, not realistic or cutesy
 4. **Hand-drawn** — Imperfect linework, gestural quality
 5. **Narrative flow** — Panels build on each other to make a point
@@ -193,7 +193,7 @@ BACKGROUND: Light Cream (#F5E6D3) OR varied light tones per panel
 
 AESTHETIC:
 - Hand-drawn editorial style (NOT cartoonish or cute)
-- Flat color, black linework, brand palette
+- Flat color, black linework, UL palette
 - Simplified but sophisticated character design
 - Variable stroke weight (thicker for outlines, thinner for details)
 - Gestural imperfect linework
@@ -285,7 +285,7 @@ CRITICAL REQUIREMENTS:
 - Minimal dialogue (visual storytelling prioritized)
 - Strategic purple/teal accents (not overwhelming color)
 - No gradients, flat colors only
-- Maintains brand aesthetic (black linework, flat color, imperfect)
+- Maintains UL aesthetic (black linework, flat color, imperfect)
 - Smart insight or humor (sophisticated, not silly)
 
 Optional: Sign small in bottom right corner of final panel in charcoal (#2D2D2D).
@@ -337,7 +337,7 @@ open /path/to/comic.png
 - [ ] **Hand-drawn quality** — Imperfect linework, gestural
 - [ ] **Minimal backgrounds** — Simple, not busy
 - [ ] **Smart insight** — Punchline or point lands effectively
-- [ ] **brand aesthetic maintained** — Flat color, black linework
+- [ ] **UL aesthetic maintained** — Flat color, black linework
 
 #### Character Validation (Planeform Aesthetic)
 - [ ] **Angular construction** — Bodies built from planes, NOT round forms
@@ -430,7 +430,7 @@ open /path/to/comic.png
 **Key Principle:**
 - **Sophisticated, not silly** — New Yorker style, editorial intelligence
 - **Visual storytelling** — Minimal dialogue, panels tell the story
-- **brand aesthetic** — Flat color, hand-drawn, imperfect
+- **UL aesthetic** — Flat color, hand-drawn, imperfect
 
 ---
 

@@ -5,7 +5,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the YouTubeThumbnailChecklist workflow in the Art skill to validate thumbnails"}' \
   > /dev/null 2>&1 &
@@ -169,7 +169,7 @@ Running **YouTubeThumbnailChecklist** in **Art**...
 
 ```
 □ Logo is present
-□ Logo matches example style (TI: mark, not brand logo)
+□ Logo matches example style (TI: mark, not UL logo)
 □ Logo size matches example (measure in pixels)
 □ Logo position matches example (measure from edges)
 □ Logo color correct for thumbnail type
@@ -376,7 +376,7 @@ AFTER FIX → RERUN ENTIRE POST-GENERATION CHECKLIST
    - ✅ Measure exact Y positions from example
 
 9. **Wrong Logo**
-   - ❌ Using brand logo instead of TI: mark
+   - ❌ Using UL logo instead of TI: mark
    - ❌ Wrong logo size or position
    - ✅ Check example for exact logo style and placement
 

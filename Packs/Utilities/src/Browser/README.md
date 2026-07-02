@@ -1,78 +1,42 @@
-# Browser — CLI-First Browser Automation
+# Browser — Browser Automation
 
-**`playwright-cli` for multi-step work. `bunx playwright` for one-shot screenshots. BrowserAgent only when AI reasoning is needed.**
+**Primary:** `agent-browser` — headless Rust CLI daemon with persistent auth profiles.
+**Fallback:** `interceptor` — Chrome extension CLI, zero bot-detection fingerprints. Use when agent-browser is down or site has aggressive bot detection.
 
-## Architecture
-
-| Tier | Tool | Tokens | When |
-|------|------|--------|------|
-| **1** | `playwright-cli` | 0 | Multi-step interaction (navigate, click, fill, assert) |
-| **1b** | `bunx playwright screenshot/pdf` | 0 | Quick one-shot screenshots and PDFs |
-| **2** | BrowserAgent / UIReviewer | ~30K | AI needs to decide what to do next |
-| **3** | Headed Chrome (`claude --chrome`) | 0 | Authenticated sessions, extensions |
+| Need | Primary (agent-browser) | Fallback (interceptor) |
+|------|------------------------|-----------------|
+| **Anonymous** | `agent-browser open URL` | `interceptor open URL` |
+| **Auth** | `--profile ~/.agent-browser/profiles/<site>` | Uses Chrome's own profiles |
+| **Bot evasion** | Standard headless | Zero CDP fingerprint — passes all checks |
 
 ## Quick Start
 
 ```bash
-# One-shot screenshot (no session needed)
-bunx playwright screenshot "https://example.com" /tmp/shot.png
+# One-shot screenshot
+agent-browser open https://example.com && agent-browser screenshot /tmp/shot.png
 
-# Multi-step session with playwright-cli
-playwright-cli -s=demo open https://example.com --persistent
-playwright-cli -s=demo snapshot          # Get element refs
-playwright-cli -s=demo click e6          # Click by ref
-playwright-cli -s=demo screenshot --filename=/tmp/demo.png
-playwright-cli -s=demo close             # ALWAYS close
+# Multi-step session
+agent-browser --session demo open https://example.com
+agent-browser --session demo snapshot
+agent-browser --session demo click @e6
 
-# Verify a web app change
-playwright-cli -s=verify open http://localhost:3000 --persistent
-playwright-cli -s=verify screenshot --filename=/tmp/verify.png
-# Read /tmp/verify.png with Read tool for visual inspection
-playwright-cli -s=verify close
+# Authenticated session (log in once headed, then headless forever)
+agent-browser --profile ~/.agent-browser/profiles/mysite open https://mysite.com
+agent-browser snapshot
 ```
-
-## Key Concepts
-
-### Named Sessions
-Every `playwright-cli` session uses `-s=<name>` for isolation. Multiple sessions run in parallel. **Always close your sessions.**
-
-### Ref-Based Interaction
-`snapshot` returns an accessibility tree with refs (`e12`, `e34`). Use these refs for `click`, `fill`, etc. — more reliable than CSS selectors.
-
-### Zero Custom Code
-Zero custom code — no TypeScript wrappers, no custom classes. Everything uses standard CLI tools:
-- `playwright-cli` — named sessions, ref-based interaction
-- `bunx playwright` — one-shot screenshots and PDFs
-- Chrome headless — DOM dumps
-
-## Requirements
-
-- `@playwright/cli` (`bun install -g @playwright/cli@latest`)
-- Playwright (`bun install -g playwright`)
-- Chrome (for headed mode and headless CLI)
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `SKILL.md` | Full skill documentation with decision tree and workflow routing |
+| `SKILL.md` | Full skill documentation |
 | `Stories/` | YAML user story definitions for UIReviewer validation |
-| `Stories/README.md` | Story format documentation and conventions |
-| `Stories/HackerNews.yaml` | Example: Hacker News front page validation |
-| `Stories/ExampleApp.yaml` | Template: localhost app testing patterns |
 | `Recipes/` | Parameterized Markdown workflow templates |
-| `Recipes/README.md` | Recipe format documentation |
-| `Recipes/SummarizePage.md` | Recipe: extract page content summary |
-| `Recipes/ScreenshotCompare.md` | Recipe: before/after visual comparison |
-| `Recipes/FormFill.md` | Recipe: fill form fields with provided data |
-| `Workflows/ReviewStories.md` | Orchestrator: fan out stories to parallel UIReviewers |
-| `Workflows/Automate.md` | Template engine: load and execute recipes |
-| `Workflows/Update.md` | Version check and verification workflow |
-| `~/.claude/agents/BrowserAgent.md` | AI-driven browser agent definition |
-| `~/.claude/agents/UIReviewer.md` | User story validation agent definition |
+| `Workflows/ReviewStories.md` | Fan out stories to parallel UIReviewers |
+| `Workflows/Automate.md` | Load and execute recipe templates |
+| `Workflows/Update.md` | Verify browser tools are current |
 
 ## Related
 
-- [BrowserAgent](~/.claude/agents/BrowserAgent.md)
-- [UIReviewer](~/.claude/agents/UIReviewer.md)
-- [Playwright CLI docs](https://playwright.dev)
+- [BrowserAgent](~/.claude/agents/BrowserAgent.md) — AI-driven agent-browser automation
+- [UIReviewer](~/.claude/agents/UIReviewer.md) — Structured story validation

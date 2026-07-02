@@ -149,6 +149,6 @@ This allows you to quickly extract what's valuable and meaningful from the conte
 
 ## Meta
 
-- **Author**: {PRINCIPAL.NAME} Miessler
-- **Version Information**: {PRINCIPAL.NAME}'s main `extractwisdom` version.
+- **Author**: {{PRINCIPAL_FULL_NAME}}
+- **Version Information**: {{PRINCIPAL_NAME}}'s main `extractwisdom` version.
 - **Published**: January 5, 2024

@@ -10,7 +10,7 @@ purpose: Generate complete, production-ready TypeScript CLI from requirements
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the CreateCli workflow in the CreateCLI skill to generate new CLI"}' \
   > /dev/null 2>&1 &
@@ -202,7 +202,7 @@ const DEFAULTS = {
  * Load configuration from environment
  */
 function loadConfig(): Config {
-  const envPath = process.env.PAI_CONFIG_DIR ? join(process.env.PAI_CONFIG_DIR, '.env') : join(homedir(), '.config', 'PAI', '.env');
+  const envPath = process.env.PAI_CONFIG_DIR ? join(process.env.PAI_CONFIG_DIR, '.env') : join(homedir(), '.claude', 'PAI', '.env');
 
   try {
     const envContent = readFileSync(envPath, 'utf-8');
@@ -276,7 +276,7 @@ const format = formatIdx !== -1 ? args[formatIdx + 1] : 'json';
 4. **Value flags**: `--flag <value>` for choices
 5. **Composable**: Flags should combine logically
 
-**Reference:** `~/.claude/PAI/CliFirstArchitecture.md` (Configuration Flags section)
+**Reference:** `~/.claude/PAI/DOCUMENTATION/Tools/CliFirstArchitecture.md` (Configuration Flags section)
 
 ---
 

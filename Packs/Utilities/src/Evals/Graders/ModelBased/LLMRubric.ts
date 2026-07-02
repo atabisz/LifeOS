@@ -5,7 +5,7 @@
 
 import { BaseGrader, registerGrader, type GraderContext } from '../Base.ts';
 import type { GraderConfig, GraderResult, LLMRubricParams } from '../../Types/index.ts';
-import { inference, type InferenceLevel } from '../../../PAI/Tools/Inference';
+import { inference, type InferenceLevel } from '../../../../PAI/TOOLS/Inference.ts';
 import { readFileSync, existsSync } from 'fs';
 
 export class LLMRubricGrader extends BaseGrader {
@@ -26,6 +26,8 @@ export class LLMRubricGrader extends BaseGrader {
     // Map model preference to inference level (default to standard/Sonnet)
     const levelMap: Record<string, InferenceLevel> = {
       'claude-haiku-4-5-20251001': 'fast',
+      'claude-sonnet-4-6': 'standard',
+      'claude-opus-4-6': 'smart',
       'claude-sonnet-4-20250514': 'standard',
       'claude-opus-4-20250514': 'smart',
     };

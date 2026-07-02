@@ -19,13 +19,13 @@ import { basename, dirname, extname, join, resolve } from "path";
 import { homedir } from "os";
 
 // ============================================================================
-// Environment Loading — keys from ~/.config/PAI/.env
+// Environment Loading — keys from ~/.claude/.env
 // ============================================================================
 
 function loadEnv(): void {
   const envPath = process.env.PAI_CONFIG_DIR
     ? resolve(process.env.PAI_CONFIG_DIR, ".env")
-    : resolve(homedir(), ".config/PAI/.env");
+    : resolve(homedir(), ".claude/.env");
   try {
     const content = readFileSync(envPath, "utf-8");
     for (const line of content.split("\n")) {
@@ -70,7 +70,7 @@ if (!existsSync(audioFile)) {
 
 const apiKey = process.env.CLEANVOICE_API_KEY;
 if (!apiKey) {
-  console.error("CLEANVOICE_API_KEY not found. Set it in ~/.config/PAI/.env");
+  console.error("CLEANVOICE_API_KEY not found. Set it in ~/.claude/.env");
   console.error("Get key at: https://cleanvoice.ai → Dashboard → Settings → API Key");
   process.exit(1);
 }

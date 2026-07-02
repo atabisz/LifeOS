@@ -5,7 +5,7 @@ Create a new evaluation use case with test cases and scoring criteria.
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the CreateUseCase workflow in the Evals skill to create eval use case"}' \
   > /dev/null 2>&1 &
@@ -34,12 +34,12 @@ Ask the user:
 ### Step 2: Create Use Case Directory
 
 ```bash
-mkdir -p ~/.claude/skills/Utilities/Evals/UseCases/<name>/{test-cases,golden-outputs,prompts}
+mkdir -p ~/.claude/skills/Evals/UseCases/<name>/{test-cases,golden-outputs,prompts}
 ```
 
 ### Step 3: Create Config File
 
-Create `~/.claude/skills/Utilities/Evals/UseCases/<name>/config.yaml`:
+Create `~/.claude/skills/Evals/UseCases/<name>/config.yaml`:
 
 ```yaml
 name: <use_case_name>
@@ -97,7 +97,7 @@ models:
 
 ### Step 4: Create Initial Prompt Version
 
-Create `~/.claude/skills/Utilities/Evals/UseCases/<name>/prompts/v1.0.0.md`:
+Create `~/.claude/skills/Evals/UseCases/<name>/prompts/v1.0.0.md`:
 
 ```markdown
 # <Task Name> Prompt v1.0.0
@@ -121,7 +121,7 @@ Create `~/.claude/skills/Utilities/Evals/UseCases/<name>/prompts/v1.0.0.md`:
 
 ### Step 5: Create Test Cases
 
-Create test cases in `~/.claude/skills/Utilities/Evals/UseCases/<name>/test-cases/`:
+Create test cases in `~/.claude/skills/Evals/UseCases/<name>/test-cases/`:
 
 Each test case is a YAML file:
 
@@ -173,7 +173,7 @@ Golden outputs serve as:
 
 ### Step 7: Create README
 
-Create `~/.claude/skills/Utilities/Evals/UseCases/<name>/README.md`:
+Create `~/.claude/skills/Evals/UseCases/<name>/README.md`:
 
 ```markdown
 # <Use Case Name>
@@ -208,7 +208,7 @@ Create `~/.claude/skills/Utilities/Evals/UseCases/<name>/README.md`:
 ## Running Evaluations
 
 \`\`\`bash
-bun run ~/.claude/skills/Utilities/Evals/EvalServer/cli-run.ts --use-case <name>
+bun run ~/.claude/skills/Evals/EvalServer/cli-run.ts --use-case <name>
 \`\`\`
 
 ## Version History
@@ -220,17 +220,17 @@ bun run ~/.claude/skills/Utilities/Evals/EvalServer/cli-run.ts --use-case <name>
 
 ```bash
 # Check structure
-ls -la ~/.claude/skills/Utilities/Evals/UseCases/<name>/
+ls -la ~/.claude/skills/Evals/UseCases/<name>/
 
 # Validate config
-bun run ~/.claude/skills/Utilities/Evals/EvalServer/cli.ts use-case show <name>
+bun run ~/.claude/skills/Evals/EvalServer/cli.ts use-case show <name>
 ```
 
 ### Step 9: Run Initial Eval
 
 ```bash
 # Run first evaluation to verify setup
-bun run ~/.claude/skills/Utilities/Evals/EvalServer/cli-run.ts \
+bun run ~/.claude/skills/Evals/EvalServer/cli-run.ts \
   --use-case <name> \
   --test-id 001-basic \
   --verbose

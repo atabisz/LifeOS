@@ -5,7 +5,7 @@ LLM-powered edit classification using Claude. Reads a word-level transcript and 
 ## Usage
 
 ```bash
-bun ~/.claude/skills/Utilities/AudioEditor/Tools/Analyze.ts <transcript.json> [--output <path>] [--aggressive]
+bun ~/.claude/skills/AudioEditor/Tools/Analyze.ts <transcript.json> [--output <path>] [--aggressive]
 ```
 
 ## Options

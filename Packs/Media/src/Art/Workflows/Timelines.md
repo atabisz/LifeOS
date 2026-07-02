@@ -1,11 +1,11 @@
 # Conceptual Timelines & Progressions Workflow
 
-**Hand-drawn timelines showing evolution, trends, and transformations using brand aesthetic.**
+**Hand-drawn timelines showing evolution, trends, and transformations using UL aesthetic.**
 
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Timelines workflow in the Art skill to create timelines"}' \
   > /dev/null 2>&1 &
@@ -43,7 +43,7 @@ Conceptual timelines show change over time through illustrated progression. Unli
 3. **Hand-drawn timeline** — Organic line connecting events (not ruler-straight)
 4. **Typography hierarchy** — 3-tier system for dates, labels, annotations
 5. **Narrative arc** — Shows transformation, not just chronology
-6. **Editorial style** — Maintains brand flat color, black linework aesthetic
+6. **Editorial style** — Maintains UL flat color, black linework aesthetic
 7. **Scannable progression** — Easy to follow the flow of time
 
 ---

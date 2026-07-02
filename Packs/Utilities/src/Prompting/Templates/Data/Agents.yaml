@@ -1,4 +1,4 @@
-# {DAIDENTITY.NAME} Agent Definitions
+# {DA_IDENTITY.NAME} Agent Definitions
 # Canonical source for templating - derived from individual agents/*.md files
 # Used by: ROSTER template, BRIEFING template, VOICE template
 
@@ -16,14 +16,14 @@ agents:
   # === PRIMARY ASSISTANT ===
   kai:
     id: kai
-    name: Assistant
-    display_name: {DAIDENTITY.NAME}
+    name: {{DA_NAME}}
+    display_name: {DA_IDENTITY.NAME}
     archetype: enthusiast
     role: Primary AI Assistant
     emoji: "🤖"
     voice:
       voice_id: s3TPKV1kjDlVtZbl4Ksh
-      voice_name: Kai
+      voice_name: {{DA_NAME}}
       rate_wpm: 235
       stability: 0.38
       similarity_boost: 0.70

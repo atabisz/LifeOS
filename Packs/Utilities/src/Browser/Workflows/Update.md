@@ -3,7 +3,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Update workflow in the Browser skill to sync capabilities"}' \
   > /dev/null 2>&1 &
@@ -17,7 +17,7 @@ Verify browser tools are current and working.
 
 ## When to Use
 
-- After playwright-cli or Playwright releases new version
+- After agent-browser releases new version
 - If browser tools fail unexpectedly
 - Periodic capability check
 
@@ -26,86 +26,44 @@ Verify browser tools are current and working.
 ### 1. Check Versions
 
 ```bash
-playwright-cli --version
-bunx playwright --version
+agent-browser --version
 ```
 
-### 2. Verify playwright-cli Works
+### 2. Verify Headless agent-browser
 
 ```bash
-# Open a test session
-playwright-cli -s=update-test open https://example.com --persistent
-
-# Get snapshot
-playwright-cli -s=update-test snapshot
-
-# Screenshot
-playwright-cli -s=update-test screenshot --filename=/tmp/update-test.png
-
-# Close session
-playwright-cli -s=update-test close
+agent-browser --session update-test open https://example.com
+agent-browser --session update-test snapshot
+agent-browser --session update-test screenshot /tmp/update-test.png
 ```
 
-### 3. Verify bunx playwright Works
+### 3. Verify One-Shot Screenshot
 
 ```bash
-bunx playwright screenshot "https://example.com" /tmp/bunx-test.png
+agent-browser open https://example.com && agent-browser screenshot /tmp/oneshot-test.png
 ```
 
-### 4. Verify BrowserAgent Works
+### 4. Verify BrowserAgent
 
 ```
-Task(subagent_type="BrowserAgent", prompt="Navigate to https://example.com. Take a snapshot. Report page title.")
+Agent(subagent_type="BrowserAgent", prompt="Navigate to https://example.com. Take a snapshot. Report page title.")
 ```
 
-### 5. Core playwright-cli Commands Reference
-
-| Command | Purpose |
-|---------|---------|
-| `open <url> --persistent` | Start named session |
-| `goto <url>` | Navigate within session |
-| `snapshot` | Accessibility tree with refs |
-| `screenshot --filename=<path>` | Visual capture |
-| `click <ref>` | Click element |
-| `fill <ref> "<value>"` | Fill input |
-| `type "<text>"` | Type text |
-| `press <key>` | Press key |
-| `select <ref> "<value>"` | Select option |
-| `hover <ref>` | Hover element |
-| `eval "<js>"` | Run JavaScript |
-| `close` | End session |
-
-### 6. Verify Stories and Recipes Directories
+### 5. Verify Stories and Recipes
 
 ```bash
-# Stories directory exists with YAML files
-ls skills/Utilities/Browser/Stories/*.yaml
-
-# Recipes directory exists with template files
-ls skills/Utilities/Browser/Recipes/*.md
-```
-
-### 7. Validate Story Pipeline
-
-```
-# Quick validation: run one story from HackerNews.yaml
-Task(subagent_type="UIReviewer", prompt="
-  Validate Hacker News front page loads.
-  URL: https://news.ycombinator.com
-  Steps: 1. Wait for page to load.
-  Assertions: 1. Page contains 'Hacker News'. 2. Story links are visible.
-")
+ls ~/.claude/skills/Browser/Stories/*.yaml
+ls ~/.claude/skills/Browser/Recipes/*.md
 ```
 
 ## Version Tracking
 
 ```
-# Last sync: 2026-02-17
-# Version: 3.3.0
-# Primary tool: playwright-cli (@playwright/cli)
-# Fallback: bunx playwright (one-shot screenshots/PDFs)
-# Agents: BrowserAgent, UIReviewer (both use playwright-cli internally)
-# Headed mode: claude --chrome (Claude Code Chrome integration)
-# Orchestration: ReviewStories (parallel story validation), Automate (recipe templates)
+# Last sync: 2026-04-04
+# Version: 8.0.0
+# Headless: agent-browser (Rust CLI daemon, headless default)
+# One-shot: agent-browser open <url> && agent-browser screenshot <path>
+# Agents: BrowserAgent, UIReviewer (both headless agent-browser)
+# Orchestration: ReviewStories, Automate
 # Custom code: NONE
 ```
