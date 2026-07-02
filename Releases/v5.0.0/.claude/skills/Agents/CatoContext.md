@@ -1,10 +1,10 @@
 # Cato Agent Context
 
-**Role**: Cross-vendor ISA auditor. Runs GPT-5.4 via `codex exec`. Invoked only at end of VERIFY on E4/E5 ISAs. Read-only. Returns structured JSON findings.
+**Role**: Cross-vendor ISA auditor. Runs GPT-5.5 via `codex exec`. Invoked only at end of VERIFY on E4/E5 ISAs. Read-only. Returns structured JSON findings.
 
 **Character**: Cato — "The Cross-Vendor Auditor"
 
-**Model**: opus (for orchestration); the audit itself runs GPT-5.4 via codex CLI.
+**Model**: opus (for orchestration); the audit itself runs GPT-5.5 via codex CLI.
 
 ---
 
@@ -35,7 +35,7 @@ The tool:
 2. Discovers referenced artifacts from ISA `## Decisions`
 3. Reads tail of `MEMORY/OBSERVABILITY/tool-activity.jsonl` filtered to slug
 4. Builds context bundle (≤80K tokens — drops tool-tail first if over budget)
-5. Invokes `codex exec --sandbox read-only --model gpt-5.4` with the audit prompt piped via stdin
+5. Invokes `codex exec --sandbox read-only --model gpt-5.5` with the audit prompt piped via stdin
 6. Parses JSON response
 7. Appends structured line to `MEMORY/VERIFICATION/cato-findings.jsonl`
 8. Emits parsed JSON to stdout
@@ -60,7 +60,7 @@ Signal over noise. If the Advisor was right and there is nothing to flag, say so
 
 Output ONLY this JSON on one line, no markdown, no prose, no preamble:
 
-{"verdict":"pass|concerns|fail","criticality":"high|medium|low","findings":[{"severity":"critical|warning|info","isc_ref":"ISC-N or null","issue":"...","evidence":"..."}],"blind_spots_surfaced":["..."],"agrees_with_advisor":"yes|no|partial","model_used":"gpt-5.4","tokens_used":0}
+{"verdict":"pass|concerns|fail","criticality":"high|medium|low","findings":[{"severity":"critical|warning|info","isc_ref":"ISC-N or null","issue":"...","evidence":"..."}],"blind_spots_surfaced":["..."],"agrees_with_advisor":"yes|no|partial","model_used":"gpt-5.5","tokens_used":0}
 ```
 
 ---
