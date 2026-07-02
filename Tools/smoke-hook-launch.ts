@@ -102,9 +102,17 @@ function resolveBashPath(): string | null {
   return probe.status === 0 && out ? out : null;
 }
 
-/** Expand $HOME / ${HOME} the way the launching POSIX shell would, for the on-disk existence check. */
+/** Expand $HOME / ${HOME} the way the launching POSIX shell would, for the on-disk existence check.
+ *  MUST prefer process.env.HOME: the `sh -c` launcher (below) expands $HOME from the environment,
+ *  and CI stages the release under a scratch `HOME=$SCRATCH`. os.homedir() reads USERPROFILE on
+ *  Windows (e.g. C:\Users\runneradmin), NOT $HOME — using it makes the static precheck look in a
+ *  different directory than where the hooks are staged, producing false "script not found"
+ *  LAUNCH-FAILs. Fall back to USERPROFILE then homedir() only when HOME is unset (portable chain). */
+function homeDir(): string {
+  return process.env.HOME ?? process.env.USERPROFILE ?? homedir();
+}
 function expandHome(s: string): string {
-  return s.replace(/\$\{HOME\}/g, homedir()).replace(/\$HOME/g, homedir());
+  return s.replace(/\$\{HOME\}/g, homeDir()).replace(/\$HOME/g, homeDir());
 }
 
 // ---- settings enumeration ----------------------------------------------
