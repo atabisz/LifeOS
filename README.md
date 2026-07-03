@@ -4,8 +4,6 @@
 
 <div align="center">
 
-# LifeOS
-
 **The Life Operating System**
 
 [![Release](https://img.shields.io/github/v/release/danielmiessler/LifeOS?style=flat&color=8B5CF6)](Releases/v6.0.0/)
