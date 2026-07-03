@@ -106,30 +106,62 @@ function expandTilde(p: string): string {
   return p.startsWith('~') ? p.replace('~', homedir()) : p;
 }
 
-// Canonicalize a path/pattern for the Windows file-path compare. This is a
-// STRICTLY win32-gated transform (no-op on macOS/Linux — see the platform guard)
-// so it cannot change the proven Unix behaviour. Two Windows-specific mismatches
-// made EVERY `paths:` entry silently no-op → PERMISSIVE before this:
-//   1. Separators. resolve() yields all-backslash (`C:\Users\example\.ssh\id_ed25519`)
-//      while the tilde-expanded PATTERNS.yaml pattern is mixed-separator
-//      (`C:\Users\example/.ssh/id_*`) and the glob regex uses `[^/]*` + literal `/`.
-//      So neither the exact `===`/startsWith compare nor the glob regex ever matched.
-//   2. Case. NTFS is case-insensitive, so `C:\Users\example\.SSH\ID_ED25519` is the SAME
-//      file as `.ssh/id_ed25519`, but a case-SENSITIVE regex/`===` let an uppercase
-//      reference bypass a lowercase deny pattern — the same MAJOR bypass class on a
-//      second axis (advisor 2026-07-02).
-// Folding BOTH separators and case on win32 makes the matcher enforce against the
-// actual Windows protected surface, with no widening — benign paths still don't match.
-// The gate is win32-ONLY on purpose: on macOS/Linux this returns the input untouched,
-// so the proven Unix behaviour is byte-identical (backslash is a legal POSIX filename
-// char; POSIX matching stays case-sensitive). NOTE (known residual, out of scope for
-// this Windows-parity fix): macOS default APFS is itself case-insensitive, so the same
-// casing-bypass class exists there under the case-SENSITIVE match — that is a
-// pre-existing condition, NOT introduced here, and closing it would change proven
-// macOS behaviour; tracked separately rather than folded in silently (Cato 2026-07-02).
+// Whether the target filesystem folds case. Case-insensitivity is really a
+// per-MOUNT property, not a per-OS one (Windows NTFS and macOS default APFS fold;
+// APFS Case-Sensitive / HFSX Macs and most Linux ext4 do not; ext4 `casefold`,
+// mounted NTFS/exFAT, and ciopfs make specific Linux mounts fold). Detecting it
+// per-path is expensive and unreliable, so this uses a platform proxy with an
+// explicit env-override escape-hatch:
+//   - PAI_CASE_INSENSITIVE_FS = 1 | true  → force case-fold ON  (case-insensitive Linux mount)
+//   - PAI_CASE_INSENSITIVE_FS = 0 | false → force case-fold OFF (case-SENSITIVE APFS/HFSX Mac)
+//   - unset → default: win32 and darwin fold (their default filesystems are
+//             case-insensitive); other POSIX (Linux) does not.
+// Folding is ALWAYS fail-safe here: every `paths:` category is restrictive-direction
+// (deny / alert / requireApproval — there is NO allow-direction path pattern, so the
+// worst a fold can do is match MORE, i.e. be stricter). On a case-sensitive FS the
+// only downside is over-blocking a genuinely differently-cased benign file; the env
+// override restores exact-case matching for that rare case.
+function foldsCase(): boolean {
+  // win32 is ALWAYS case-folded: NTFS (and every default Windows volume) is
+  // case-insensitive, and there is no supported case-sensitive Windows variant a
+  // PAI install runs on — so a `=0` override here would only be misconfiguration
+  // reopening the casing bypass. Clamp it: on win32, always fold (footgun closed;
+  // Forge/GPT-5.4 cross-family concern 2026-07-02).
+  if (process.platform === 'win32') return true;
+  // On POSIX case-sensitivity is genuinely per-mount, so the override is a real
+  // escape hatch (force ON for a case-insensitive Linux mount / force OFF for a
+  // case-SENSITIVE APFS/HFSX Mac):
+  //   PAI_CASE_INSENSITIVE_FS = 1 | true  → fold ON
+  //   PAI_CASE_INSENSITIVE_FS = 0 | false → fold OFF
+  //   unset → default: darwin folds (APFS default is case-insensitive), other POSIX does not.
+  const override = process.env.PAI_CASE_INSENSITIVE_FS;
+  if (override !== undefined && override !== '') {
+    return override === '1' || override.toLowerCase() === 'true';
+  }
+  return process.platform === 'darwin';
+}
+
+// Canonicalize a path/pattern before compare, closing two filesystem-equivalence
+// mismatches that otherwise let references bypass the `paths:` controls:
+//   1. Separators (win32 ONLY). resolve() yields all-backslash on Windows
+//      (`C:\Users\example\.ssh\id_ed25519`) while the tilde-expanded PATTERNS.yaml
+//      pattern is mixed-separator (`C:\Users\example/.ssh/id_*`) and the glob regex
+//      uses `[^/]*` + literal `/`, so neither `===` nor the glob ever matched. Folded
+//      win32-only because backslash is a legal filename char on POSIX — folding it
+//      there would corrupt real names.
+//   2. Case (any case-insensitive FS, per foldsCase()). On such a mount
+//      `~/.SSH/ID_ED25519` is the SAME file as `~/.ssh/id_ed25519`, but a
+//      case-SENSITIVE regex/`===` let an uppercase reference bypass a lowercase deny
+//      pattern — the same MAJOR bypass class the win32 separator bug was, on a second
+//      axis. This originally shipped win32-only (2026-07-02); the macOS/Linux residual
+//      is closed here by keying case-folding on foldsCase() rather than the OS.
+// Both `expandedPattern` and `normalizedPath` pass through this, so the fold is
+// symmetric and matching semantics are otherwise unchanged.
 function toCanonicalPath(p: string): string {
-  if (process.platform !== 'win32') return p;   // POSIX: provable no-op — no touch.
-  return p.replace(/\\/g, '/').toLowerCase();
+  let out = p;
+  if (process.platform === 'win32') out = out.replace(/\\/g, '/');  // separators: win32 only
+  if (foldsCase()) out = out.toLowerCase();                          // case: case-insensitive FS
+  return out;
 }
 
 function matchesPathPattern(filePath: string, pattern: string): boolean {

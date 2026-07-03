@@ -9,7 +9,7 @@
  *
  * Run: bun test hooks/security/SecurityInvariants.test.ts
  */
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { createPatternInspector } from './inspectors/PatternInspector.ts';
 import { createEgressInspector } from './inspectors/EgressInspector.ts';
 import { stripEnvVarPrefix, stripShellQuoting } from './command-normalize.ts';
@@ -460,5 +460,82 @@ describe('Normalizer unit guarantees (so a masked regression is caught directly)
 
   it('never strips bare env (credential-dump alert must survive)', () => {
     expect(stripEnvVarPrefix('env')).toBe('env');
+  });
+});
+
+// ── Path-control case-insensitivity (case-insensitive-FS parity) ──
+//
+// On a case-insensitive filesystem (Windows NTFS, macOS default APFS, ext4 casefold
+// mounts) `~/.SSH/ID_ED25519` is the SAME file as `~/.ssh/id_ed25519`. A case-SENSITIVE
+// match let an uppercase/mixed reference bypass a lowercase `paths:` deny — the same
+// MAJOR bypass class the win32 separator bug was, on a second axis. PatternInspector
+// folds case when foldsCase() is true; PAI_CASE_INSENSITIVE_FS forces the branch so
+// this runs deterministically on ANY host (not only a genuinely case-insensitive one).
+//
+// These assert against real PATTERNS.yaml deny entries: ~/.ssh/id_* , ~/.ssh/*.pem ,
+// ~/.aws/credentials (zeroAccess → deny).
+function pathCtx(file: string): InspectionContext {
+  return { sessionId: 'test', toolName: 'Read', toolInput: { file_path: file } };
+}
+async function pathAction(file: string): Promise<string> {
+  const r = (await pattern.inspect(pathCtx(file))) as InspectionResult;
+  return r.action;
+}
+function homePath(rel: string): string {
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
+  return `${home}/${rel}`;
+}
+
+describe('PatternInspector — path-control case-insensitivity (force-fold ON)', () => {
+  const prev = process.env.PAI_CASE_INSENSITIVE_FS;
+  // Force the case-insensitive-FS branch so the test is host-independent.
+  beforeAll(() => { process.env.PAI_CASE_INSENSITIVE_FS = '1'; });
+  afterAll(() => {
+    if (prev === undefined) delete process.env.PAI_CASE_INSENSITIVE_FS;
+    else process.env.PAI_CASE_INSENSITIVE_FS = prev;
+  });
+
+  it('DENIES lowercase ~/.ssh/id_ed25519 (baseline)', async () => {
+    expect(await pathAction(homePath('.ssh/id_ed25519'))).toBe('deny');
+  });
+  it('DENIES uppercase-dir ~/.SSH/id_ed25519 (bypass closed)', async () => {
+    expect(await pathAction(homePath('.SSH/id_ed25519'))).toBe('deny');
+  });
+  it('DENIES uppercase-file ~/.ssh/ID_ED25519 (bypass closed)', async () => {
+    expect(await pathAction(homePath('.ssh/ID_ED25519'))).toBe('deny');
+  });
+  it('DENIES mixed-case ~/.Ssh/Server.PEM vs ~/.ssh/*.pem (bypass closed)', async () => {
+    expect(await pathAction(homePath('.Ssh/Server.PEM'))).toBe('deny');
+  });
+  it('DENIES uppercase exact ~/.aws/CREDENTIALS vs ~/.aws/credentials (bypass closed)', async () => {
+    expect(await pathAction(homePath('.aws/CREDENTIALS'))).toBe('deny');
+  });
+  it('does NOT widen — benign ~/notes/ssh-todo.md stays allowed', async () => {
+    expect(await pathAction(homePath('notes/ssh-todo.md'))).toBe('allow');
+  });
+  it('does NOT widen — ~/.sshfoo/id_backup (not .ssh) stays allowed', async () => {
+    expect(await pathAction(homePath('.sshfoo/id_backup'))).toBe('allow');
+  });
+});
+
+describe('PatternInspector — PAI_CASE_INSENSITIVE_FS=0 override', () => {
+  const prev = process.env.PAI_CASE_INSENSITIVE_FS;
+  beforeAll(() => { process.env.PAI_CASE_INSENSITIVE_FS = '0'; });
+  afterAll(() => {
+    if (prev === undefined) delete process.env.PAI_CASE_INSENSITIVE_FS;
+    else process.env.PAI_CASE_INSENSITIVE_FS = prev;
+  });
+
+  it('still DENIES exact-case ~/.aws/credentials regardless of override', async () => {
+    expect(await pathAction(homePath('.aws/credentials'))).toBe('deny');
+  });
+  // Platform-dependent behaviour of `=0` (the footgun clamp):
+  //   - win32: `=0` is IGNORED (NTFS is always case-insensitive; clamp closes the
+  //     misconfiguration footgun) → uppercase STILL denied.
+  //   - POSIX: `=0` is the real escape hatch for a case-SENSITIVE mount → uppercase
+  //     is a genuinely different file → allowed (exact-case semantics).
+  it('honors the win32 clamp / POSIX escape-hatch for uppercase ~/.aws/CREDENTIALS', async () => {
+    const expected = process.platform === 'win32' ? 'deny' : 'allow';
+    expect(await pathAction(homePath('.aws/CREDENTIALS'))).toBe(expected);
   });
 });
