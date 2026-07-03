@@ -39,7 +39,7 @@ Prefer the terminal? Run the same command yourself. You'll need [Claude Code](ht
 
 <table>
 <tr>
-<td width="20%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
 
 ### 🎯
 **Current → Ideal State**
@@ -47,15 +47,23 @@ Prefer the terminal? Run the same command yourself. You'll need [Claude Code](ht
 Name where you are and where you want to be, then close the gap with checkable steps.
 
 </td>
-<td width="20%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
+
+### 📈
+**General Hill Climbing**
+
+Every goal becomes a hill; the system keeps picking the next move that closes the gap.
+
+</td>
+<td width="25%" valign="top" align="center">
 
 ### 🧭
 **TELOS**
 
-Your mission, goals, and challenges — the file the system reasons against.
+Your mission, goals, and challenges. LifeOS interviews you to capture them, then reasons against them.
 
 </td>
-<td width="20%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
 
 ### ⚙️
 **The Algorithm**
@@ -63,7 +71,9 @@ Your mission, goals, and challenges — the file the system reasons against.
 A seven-phase engine that turns a vague ask into a testable spec and climbs toward it.
 
 </td>
-<td width="20%" valign="top" align="center">
+</tr>
+<tr>
+<td width="25%" valign="top" align="center">
 
 ### 📋
 **The ISA**
@@ -71,7 +81,7 @@ A seven-phase engine that turns a vague ask into a testable spec and climbs towa
 The Ideal State Artifact — one document capturing what "done" is, as verifiable criteria.
 
 </td>
-<td width="20%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
 
 ### 🧩
 **The Skill System**
@@ -79,9 +89,7 @@ The Ideal State Artifact — one document capturing what "done" is, as verifiabl
 100+ self-activating, composable units of expertise.
 
 </td>
-</tr>
-<tr>
-<td width="20%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
 
 ### 🪝
 **The Hook System**
@@ -89,7 +97,7 @@ The Ideal State Artifact — one document capturing what "done" is, as verifiabl
 Guardrails that are code, not good intentions, enforced every session.
 
 </td>
-<td width="20%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
 
 ### 🔀
 **The Router System**
@@ -97,7 +105,9 @@ Guardrails that are code, not good intentions, enforced every session.
 Every prompt routed to the right effort and model, automatically.
 
 </td>
-<td width="20%" valign="top" align="center">
+</tr>
+<tr>
+<td width="25%" valign="top" align="center">
 
 ### 📊
 **Pulse**
@@ -105,7 +115,7 @@ Every prompt routed to the right effort and model, automatically.
 The Life Dashboard — where you watch the whole system run.
 
 </td>
-<td width="20%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
 
 ### ✨
 **Custom Spinner Verbs**
@@ -113,7 +123,7 @@ The Life Dashboard — where you watch the whole system run.
 Your own animated working-verb and tips in the statusline.
 
 </td>
-<td width="20%" valign="top" align="center">
+<td width="25%" valign="top" align="center">
 
 ### 💬
 **Custom Tooltips**
