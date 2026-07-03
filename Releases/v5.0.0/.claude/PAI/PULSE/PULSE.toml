@@ -56,3 +56,46 @@ heartbeat_cost_ceiling = 0.10     # USD per heartbeat evaluation
 # Growth cadence (diary nightly, opinions weekly). Reserved for the growth jobs.
 diary_schedule = "0 23 * * *"
 growth_schedule = "0 4 * * 0"
+
+# ── DA cron jobs (the proactive loop) ──
+# These wire the DA check-scripts into Pulse's cron loop (the ONLY scheduler,
+# pulse.ts:495 → lib.ts parsed.job). SAFETY PHASE-GATE: THREE of four ship
+# enabled=false. da-scheduled-tasks and da-heartbeat are the AUTONOMOUS ACTUATION
+# + GENERATION surfaces — an auto-generator wired to an unaudited actuator is
+# exactly what the plan's phase gate forbids. da-growth AUTONOMOUSLY MUTATES
+# PERSONA (opinion decay/prune now; trait drift when DA_GROWTH_EXTRACT=1) — same
+# safety family, so it ships OFF too so persona drift doesn't begin with no
+# observation window (advisor 2026-07-04). Only da-diary (append-only, no
+# dispatch, no persona mutation) ships ON.
+
+[[job]]
+name = "da-scheduled-tasks"
+schedule = "* * * * *"                 # every minute; isDue() dedups to once/min
+type = "script"
+command = "bun run checks/da-tasks.ts"
+output = "voice"
+enabled = false                        # PHASE-GATE: enable after fire-executor audit + principal opt-in
+
+[[job]]
+name = "da-heartbeat"
+schedule = "*/30 * * * *"              # heartbeat_schedule — the AS1 proactivity poll
+type = "script"
+command = "bun run checks/da-heartbeat.ts"
+output = "voice"
+enabled = false                        # PHASE-GATE: enable after fire-executor audit + principal opt-in
+
+[[job]]
+name = "da-diary"
+schedule = "0 23 * * *"                # diary_schedule — nightly, silent writer
+type = "script"
+command = "bun run checks/da-diary.ts"
+output = "log"
+enabled = true
+
+[[job]]
+name = "da-growth"
+schedule = "0 4 * * 0"                 # growth_schedule — weekly Sun 4 AM, silent writer
+type = "script"
+command = "bun run checks/da-growth.ts"
+output = "log"
+enabled = false                        # PHASE-GATE: autonomous persona mutation — enable after an observation window

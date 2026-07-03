@@ -59,8 +59,13 @@ async function readJSONL<T>(path: string): Promise<T[]> {
 }
 
 function daysAgoStr(days: number): string {
+  // UTC date basis, matching the da-diary writer + module.ts countDiaryToday.
+  // Was America/Los_Angeles — a leftover from the upstream template; the writer
+  // buckets DiaryEntry.date by UTC (its source timestamps are UTC ISO), so the
+  // reader must query the same basis or the day-boundary cutoff drifts (advisor
+  // 2026-07-04).
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000)
-    .toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" })
+    .toISOString().slice(0, 10)
 }
 
 const MOOD_ICON: Record<string, string> = {

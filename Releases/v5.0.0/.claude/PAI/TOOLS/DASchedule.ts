@@ -14,7 +14,7 @@
 // via one lib — a single path expression, so the CLI and the daemon endpoints
 // never diverge across platforms (auto-extract-shared-helper rule).
 import type { ScheduledTask } from "../PULSE/Assistant/store"
-import { readTasks, writeTasks, appendTask } from "../PULSE/Assistant/store"
+import { readTasks, writeTasks, appendTask, approveTask } from "../PULSE/Assistant/store"
 
 // ── CLI Argument Parsing ──
 
@@ -170,6 +170,26 @@ switch (command) {
     break
   }
 
+  case "approve": {
+    const id = rest[0]
+    if (!id) {
+      console.error("Usage: approve <task-id>")
+      process.exit(1)
+    }
+    // Promote a pending_approval must_ask task to active+confirmed so it can fire.
+    const outcome = approveTask(id)
+    if (outcome.ok) {
+      console.log(`Approved: ${outcome.id} — now active + confirmed (will fire on schedule)`)
+    } else {
+      const msg = outcome.reason === "not_found" ? `Task not found: ${id}`
+        : outcome.reason === "ambiguous" ? `Ambiguous ID "${id}" — be more specific.`
+        : `Task ${id} is not pending approval (nothing to approve).`
+      console.error(msg)
+      process.exit(1)
+    }
+    break
+  }
+
   default:
     console.log(`DASchedule — DA Scheduled Task Manager
 
@@ -178,6 +198,7 @@ Usage:
   bun PAI/TOOLS/DASchedule.ts add --desc "..." --at "ISO"    One-time task
   bun PAI/TOOLS/DASchedule.ts add --desc "..." --cron "..."  Recurring task
   bun PAI/TOOLS/DASchedule.ts cancel <id>                    Cancel task
+  bun PAI/TOOLS/DASchedule.ts approve <id>                   Approve a pending_approval task → active+confirmed
   bun PAI/TOOLS/DASchedule.ts history                        Completed/cancelled
 
 Options:

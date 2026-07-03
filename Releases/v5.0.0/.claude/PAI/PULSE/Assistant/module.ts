@@ -28,8 +28,9 @@ import { homedir } from "os"
 import YAML from "yaml"
 import {
   readTasks,
-  writeTasks,
   appendTask,
+  mutateTasks,
+  approveTask,
   type ScheduledTask,
 } from "./store"
 import { runHeartbeat, type HeartbeatDecision } from "./heartbeat"
@@ -270,7 +271,12 @@ function buildTasksResponse(): Record<string, unknown> {
 // ── Diary / opinions ──
 
 function todayStr(): string {
-  return new Date().toLocaleDateString("en-CA")
+  // UTC date, matching the da-diary writer's DiaryEntry.date basis. countDiaryToday
+  // does an EXACT date-string match, so writer and this counter MUST use the same
+  // basis or diary_entries_today mis-counts near the day boundary (advisor
+  // 2026-07-04). The writer buckets by UTC because its source timestamps
+  // (ratings.jsonl, work.json.started) are UTC ISO.
+  return new Date().toISOString().slice(0, 10)
 }
 
 function buildDiaryResponse(): Record<string, unknown> {
@@ -439,19 +445,50 @@ function handleTaskDelete(id: string): Response {
   // Reject empty/blank id — otherwise the startsWith("") fallback would cancel
   // tasks[0] (Forge audit 2026-07-03: DELETE /assistant/tasks/ trailing slash).
   if (!id.trim()) return Response.json({ error: "task id required" }, { status: 400 })
-  const tasks = readTasks()
-  const exact = tasks.find((t) => t.id === id)
-  // Prefix fallback only when UNAMBIGUOUS — a partial id matching >1 task must
-  // not silently cancel the wrong one.
-  const prefixMatches = tasks.filter((t) => t.id.startsWith(id))
-  const match = exact ?? (prefixMatches.length === 1 ? prefixMatches[0] : undefined)
-  if (!match) {
-    const status = prefixMatches.length > 1 ? 409 : 404
-    return Response.json({ error: prefixMatches.length > 1 ? "ambiguous id" : "task not found" }, { status })
+  // Read-decide-AND-write all INSIDE the store lock (mutateTasks). The prior
+  // read-unlocked → mutate stale → writeTasks(stale) path blindly clobbered any
+  // fire-executor status write (last_fired/completed/failed) that landed in
+  // between (Forge audit C4). The decision must be made on the same in-lock
+  // snapshot that gets persisted.
+  try {
+    const outcome = mutateTasks((tasks) => {
+      const exact = tasks.find((t) => t.id === id)
+      // Prefix fallback only when UNAMBIGUOUS — a partial id matching >1 task
+      // must not silently cancel the wrong one.
+      const prefixMatches = tasks.filter((t) => t.id.startsWith(id))
+      const match = exact ?? (prefixMatches.length === 1 ? prefixMatches[0] : undefined)
+      if (!match) {
+        return { tasks, result: { ok: false, ambiguous: prefixMatches.length > 1 } as const }
+      }
+      match.status = "cancelled"
+      return { tasks, result: { ok: true, cancelled: match.id } as const }
+    })
+    if (!outcome.ok) {
+      const status = outcome.ambiguous ? 409 : 404
+      return Response.json({ error: outcome.ambiguous ? "ambiguous id" : "task not found" }, { status })
+    }
+    return Response.json({ ok: true, cancelled: outcome.cancelled })
+  } catch {
+    return Response.json({ error: "store busy, retry" }, { status: 503 })
   }
-  match.status = "cancelled"
-  writeTasks(tasks)
-  return Response.json({ ok: true, cancelled: match.id })
+}
+
+function handleTaskApprove(id: string): Response {
+  // Consent action — promote a pending_approval must_ask task to active+confirmed
+  // so the fire-executor can run it. The store's approveTask does the in-lock,
+  // validated transition (only ever promotes an EXISTING pending_approval task).
+  if (!id.trim()) return Response.json({ error: "task id required" }, { status: 400 })
+  try {
+    const outcome = approveTask(id)
+    if (outcome.ok) return Response.json({ ok: true, approved: outcome.id, status: "active", confirmed: true })
+    const status = outcome.reason === "not_found" ? 404 : outcome.reason === "ambiguous" ? 409 : 409
+    const msg = outcome.reason === "not_found" ? "task not found"
+      : outcome.reason === "ambiguous" ? "ambiguous id"
+      : "task is not pending approval" // not_pending
+    return Response.json({ error: msg }, { status })
+  } catch {
+    return Response.json({ error: "store busy, retry" }, { status: 503 })
+  }
 }
 
 // ── Avatar ──
@@ -516,6 +553,14 @@ export async function handleAssistantRequest(req: Request, pathname: string): Pr
   if (pathname === "/assistant/tasks") {
     if (method === "GET") return Response.json(buildTasksResponse())
     if (method === "POST") return handleTaskCreate(req)
+  }
+
+  // POST /assistant/tasks/:id/approve — promote a pending_approval task to
+  // active+confirmed so it can fire. Ordered BEFORE the generic DELETE
+  // /assistant/tasks/ check (both match startsWith("/assistant/tasks/")).
+  if (method === "POST" && pathname.startsWith("/assistant/tasks/") && pathname.endsWith("/approve")) {
+    const id = decodeURIComponent(pathname.slice("/assistant/tasks/".length, -"/approve".length))
+    return handleTaskApprove(id)
   }
 
   // DELETE /assistant/tasks/:id

@@ -2,11 +2,27 @@
 
 **The DA subsystem formalizes how PAI instantiates, manages, and evolves a Digital Assistant. It turns DA_IDENTITY from a flat markdown file into a living schema with interview-based creation, heartbeat-driven proactivity, natural-language scheduling, identity growth, and multi-DA awareness.**
 
-**Version:** 1.0 (Design) — implemented 2026-07-03
-**Location:** Integrated into Pulse (`PULSE/Assistant/module.ts`, with `PULSE/Assistant/{heartbeat,store}.ts`) + PAI/USER/DA/
-**Status:** Implemented. The authoritative module path is `PULSE/Assistant/module.ts` (what `pulse.ts` imports at `pulse.ts:119`), NOT the `modules/da.ts` this design doc originally proposed — the daemon call-site is the real contract. Older `modules/da.ts` references below are historical design notes.
+**Version:** 2.0 (As-Built) — shipped across three sessions 2026-07-03 → 2026-07-04
+**Location:** `PULSE/Assistant/{module,heartbeat,store,delegation}.ts` + `PULSE/checks/da-{tasks,heartbeat,diary,growth}.ts` + `PAI/USER/DA/`. Served via `pulse.ts` (imports `./Assistant/module` at `pulse.ts:119`; cron runs `[[job]]` entries).
+**Status:** **Implemented.** Every subsystem below is built, tested (89 tests across the suites), and live-probed. **Design-era note:** this doc was written as a "1.0 (Design)" spec; the sections below retain the original design rationale as a historical record, annotated where the as-built diverged. The authoritative module path is `PULSE/Assistant/module.ts` — the `modules/da.ts` in older diagrams/code-blocks is a historical design label, NOT the shipped path.
 
-> **Autonomy enforcement contract (load-bearing — read before building the fire-executor).** `must_ask` is enforced at the module level per Miessler's intent, and it fails CLOSED: a scheduled task whose action falls under `autonomy.must_ask` is stored with `status: "pending_approval"`, NOT `"active"`. The heartbeat gates its own `notify` via `requiresConfirmation()`. **A future scheduled-task fire-executor MUST only run `status: "active"` tasks and MUST honor `requires_confirmation` before firing anything else — storage intentionally does NOT block queueing (a must_ask task is a legitimate thing to queue for approval), so the executor is the enforcement point.** Because `pending_approval` is inert-by-default, an executor that naively iterates `active` tasks skips must_ask actions automatically.
+> **⚠️ Read the "As-Built Decisions" section (immediately below) before touching this subsystem — it captures the load-bearing safety choices (phase-gate, concurrency lock, consent gate, structural no-notify) that the design-era body predates.**
+
+---
+
+## As-Built Decisions (load-bearing — read first)
+
+The subsystem shipped in three sessions. The design-rationale body (§1–§11) is the original intent; these are the decisions that govern the *shipped* behavior. Provenance: build ISAs `MEMORY/WORK/pulse-da-subsystem/ISA.md` (keystone), `.../pulse-da-remaining-gaps-build/ISA.md` (fire-executor + writers), `.../pulse-da-gaps-close/ISA.md` (approve + formation + delegation).
+
+- **Module path is `PULSE/Assistant/module.ts`, not `modules/da.ts`.** The daemon imports `./Assistant/module` — the call-site is the contract. Exports: `startAssistant` / `handleAssistantRequest` / `assistantHealth` / `stopAssistant` (+ `triggerHeartbeat`).
+- **Autonomy `must_ask` is enforced at the module level and fails CLOSED.** A task whose action falls under `autonomy.must_ask` is stored `status: "pending_approval"`, NOT `"active"`. The fire-executor runs **only `active` tasks** and honors `requires_confirmation`; `pending_approval` is inert-by-default. Storage does not block queueing — the executor/approve path is the enforcement point.
+- **Consent gate (approve path).** A `pending_approval` + `requires_confirmation` task is promoted to `active` + `confirmed:true` ONLY via `POST /assistant/tasks/:id/approve` or `DASchedule.ts approve <id>` (both → `store.approveTask`, in-lock, id-validated). `script` actions stay unfireable regardless of approval — `willFire` re-classifies them must_ask unconditionally (a second gate consent can't unlock).
+- **SAFETY PHASE-GATE — what is LIVE vs STAGED.** Only `da-diary` (append-only, no dispatch) ships `enabled = true`. The autonomous-action jobs (`da-scheduled-tasks`, `da-heartbeat`) and the persona-mutating `da-growth` ship `enabled = false` — built, tested, manually probed, but NOT running unattended until the principal opts them on after an observation window. The proactive loop is *staged*, not autonomously running.
+- **Concurrency: the shared store is lock-guarded.** `store.ts mutateTasks` does a fail-CLOSED lockfile read-modify-write (throws `LockTimeoutError` rather than writing lock-free); the fire-executor re-validates + CLAIMS a task inside the lock BEFORE dispatch (no double-fire / fire-after-cancel / crash-replay). `readTasks` skips corrupt JSONL lines rather than zeroing the store. A malformed cron is contained per-task (no cycle-wide poison-pill). Origin: Forge cross-family audit found + fixed 8 concurrency/poison-pill/data-loss criticals.
+- **Growth formation is autonomous persona mutation → gated + bounded.** `da-growth.ts` always runs deterministic decay/prune; the LLM belief-EXTRACTION + trait-drift PROPOSAL half runs ONLY when `DA_GROWTH_EXTRACT=1`. Formation uses `Inference.ts --level standard` (Sonnet — the `fast`/Haiku 15s tier intermittently timed out and silently formed nothing). Every proposal routes through the ≤5pt clamp + a **per-month drift ledger** (baseline reset per month, so cumulative monthly drift is bounded, not just per-run) + never-autonomous exclusions {name, voice, relationship.dynamic} + anti-sycophancy floor {directness, precision} + a NaN guard. New opinions seed at 0.5 (observation) / 0.8 (stated) with the frontend field contract `topic`/`position`/`confidence` (NOT `belief`).
+- **Multi-DA delegation is a callable primitive, strictly hierarchical.** `PULSE/Assistant/delegation.ts delegateToWorker` runs a worker DA (its `DA_IDENTITY.yaml` as system prompt) via tool-less `Inference.ts`, so the worker STRUCTURALLY cannot notify the principal — its only egress is the result string returned to the caller (the primary). Rejects primary/unknown/disabled/non-worker. `devi` is enabled as a delegation target; delegation is NOT autonomously scheduled.
+- **Date basis is UTC.** The diary writer, `module.countDiaryToday`, and `DAGrowth.daysAgoStr` all bucket by `toISOString().slice(0,10)` — matching the UTC-ISO source timestamps in `ratings.jsonl`/`work.json` (a local-tz basis mis-buckets near midnight).
+- **`voice_id` is honestly empty.** `garry`'s `voice.main.voice_id` is `""`; the module surfaces `{provider}` only, never a fabricated id. Setting a real ElevenLabs voice is the principal's `/interview` choice (deferred).
 
 ---
 
@@ -421,17 +437,25 @@ Dispatch (uses existing Pulse dispatch infrastructure)
 
 ### PULSE.toml Integration
 
-The heartbeat replaces the disabled `proactive-suggestions` job:
+As-built `[da]` section (note: `primary` lives in `_registry.yaml`, not here — registry-as-truth; the toml holds only the operational schedule):
 
 ```toml
 [da]
 enabled = true
-primary = "your-da"                 # Which DA identity to use
 heartbeat_schedule = "*/30 * * * *"   # Every 30 minutes
-heartbeat_model = "haiku"       # Cost-efficient evaluation
-heartbeat_cost_ceiling = 0.01   # Max per evaluation
+heartbeat_model = "fast"        # Inference.ts level → Haiku. NEVER claude --bare.
+heartbeat_cost_ceiling = 0.10   # USD per evaluation
 diary_schedule = "0 23 * * *"   # Daily diary at 11 PM
 growth_schedule = "0 4 * * 0"   # Weekly growth review, Sunday 4 AM
+```
+
+The four DA cron jobs are separate `[[job]]` entries (Pulse's only scheduler). As-built enabled state:
+
+```toml
+[[job]] name = "da-scheduled-tasks"  schedule = "* * * * *"    command = "bun run checks/da-tasks.ts"     enabled = false  # PHASE-GATE (autonomous actuation)
+[[job]] name = "da-heartbeat"        schedule = "*/30 * * * *" command = "bun run checks/da-heartbeat.ts" enabled = false  # PHASE-GATE (autonomous generation)
+[[job]] name = "da-diary"            schedule = "0 23 * * *"   command = "bun run checks/da-diary.ts"     enabled = true   # append-only, silent
+[[job]] name = "da-growth"           schedule = "0 4 * * 0"    command = "bun run checks/da-growth.ts"    enabled = false  # PHASE-GATE (persona mutation)
 ```
 
 ### Context Bundle Schema
@@ -538,12 +562,15 @@ interface ScheduledTask {
     // For "script":
     command?: string            // Shell command
   }
-  status: "active" | "completed" | "cancelled"
+  status: "active" | "completed" | "cancelled" | "pending_approval" | "failed"  // as-built: +pending_approval (must_ask, inert), +failed (once-task terminal error)
+  requires_confirmation?: boolean  // as-built: true for must_ask actions — the fire-executor skips it until confirmed
+  confirmed?: boolean              // as-built: flipped true only via the approve path (consent gate)
   last_fired?: string           // Last execution time
   fire_count: number            // Times executed
-  tags: string[]                // For filtering/grouping
 }
 ```
+
+> **As-built delta:** the shipped `ScheduledTask` (`PULSE/Assistant/store.ts`) adds `pending_approval` + `failed` statuses and the `requires_confirmation`/`confirmed` fields (the consent-gate pivot), and dropped the design-era `tags` field (unused). A recurring task that errors stays `active` (transient); only a `once` task goes terminal `failed`.
 
 ### Natural Language Parsing
 
@@ -890,7 +917,23 @@ Continue Pulse startup (HTTP server, other modules, cron loop)
 
 ### HTTP Routes
 
-The DA module adds these routes to the Pulse HTTP server:
+> **As-built:** the design-era `/da/*` routes below were superseded — the shipped module serves `/assistant/*` (matching the Observability `/assistant` dashboard page's fetch contract). The real routes:
+>
+> | Route | Method | Purpose |
+> |---|---|---|
+> | `/assistant/health` | GET | Health + status (primary_da, identity_loaded, scheduled_tasks, last_heartbeat, diary_entries_today, opinions_count) |
+> | `/assistant/identity` | GET | Current DA identity (JSON) |
+> | `/assistant/personality` | GET | Traits, preferences, anchors, autonomy, writing, voice |
+> | `/assistant/tasks` | GET | Unified task list (by_source: da/pulse/claude-code) |
+> | `/assistant/tasks` | POST | Create a scheduled task |
+> | `/assistant/tasks/:id` | DELETE | Cancel a task (in-lock) |
+> | `/assistant/tasks/:id/approve` | POST | Promote a pending_approval task → active+confirmed (consent gate) |
+> | `/assistant/personality/traits` | PATCH | Bounded trait update (≤5pt) |
+> | `/assistant/diary` | GET | `{ entries: [...] }` envelope |
+> | `/assistant/opinions` | GET | `{ raw: <yaml> }` envelope |
+> | `/assistant/avatar` | GET | Avatar bytes or 404 |
+
+_Original design-era route sketch (historical — NOT the shipped paths):_
 
 | Route | Method | Purpose |
 |---|---|---|
@@ -994,6 +1037,8 @@ interface HeartbeatContext {
 ---
 
 ## 8. Implementation Phases
+
+> **✅ ALL PHASES SHIPPED (2026-07-03 → 2026-07-04).** The `[ ]`/`[P]` checkboxes below are the original design-era plan, retained as a historical record. As-built outcome: Phase 1 (identity schema) + Phase 2 (interview) ✅; Phase 3 (heartbeat + scheduled tasks) ✅ — heartbeat is a cron `[[job]]` (phase-gated OFF), the "scheduled task evaluator" shipped as the fire-executor `checks/da-tasks.ts`; Phase 4 (diary + growth) ✅ — diary live, growth formation gated behind `DA_GROWTH_EXTRACT=1`; Phase 5 (multi-DA + delegation) ✅ — `devi` worker + `delegateToWorker` primitive. The one deferred item is a real `voice_id` (principal's `/interview` choice). Two divergences from the plan below: the module path is `Assistant/module.ts` (not `modules/da.ts`), and routes are `/assistant/*` (not `/da/*`).
 
 ### Phase 1: Identity Schema (Week 1)
 
