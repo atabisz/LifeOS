@@ -160,26 +160,90 @@ A meaningful library of custom thinking skills — first principles, council deb
 
 ## Core Components
 
-What actually makes LifeOS work, in two tiers. The **unique features** are the parts you won't find anywhere else. The **supporting components** are the subsystems underneath them.
+What actually makes LifeOS work, in two tiers. **The unique features** are the parts you won't find anywhere else.
 
-### The unique features
+<table>
+<tr>
+<td width="25%" valign="top" align="center">
 
-- **Current State → Ideal State** — the whole idea. Name where you are, name where you want to be, then close the gap with steps you can check. Everything else serves this move.
-- **The Algorithm** — the centerpiece. A seven-phase engine (Observe → Think → Plan → Build → Execute → Verify → Learn) that turns a vague ask into a testable spec and climbs toward it, scaling its own effort to the work.
-- **The Skill System** — a growing library of self-activating, composable units of expertise. Deterministic code wrapped in a natural-language trigger, so the right capability fires the moment you describe the task.
-- **The Hook System** — deterministic lifecycle interception. Guardrails that are code, not good intentions: they fire at fixed points and enforce the rules a model can't be trusted to remember.
-- **The Router System** — every prompt gets classified and routed to the right effort and the right model. Quick asks stay cheap and fast; hard problems get the full engine.
-- **Pulse** — the Life Dashboard. The live surface where you watch the whole system run.
-- **Custom Spinner Verbs** — your own animated working-verb and rotating tips in the statusline. A small, personal touch most tools never bother with.
-- **Custom Tooltips** — the dashboard explains itself on hover, so the surface teaches you instead of sending you to a manual.
+### 🎯
+**Current → Ideal State**
 
-### The supporting components
+Name where you are and where you want to be, then close the gap with steps you can check.
 
-- **Memory** — text-based memory that compounds across sessions (WORK, KNOWLEDGE, LEARNING) plus a typed graph.
-- **Agents** — parallel delegation to specialized researchers, builders, and adversarial reviewers.
-- **Voice** — spoken notifications in a voice you choose, so you stay in flow.
-- **Learning** — every run reflects on itself and feeds what it learned back into the next one.
-- **Security** — deterministic gates that keep private data private and block anything unsafe before it runs.
+</td>
+<td width="25%" valign="top" align="center">
+
+### ⚙️
+**The Algorithm**
+
+A seven-phase engine that turns a vague ask into a testable spec and climbs toward it.
+
+</td>
+<td width="25%" valign="top" align="center">
+
+### 🧩
+**The Skill System**
+
+100+ self-activating, composable units of expertise, each fired by a natural-language trigger.
+
+</td>
+<td width="25%" valign="top" align="center">
+
+### 🪝
+**The Hook System**
+
+Guardrails that are code, not good intentions — enforced at fixed points every session.
+
+</td>
+</tr>
+<tr>
+<td valign="top" align="center">
+
+### 🔀
+**The Router System**
+
+Every prompt routed to the right effort and the right model, automatically.
+
+</td>
+<td valign="top" align="center">
+
+### 📊
+**Pulse**
+
+The Life Dashboard — the live surface where you watch the whole system run.
+
+</td>
+<td valign="top" align="center">
+
+### ✨
+**Custom Spinner Verbs**
+
+Your own animated working-verb and rotating tips in the statusline.
+
+</td>
+<td valign="top" align="center">
+
+### 💬
+**Custom Tooltips**
+
+The dashboard explains itself on hover instead of sending you to a manual.
+
+</td>
+</tr>
+</table>
+
+**The supporting components** are the subsystems underneath.
+
+<table>
+<tr>
+<td width="20%" valign="top" align="center"><b>🧠 Memory</b><br/><sub>Compounds across sessions, plus a typed graph.</sub></td>
+<td width="20%" valign="top" align="center"><b>🤖 Agents</b><br/><sub>Parallel delegation to specialized workers.</sub></td>
+<td width="20%" valign="top" align="center"><b>🔊 Voice</b><br/><sub>Spoken notifications in a voice you choose.</sub></td>
+<td width="20%" valign="top" align="center"><b>🎓 Learning</b><br/><sub>Every run reflects and feeds the next.</sub></td>
+<td width="20%" valign="top" align="center"><b>🛡️ Security</b><br/><sub>Gates that keep private data private.</sub></td>
+</tr>
+</table>
 
 Full docs for every component: **[docs.ourlifeos.ai](https://docs.ourlifeos.ai)**
 
