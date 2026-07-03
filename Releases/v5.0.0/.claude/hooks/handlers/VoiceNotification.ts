@@ -89,7 +89,7 @@ function logVoiceEvent(event: VoiceEvent): void {
   }
 }
 
-async function sendNotification(payload: ElevenLabsNotificationPayload, sessionId: string): Promise<void> {
+async function sendNotification(payload: ElevenLabsNotificationPayload, sessionId: string): Promise<boolean> {
   const voiceId = payload.voice_id || DA_IDENTITY.mainDAVoiceID;
 
   const baseEvent: Omit<VoiceEvent, 'event_type' | 'status_code' | 'error'> = {
@@ -118,14 +118,14 @@ async function sendNotification(payload: ElevenLabsNotificationPayload, sessionI
         status_code: response.status,
         error: response.statusText,
       });
-    } else {
-      logVoiceEvent({
-        ...baseEvent,
-        event_type: 'sent',
-        status_code: response.status,
-      });
-
+      return false;
     }
+    logVoiceEvent({
+      ...baseEvent,
+      event_type: 'sent',
+      status_code: response.status,
+    });
+    return true;
   } catch (error) {
     console.error('[Voice] Failed to send:', error);
     logVoiceEvent({
@@ -133,6 +133,7 @@ async function sendNotification(payload: ElevenLabsNotificationPayload, sessionI
       event_type: 'failed',
       error: error instanceof Error ? error.message : String(error),
     });
+    return false;
   }
 }
 
@@ -140,7 +141,7 @@ async function sendNotification(payload: ElevenLabsNotificationPayload, sessionI
  * Handle voice notification with pre-parsed transcript data.
  * Uses ElevenLabs TTS via the voice server.
  */
-export async function handleVoice(parsed: ParsedTranscript, sessionId: string): Promise<void> {
+export async function handleVoice(parsed: ParsedTranscript, sessionId: string): Promise<{ ok: boolean; message: string }> {
   let voiceCompletion = parsed.voiceCompletion;
 
   // Validate voice completion
@@ -152,7 +153,7 @@ export async function handleVoice(parsed: ParsedTranscript, sessionId: string): 
   // Skip empty or too-short messages
   if (!voiceCompletion || voiceCompletion.length < 5) {
     console.error('[Voice] Skipping - message too short or empty');
-    return;
+    return { ok: false, message: '' };
   }
 
   // Get voice settings from DA identity in settings.json
@@ -173,5 +174,6 @@ export async function handleVoice(parsed: ParsedTranscript, sessionId: string): 
     } : undefined,
   };
 
-  await sendNotification(payload, sessionId);
+  const ok = await sendNotification(payload, sessionId);
+  return { ok, message: voiceCompletion };
 }

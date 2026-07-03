@@ -8,12 +8,11 @@ defaults:
 
 # Summarize Page
 
-1. Open a playwright-cli session
+1. Open an agent-browser session
 2. Navigate to: {URL}
-3. Run `snapshot` to get page content
+3. Run `agent-browser snapshot` to get page content
 4. Extract the main content area (ignore navigation, headers, footers)
 5. Summarize in {format} format
-6. Close session
 
 **Output requirements:**
 - Title of the page

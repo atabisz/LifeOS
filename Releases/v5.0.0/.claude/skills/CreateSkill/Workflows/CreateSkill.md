@@ -90,6 +90,10 @@ Follow this exact structure:
 ---
 name: SkillName
 description: [What it does]. USE WHEN [intent triggers using OR]. NOT FOR [confusable alternatives]. [Additional capabilities].
+# Optional frontmatter (claude-code v2.1.186+ — kebab/snake/camelCase all accepted):
+#   display-name: Human-Readable Name   # shown in skill picker instead of the dir name
+#   default-enabled: false              # ship disabled; user opts in via /reload-skills
+#   fallback: OtherSkill                # skill to route to if this one is unavailable
 ---
 
 # SkillName

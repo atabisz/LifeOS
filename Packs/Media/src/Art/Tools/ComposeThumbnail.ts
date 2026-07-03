@@ -16,6 +16,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, unlinkSync } from "node:fs";
 import { resolve, dirname } from "node:path";
+import { homedir } from "node:os";
 
 // ============================================================================
 // Types
@@ -44,7 +45,7 @@ const DEFAULTS = {
   borderColor: "#bb9af7",       // Tokyo Night Vivid Purple
   font: "Helvetica-Bold",       // System font that actually exists
   headshotPosition: "left" as const,
-  output: `${process.env.HOME}/Downloads/yt-thumbnail-${Date.now()}.png`,
+  output: `${process.env.HOME ?? process.env.USERPROFILE ?? homedir()}/Downloads/yt-thumbnail-${Date.now()}.png`,
 };
 
 const LAYOUT = {
@@ -105,7 +106,7 @@ function printHelp(): void {
 ComposeThumbnail - YouTube Thumbnail Composition CLI
 
 USAGE:
-  bun ~/.claude/skills/Media/Art/Tools/ComposeThumbnail.ts [OPTIONS]
+  bun ~/.claude/skills/Art/Tools/ComposeThumbnail.ts [OPTIONS]
 
 REQUIRED:
   --background <path>     Background image (dramatic tech art)
@@ -123,7 +124,7 @@ OPTIONAL:
   --help, -h              Show this help message
 
 EXAMPLE:
-  bun ~/.claude/skills/Media/Art/Tools/ComposeThumbnail.ts \\
+  bun ~/.claude/skills/Art/Tools/ComposeThumbnail.ts \\
     --background ~/Downloads/tech-background.png \\
     --headshot ~/Downloads/headshot-nobg.png \\
     --title "AI AGENTS KILLING SOFTWARE" \\

@@ -1,11 +1,11 @@
 # Visual Mental Models & Frameworks Workflow
 
-**Hand-drawn frameworks, mental models, and conceptual diagrams using brand aesthetic.**
+**Hand-drawn frameworks, mental models, and conceptual diagrams using UL aesthetic.**
 
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Frameworks workflow in the Art skill to create diagrams"}' \
   > /dev/null 2>&1 &
@@ -40,7 +40,7 @@ Visual frameworks illustrate mental models, thinking frameworks, and conceptual 
 ### Core Characteristics
 1. **Clear structure** — Framework shape is recognizable (2x2, Venn, pyramid, etc.)
 2. **Hand-drawn organic** — Imperfect lines, wobbly circles, human touch
-3. **Editorial aesthetic** — Flat colors, black linework, brand palette
+3. **Editorial aesthetic** — Flat colors, black linework, UL palette
 4. **Labels integrated** — Typography part of visual design
 5. **Conceptual clarity** — Framework immediately understandable
 6. **Memorable visual** — Becomes THE reference image for this framework
@@ -301,7 +301,7 @@ open /path/to/framework.png
 - [ ] **Hand-drawn aesthetic** — Imperfect lines, organic shapes, human quality
 - [ ] **Strategic color** — Purple on optimal zone, teal on contrast, not everywhere
 - [ ] **Conceptually memorable** — This becomes THE reference image for framework
-- [ ] **Editorial style** — Maintains brand flat color, black linework aesthetic
+- [ ] **Editorial style** — Maintains UL flat color, black linework aesthetic
 
 #### Must NOT Have
 - [ ] Perfect digital geometry (too clean)

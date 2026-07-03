@@ -76,12 +76,12 @@ Use the Agents skill to compose task-specific agents with unique traits, voices,
 
 | Priority | User Says | System | Tool | What Happens |
 |----------|-----------|--------|------|-------------|
-| **1. DEFAULT** | "parallel work", "agents", "team", "swarm", or Algorithm selects delegation | **Agent Teams** | `TeamCreate` → `Agent` with `team_name` → `TaskCreate` → `SendMessage` | Persistent teammates, shared task list, peer messaging, task dependencies |
+| **1. DEFAULT** | "parallel work", "agents", "team", "swarm", or Algorithm selects delegation | **Agent Teams** | `Agent` (spawn teammates) → `TaskCreate` (shared list) → `SendMessage` (coordinate by id/name). Teams implicit under `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`; `TeamCreate`/`TeamDelete` removed in CC v2.1.178 | Persistent teammates, shared task list, peer messaging, task dependencies |
 | **2. EXPLICIT** | "**custom agents**", "spin up **custom** agents" | **Custom Agents** (ComposeAgent) | `Skill("Agents")` → `Agent(subagent_type="general-purpose", prompt=<composed>)` | Unique personalities, voices, one-shot parallel work |
 | **3. UNATTENDED** | "run overnight", "long-running", "CI trigger", or task exceeds session lifetime | **Managed Agents** (Anthropic cloud API) | `Skill("claude-api")` to build workflows | Durable sessions, sandboxed containers, vault credentials, $0.08/session-hour |
 
 **These are three distinct systems:**
-- **Agent Teams** = persistent local teammates with shared task lists, messaging, and multi-turn coordination via `TeamCreate`. DEFAULT for all parallel work.
+- **Agent Teams** = persistent local teammates with shared task lists, messaging, and multi-turn coordination. DEFAULT for all parallel work. Teams are implicit (one per session) under `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`; spawn via `Agent`, coordinate via `TaskCreate`/`SendMessage`. The standalone `TeamCreate`/`TeamDelete` tools were removed in CC v2.1.178.
 - **Custom Agents** = one-shot parallel workers with unique identities via ComposeAgent. ONLY when {{PRINCIPAL_NAME}} explicitly says "custom agents".
 - **Managed Agents** = cloud-hosted agents with durable sessions that survive disconnects. For unattended/overnight work only.
 
@@ -94,10 +94,10 @@ Use the Agents skill to compose task-specific agents with unique traits, voices,
 | Architecture/design tasks | **Architect** agent | Specialized for system design |
 
 **For Agent Teams (default):**
-1. `TeamCreate` with descriptive team name
+1. Ensure `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set — every session then has one implicit team (the standalone `TeamCreate`/`TeamDelete` tools were removed in CC v2.1.178; `team_name` is now ignored)
 2. `TaskCreate` for each work item (with dependencies if needed)
-3. Spawn teammates via `Agent` with `team_name` and `name` parameters
-4. Teammates self-claim tasks, message each other, go idle between rounds
+3. Spawn teammates via `Agent` with a `name` parameter
+4. Teammates self-claim tasks, `SendMessage` each other (by id or name), go idle between rounds
 
 **For Custom Agents (only when explicitly requested):**
 1. Invoke Agents skill → ComposeAgent for EACH agent with different trait combinations
@@ -195,6 +195,33 @@ Three primitives for non-blocking work. Pick the right one:
 - Selective filters only — never pipe raw logs. Monitors producing too many events get auto-stopped.
 
 ---
+
+## Sub-Agent Nesting Depth Policy
+
+As of Claude Code v2.1.172, sub-agents can spawn their own sub-agents up to **5 levels deep**. This turns delegation from a flat orchestrator→worker fan-out into a tree — and a tree has a new failure mode the flat model never had: cost and latency compound multiplicatively per level, and a runaway recursive delegation can fan out far faster than you notice.
+
+**PAI rule of thumb:**
+
+- **Default to depth 1** — the primary delegates to workers; workers do the work and return. This covers the overwhelming majority of parallel tasks.
+- **Depth 2 is the practical ceiling** for normal work: a coordinator agent that itself spawns a small bounded set of specialists (e.g. a research lead spawning per-source researchers). Name the fan-out width explicitly in the parent's prompt so it can't balloon.
+- **Depths 3–5 require an explicit, bounded reason** — a genuine recursive decomposition where each level provably shrinks the problem (e.g. a migration that splits by module, then by file). Never spawn deep "just in case." Every level past 2 multiplies token cost and wall-clock; a 5-deep tree with width 3 is 243 leaf agents.
+- **Bound every level.** A parent that delegates must state how many children it may spawn. Unbounded recursion is the runaway mode; the 5-level platform limit is a backstop, not a budget.
+- **Prefer width over depth.** A single primary spawning 10 parallel workers (depth 1, width 10) is cheaper, faster, and far easier to reason about than a 4-level chain. Flatten when you can.
+
+When in doubt, keep delegation shallow and wide. Depth is for problems that are genuinely recursive, not for problems that are merely large.
+
+## Consuming Agent Output
+
+Nesting depth governs the cost of *spawning*. This section governs the cost of *consuming* — the half of delegation that quietly dominates the bill. When a worker returns, the conductor has to pull its output back into context, and the naive move (read the worker's full transcript) is the single biggest avoidable token cost in a delegation: it collapses the conductor's prompt cache and re-pays for reasoning the conductor never needed to see.
+
+Four rules, cheapest-first:
+
+- **Digest, not transcript.** A worker's value is its conclusion, not its scratch work. Have it return a structured digest — verdict + findings + a pointer to the artifact (diff, file path, output file) — and consume that. When you control the prompt, specify the digest shape up front ("return: verdict, ≤5 findings each with file:line, and the path to your diff"). Reading the raw `tasks/<id>.output` transcript into the conductor is the anti-pattern this rule exists to kill.
+- **Review the diff, not the tree.** For a code-producing agent (Forge, Anvil, Engineer), read what *changed* — `git diff`, the named files — not a fresh read of the whole repository. The diff is the unit of review; the tree is context you already had.
+- **Batch the delegation.** One agent call that does N related things and returns one digest beats N round-trips that each re-pay context setup. Bundle related asks into a single well-scoped delegation.
+- **Delegate the write.** When the artifact is file content, let the worker write the files (in a worktree, or directly) and return paths + a digest. The conductor then spends zero tokens regenerating content it only needs to verify — it reads the diff, not the generated bytes.
+
+**Why this matters (cost basis).** Published A/B measurements on conductor/executor delegation (e.g. the `antigravity-for-claude-code` pattern) show the digest-not-raw discipline is the dominant lever — collapsing cache-read by consuming a digest instead of the full executor output drove roughly −27% cost vs. a solo high-effort run and −64% vs. solo max-effort *at equal output quality*. (Reported figures are cost-weighted USD estimates at the authors' Vertex rates over a small eval (3/3 quality parity); the source flags them as approximate and rate-dependent, so treat the direction as the signal, not the exact percentages.) The savings come almost entirely from what the conductor refuses to read back, not from the delegation itself. This is consumption discipline, not a delegation floor: it changes neither *whether* to delegate (see the Async Primitives table and the Algorithm's Delegation Gate) nor *how many* workers to spawn (the tier delegation floors) — only how cheaply each result re-enters context.
 
 ## Knowledge Archive Access
 

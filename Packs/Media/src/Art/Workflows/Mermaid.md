@@ -1,11 +1,11 @@
 # Mermaid-Style Technical Diagrams with Excalidraw Aesthetic
 
-**Hand-drawn technical diagrams combining Mermaid structure with Excalidraw sketchy aesthetic and brand color scheme.**
+**Hand-drawn technical diagrams combining Mermaid structure with Excalidraw sketchy aesthetic and UL color scheme.**
 
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Mermaid workflow in the Art skill to create diagrams"}' \
   > /dev/null 2>&1 &
@@ -21,7 +21,7 @@ Creates **EXCALIDRAW-STYLE MERMAID DIAGRAMS** — flowcharts, sequence diagrams,
 
 ## Purpose
 
-The Mermaid workflow creates structured technical diagrams (like Mermaid.js generates) but with a **hand-drawn whiteboard aesthetic** (like Excalidraw) while maintaining **brand editorial color scheme**. Unlike generic technical diagrams, these follow specific diagram grammar (flowcharts, sequences, states, etc.) and are derived from content analysis, not hand-specified.
+The Mermaid workflow creates structured technical diagrams (like Mermaid.js generates) but with a **hand-drawn whiteboard aesthetic** (like Excalidraw) while maintaining **UL editorial color scheme**. Unlike generic technical diagrams, these follow specific diagram grammar (flowcharts, sequences, states, etc.) and are derived from content analysis, not hand-specified.
 
 **Use this workflow for:**
 - Flowcharts showing decision logic and process flows
@@ -416,7 +416,7 @@ CONNECTION PATHS:
 
 ### Step 5: Construct Comprehensive Prompt
 
-**Build the generation prompt with Excalidraw + Mermaid + brand aesthetic:**
+**Build the generation prompt with Excalidraw + Mermaid + UL aesthetic:**
 
 ### Prompt Template
 
@@ -588,7 +588,7 @@ SPECIAL ELEMENTS (if applicable):
 - Relationship lines: Different arrow styles for different relationships
 - Cardinality labels: Hand-written "1", "*", "0..1", etc.
 
-COLOR USAGE (Strategic, Brand Palette):
+COLOR USAGE (Strategic, UL Palette):
 - Black (#000000): All primary structure (most boxes, all arrows)
 - Deep Purple (#4A148C): Critical path nodes, main flow, key entities (10-20% of nodes)
 - Deep Teal (#00796B): Alternative paths, secondary entities (5-10% of nodes)
@@ -598,7 +598,7 @@ COLOR USAGE (Strategic, Brand Palette):
 CRITICAL REQUIREMENTS:
 - Excalidraw hand-drawn aesthetic (wobbly, sketchy, organic)
 - Mermaid diagram structure ([chosen type] grammar)
-- brand color scheme (purple for critical, teal for secondary, black structure)
+- UL color scheme (purple for critical, teal for secondary, black structure)
 - 3-tier typography (title, node labels, edge labels)
 - Whiteboard sketch feel (not polished, not digital)
 - All shapes imperfect (rectangles wobbly, circles oval, arrows curved)
@@ -615,7 +615,7 @@ VALIDATION CHECKPOINTS:
 - Can you follow the flow/logic/sequence easily?
 - Is the critical path obvious (purple highlights)?
 - Are labels readable despite hand-lettered style?
-- Does it maintain brand aesthetic (flat colors, no gradients)?
+- Does it maintain UL aesthetic (flat colors, no gradients)?
 
 Optional: Sign small in bottom right corner in charcoal (#2D2D2D).
 ```
@@ -669,10 +669,9 @@ GOING INTO BLOG/WEBSITE: Remove background for transparency
 **For blog/website use** — use the **Images skill** for background removal:
 
 ```bash
-bun ~/.claude/PAI/Tools/RemoveBg.ts /path/to/mermaid-diagram.png
+bun ~/.claude/PAI/TOOLS/RemoveBg.ts /path/to/mermaid-diagram.png
 ```
 
-**See:** `~/.claude/skills/Images/Workflows/BackgroundRemoval.md` for full documentation.
 
 **Immediately open:**
 ```bash
@@ -700,7 +699,7 @@ open /path/to/mermaid-diagram.png
 - [ ] **Variable line weight:** Thicker boxes, thinner details
 - [ ] **Organic joins:** Connections look natural
 
-#### Brand Editorial Style
+#### UL Editorial Style
 - [ ] **Color strategic:** Purple on critical (10-20%), teal on secondary (5-10%)
 - [ ] **Black dominant:** Most structure in black
 - [ ] **Typography hierarchy:** 3 tiers clear
@@ -727,7 +726,7 @@ open /path/to/mermaid-diagram.png
 | **Wrong diagram type** | Doesn't match content | Return to Step 2, reconsider diagram type based on CSE |
 | **Missing Mermaid structure** | Doesn't follow conventions | Add proper diagram grammar: decision diamonds for flowcharts, lifelines for sequence, etc. |
 | **Color overload** | Too much purple/teal | Limit: "Purple on 2-3 critical nodes only, teal on 1-2 secondary, rest black" |
-| **Looks generic** | Missing brand or Excalidraw style | Combine both: "Excalidraw wobbly whiteboard sketch + brand purple/teal strategic accents" |
+| **Looks generic** | Missing UL or Excalidraw style | Combine both: "Excalidraw wobbly whiteboard sketch + UL purple/teal strategic accents" |
 
 **Regeneration Process:**
 1. Identify specific validation failures
@@ -894,18 +893,18 @@ open /path/to/mermaid-diagram.png
 5. Construct comprehensive prompt
 6. Choose aspect ratio (based on diagram type)
 7. Generate with nano-banana-pro
-8. Validate thoroughly (structure + aesthetic + brand + readability)
+8. Validate thoroughly (structure + aesthetic + UL + readability)
 ```
 
 ### Core Principles
 1. **CSE-driven:** Always derive from content analysis, never manually specify
 2. **Mermaid grammar:** Follow proper diagram type conventions
 3. **Excalidraw aesthetic:** Hand-drawn whiteboard sketch feel
-4. **brand color scheme:** Strategic purple/teal, black structure
+4. **UL color scheme:** Strategic purple/teal, black structure
 5. **Readable imperfection:** Sketchy but clear
 
 ---
 
 **The workflow: /cse → Diagram Type → Structure → Excalidraw Design → Prompt → Generate → Validate → Complete**
 
-**The synthesis: Mermaid structure + Excalidraw aesthetic + brand editorial style = Technical diagrams that feel like smart sketches on a whiteboard.**
+**The synthesis: Mermaid structure + Excalidraw aesthetic + UL editorial style = Technical diagrams that feel like smart sketches on a whiteboard.**

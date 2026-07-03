@@ -1,11 +1,11 @@
-# Art Image Generation Workflow
+# UL Art Image Generation Workflow
 
 **Charcoal Architectural Sketch TECHNIQUE — Applied to CONTENT-RELEVANT subjects.**
 
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Essay workflow in the Art skill to create header images"}' \
   > /dev/null 2>&1 &
@@ -143,7 +143,7 @@ Or use the slash command:
 **Read the aesthetic file and select the appropriate emotional vocabulary.**
 
 ```bash
-Read ~/.claude/skills/Media/Art/SKILL.md
+Read ~/.claude/skills/Art/SKILL.md
 ```
 
 **Match the contVent to one of these emotional registers:**
@@ -348,13 +348,15 @@ OBJECTS (if present) — GESTURAL SUGGESTED FORMS:
 - Recognizable forms through accumulated lines
 - NOT flat symbols — sketched with depth
 
-COMPOSITION — FULL FRAME IS MANDATORY:
-- 🚨 SUBJECTS MUST FILL THE ENTIRE FRAME — edge to edge horizontally and vertically
-- Subjects should nearly TOUCH the edges of the image
-- NO large empty margins on any side
-- If there's 20%+ empty space on any edge, the composition is WRONG
-- MINIMALIST means few elements, NOT small elements with lots of empty space
-- Subjects LARGE and DOMINANT — filling the available space
+COMPOSITION — FULL FRAME WITH BREATHING ROOM (target band: 7–12% margin on every edge):
+- 🚨 SUBJECTS MUST DOMINATE the frame, NOT be small islands in empty space
+- Target margin band: each of the four edges should have **between 7% and 12% empty space** (transparent or background-color) — not zero, not 20%+
+- Hard FAILS:
+  - Any edge with **less than 5% margin** → subject is butting against the edge, looks visually clipped (the 2026-04-27 "flat against the side" failure)
+  - Any edge with **more than 15% margin** → subject is too small, wallpaper margin (the original failure that caused FillFrame to exist)
+- The prompt MUST request: "the subject fills most of the frame with a small comfortable margin around all four edges — roughly 8% breathing room on top, bottom, left, and right"
+- Models routinely produce one of the two failure modes (zero margin OR wallpaper margin). The pipeline corrects both via FillFrame.ts (refills wallpaper) + a post-pad step (adds breathing room).
+- MINIMALIST means few elements, NOT small elements lost in empty space.
 
 COLOR — CHARCOAL DOMINANT, COLORS AS ACCENTS ONLY:
 - CHARCOAL AND GRAY DOMINANT — 70-80% of image
@@ -362,7 +364,7 @@ COLOR — CHARCOAL DOMINANT, COLORS AS ACCENTS ONLY:
 - Colors are the ESSENCE of elements (purple = cold capital, sienna = human warmth)
 - Every bit of color belongs to a form — no random color floating in space
 
-Optional: Sign small in bottom right corner in charcoal.
+DO NOT include any signature text in the prompt — AI models hallucinate garbled text instead of clean signatures. The KAI signature will be added programmatically in the Optimize step using ImageMagick.
 NO other text.
 ```
 
@@ -381,6 +383,101 @@ Before generating, verify:
 - [ ] **Title test** — could someone guess the title from the image alone?
 
 **Output:** A complete prompt ready for generation.
+
+---
+
+### 🚨 Model-Specific Prompt Construction (CONTENT-LED, BOTH MODELS)
+
+**The two production models reason about prompts very differently. Generic visual-spec prompts waste OpenAI's reasoning capability and starve Google's compositional fidelity. Both models need the CONTENT'S LOGIC up front — not just adjectives.**
+
+**🚨 GPT-IMAGE-1 IS DEPRECATED** (per OpenAI docs) — DO NOT USE. The current OpenAI image model is `gpt-image-2` (released Apr 21, 2026 — currently #1 on Artificial Analysis Image Arena, Elo 1331). Fallback to `gpt-image-2.5` (Dec 16, 2025) only if `gpt-image-2` is unavailable. Always pass `--model gpt-image-2`.
+
+OpenAI's `gpt-image-2` is an autoregressive multimodal model with native "thinking mode" reasoning. Image tokens flow through the same transformer as text tokens, which is what gives it instruction-following depth. **But it has documented quirks** that the prompt must address explicitly:
+- **Warm-color bias** — over-weights amber/sienna, under-delivers purple/cool tones unless explicitly constrained
+- **Photoreal/digital-clean default** — needs explicit "no photorealism, no digital cleanness, hand-drawn" suppression to get editorial sketch register
+- **Avoids named artists in canonical examples** — Lebbeus Woods / Paul Rudolph references work less reliably than on Google; lean on **descriptive structural language** ("dense gestural overlapping charcoal strokes, hatched cross-section, architectural concept-sketch quality") as primary, named-artist as secondary
+- **No negative-prompt parameter** — encode all "do not"s as inline constraints
+- Prefers structured-but-flexible prompts in the order: **background/scene → subject → key details → constraints → intended use**
+- Optimal length: under ~500 words, hard ceiling 32k chars
+- Supports `background: transparent` natively via API (`--transparent` flag)
+- Supports `--quality low|medium|high` (default high)
+
+Google's `nano-banana-pro` (Gemini 3 Pro Image) is more visually-anchored — it executes composition and style with high fidelity, but it produces stronger results when the composition is grounded in WHY the scene exists, not just WHAT objects to draw. Lead with composition, but include the thesis as context so the model treats the elements as load-bearing instead of decorative.
+
+**Both prompts MUST include three blocks, in this order:**
+
+1. **Thesis brief** — 2–4 sentences distilling the essay: the argument, the tension, what the reader should feel, and what a stranger should intuit from the image alone.
+2. **Visual brief** — the composition / subject / palette / style. Strict edge-to-edge composition rules from `Step 4: Design Composition`.
+3. **Anti-pattern list** — what to avoid (literal corporate clichés if it's a workplace essay, digital-vector look, text/logos/watermarks, blank margins).
+
+**Two prompt shapes — pick by model:**
+
+#### OpenAI gpt-image-2 — REASONING-LED (thesis is the spine)
+
+```
+You are illustrating the header for an editorial essay titled "[TITLE]".
+[2–4 sentence thesis brief: argument, tension, emotional register, what the
+reader-as-stranger should intuit from the image alone.]
+
+Render as a single hand-drawn editorial illustration filling the entire
+square frame edge-to-edge with NO blank margins. [Style notes: charcoal,
+warm sepia, painterly gestural texture, New Yorker / Atlantic polish.]
+[Composition: dominant subject, supporting elements, what touches which
+edge.] The visual must carry the thesis — anyone seeing this image without
+reading the essay should intuit the argument.
+
+Avoid: [literal cliché list — e.g. laptops, suits, office buildings if it's
+a workplace essay], digital vector look, text, labels, signatures,
+watermarks. Palette: warm sepia + charcoal with single accent of soft
+amber light. Background: warm sepia paper that blends seamlessly into a
+cream blog page.
+```
+
+#### Google nano-banana-pro — COMPOSITION-LED (thesis is the load-bearing context)
+
+```
+Editorial illustration filling the entire square frame edge-to-edge,
+NO blank margins. The image illustrates a New Yorker-style essay about
+[topic in one phrase]: [2–3 sentence thesis brief — what the essay argues,
+what the reader should feel].
+
+Composition: [dominant subject described concretely with placement, scale,
+linework]. [Supporting elements with placement and edge-coverage].
+Strict composition: [what occupies what % of canvas, what touches which
+edges, ZERO blank space]. Style: bold charcoal and warm sepia ink,
+hand-drawn gestural strokes with hatching for depth, painterly New Yorker
+editorial polish. NOT digital, NOT vector. Palette: charcoal, warm sepia,
+single soft amber accent.
+
+No text, no labels, no signatures, no watermarks, no borders. Background:
+seamless warm sepia paper that blends into a cream blog page.
+```
+
+### 🚨 DEFAULT FOR BLOG HEADERS: MULTI-CANDIDATE FROM BOTH MODELS, AUTO-SELECT
+
+**Single-generation is NOT the default for blog header essays.** Single-shot generation is acceptable for low-stakes diagrams, schematics, or technical illustrations where the visual answer is mechanical. Editorial essay headers are not those — they are creative judgment calls where one model's interpretation routinely beats the other and you cannot predict which in advance.
+
+**Default protocol for any blog header (Essay workflow): generate N candidates from BOTH models in parallel, then auto-select via the Concept Fidelity Gate (Step 8).**
+
+- **N defaults to 4 total** (2 OpenAI gpt-image-2 + 2 Google nano-banana-pro), each with a distinct compositional angle on the same thesis brief.
+- **Bump to 6 (3+3) or 8 (4+4)** when the thesis is multi-part, the metaphor is non-obvious, or the previous round failed the gate.
+- **Spawn all candidates as parallel background jobs** (`run_in_background: true`) — the wall-clock cost of 4 parallel is roughly the same as 1 sequential.
+- **All outputs go to `~/Downloads/`** with descriptive suffixes (`{slug}-candidate-{n}-{model}-{angle}.png`).
+- **Then run the Concept Fidelity Gate (Step 8)** on each. Score every candidate against the thesis brief. Auto-select the highest-fidelity winner.
+- **The winner moves through optimize → mv → git add. Losers stay in `~/Downloads/` as disposable.**
+
+**Why this is the default, not an option:**
+
+- The two models have orthogonal strengths and orthogonal failure modes. Generating from only one model leaves 50%+ of the option space unexplored on every run.
+- Concept fidelity scoring against a written thesis is fast (you Read each image and check 4 questions). It costs less than re-spending an entire turn after the principal rejects a single image.
+- the principal has explicitly directed this pattern: *"I want you to change the workflow so that it makes n number of options with both Nano Banana and OpenAI and selects the best."* This is not negotiable for blog headers.
+
+**When to break the default and generate single-model:**
+
+- the principal explicitly names a model (e.g. *"use Nano Banana Pro for this one"*) — honor the directive.
+- The previous round selected a clear leader and the principal is asking for a tight variation on it.
+- The image type is not editorial (diagram, schematic, dashboard, technical illustration).
+- Total candidate count from prior rounds in this same task already exceeds 8 — you're approaching the 4-turn cap; don't burn more compute, surface to the principal instead.
 
 ---
 
@@ -426,13 +523,24 @@ Before generating, verify:
 
 ### Default Model: nano-banana-pro
 
-### 🚨 CRITICAL: Always Output to Downloads First
+### 🚨 CRITICAL: Always Output to Downloads First — `~/Downloads/` IS THE WORKING DIRECTORY
 
-**ALL images go to `~/Downloads/` for preview before final placement.**
+**`~/Downloads/` is the canonical working directory for ALL Art-skill image generation. EVERY `--output` path MUST start with `~/Downloads/`. ZERO exceptions.**
+
+This applies to:
+- Single-shot generations (`--output ~/Downloads/{name}.png`)
+- Multi-candidate comparisons across models (`--output ~/Downloads/{name}-candidate-{n}-{model}.png`)
+- Thumbnail generation (`--thumbnail` flag — both `.png` and `-thumb.png` land in `~/Downloads/`)
+- Background-removal intermediates
+- Optimization intermediates (`cwebp` / `magick` outputs while iterating)
+
+**NEVER point `--output` directly at `~/LocalProjects/Website/cms/public/images/`, the public/ tree of any project, or any git-tracked path.** Doing so bypasses the visual inspection gate and risks staging a bad image into git before any human or AI has actually seen it.
+
+The strict pipeline:
 
 ```bash
-# ALWAYS output to Downloads first for user to review in Preview
-bun run ~/.claude/skills/art/Tools/Generate.ts \
+# 1. GENERATE → ALWAYS to ~/Downloads/
+bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --model nano-banana-pro \
   --prompt "[YOUR PROMPT]" \
   --size 2K \
@@ -440,17 +548,31 @@ bun run ~/.claude/skills/art/Tools/Generate.ts \
   --thumbnail \
   --output ~/Downloads/[descriptive-name].png
 
-# After user approves, THEN copy to final destination:
-cp ~/Downloads/[name].png ${PROJECTS_DIR}/YourWebsite/cms/public/images/
-cp ~/Downloads/[name]-thumb.png ${PROJECTS_DIR}/YourWebsite/cms/public/images/
+# 2. INSPECT → MANDATORY visual gate via the Read tool
+#    (see Step 8 — you literally cannot validate the image without this)
+#    Read("~/Downloads/[descriptive-name].png")
+#    nano-banana-pro often returns JPEG even for --output .png:
+#    Read("~/Downloads/[descriptive-name].jpg")
+
+# 3. OPTIMIZE → still in ~/Downloads/
+cwebp -q 78 ~/Downloads/[name].png -o ~/Downloads/[name].webp
+magick ~/Downloads/[name].png -resize 512x512 -colors 128 ~/Downloads/[name]-thumb.png
+
+# 4. MOVE → only after visual gate passes, only the chosen winner
+mv ~/Downloads/[name].{png,webp,thumb.png} ~/LocalProjects/Website/cms/public/images/
+
+# 5. STAGE → git add the moved files
+cd ~/LocalProjects/Website && git add cms/public/images/[name].*
 ```
+
+**If you generate multiple candidates for comparison, all of them stay in `~/Downloads/`. Only the winner moves through steps 4–5. The losers stay in `~/Downloads/` (they're disposable; the principal's Downloads folder is the staging area, not a permanent archive).**
 
 ### Construct Command Based on Intent
 
 Based on user's request and the mapping tables above, construct the CLI command:
 
 ```bash
-bun run ~/.claude/skills/art/Tools/Generate.ts \
+bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --model [SELECTED_MODEL from table] \
   --prompt "[PROMPT from Step 5]" \
   --size [SELECTED_SIZE] \
@@ -470,14 +592,19 @@ The `--thumbnail` flag generates TWO versions:
 2. `output-thumb.png` — With `#EAE9DF` background (for thumbnails, social previews, OpenGraph)
 
 ```bash
-# Example: Generates both header.png AND header-thumb.png
-bun run ~/.claude/skills/art/Tools/Generate.ts \
+# Example: Generates both my-header.png AND my-header-thumb.png in ~/Downloads/
+# 🚨 --output MUST point to ~/Downloads/ — NEVER directly into cms/public/images/
+bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --model nano-banana-pro \
   --prompt "[YOUR PROMPT]" \
   --size 2K \
   --aspect-ratio 1:1 \
   --thumbnail \
-  --output ~/Website/cms/public/images/my-header.png
+  --output ~/Downloads/my-header.png
+
+# After visual inspection passes (Step 8), move into the website tree:
+mv ~/Downloads/my-header.png ~/Downloads/my-header-thumb.png \
+   ~/LocalProjects/Website/cms/public/images/
 ```
 
 **Why two versions?**
@@ -513,13 +640,12 @@ For non-blog images that only need transparency, or to remove backgrounds after 
 
 ```bash
 # Use the Images Skill for background removal
-bun ~/.claude/PAI/Tools/RemoveBg.ts /path/to/output.png
+bun ~/.claude/PAI/TOOLS/RemoveBg.ts /path/to/output.png
 
 # Or batch process multiple images
-bun ~/.claude/PAI/Tools/RemoveBg.ts image1.png image2.png image3.png
+bun ~/.claude/PAI/TOOLS/RemoveBg.ts image1.png image2.png image3.png
 ```
 
-**See:** `~/.claude/skills/Images/Workflows/BackgroundRemoval.md` for full documentation.
 
 ### 🚨 COMPOSITION: USE FULL FRAME, MINIMALIST, NO BACKGROUNDS
 
@@ -549,7 +675,7 @@ bun ~/.claude/PAI/Tools/RemoveBg.ts image1.png image2.png image3.png
 | Model | Command | When to Use |
 |-------|---------|-------------|
 | **flux** | `--model flux --size 1:1 --remove-bg` | Maximum quality, more detail |
-| **gpt-image-1** | `--model gpt-image-1 --size 1024x1024 --remove-bg` | Different interpretation |
+| **gpt-image-2** | `--model gpt-image-2 --size 1024x1024 --remove-bg` | Different interpretation |
 
 ### Immediately Open
 
@@ -563,6 +689,46 @@ open /path/to/output.png
 
 **🚨 CRITICAL: This step happens AFTER generation and background removal, BEFORE validation.**
 
+### 🚨🚨🚨 STEP 7.0 — MANDATORY FILLFRAME + PADDING PASS (deterministic margin enforcement)
+
+**Before any other optimization, EVERY image generated by this workflow MUST pass through this two-stage margin pipeline.** Models produce one of two failure modes — wallpaper margin (subject lost in empty space) OR zero margin (subject butting against the edges and looking visually clipped). The pipeline corrects both:
+
+```bash
+# Stage A — FillFrame.ts: detect subject bbox, crop to it, refill the canvas so subject dominates.
+# Eliminates wallpaper-margin failures.
+bun ~/.claude/skills/Art/Tools/FillFrame.ts \
+  ~/Downloads/[name].png \
+  ~/Downloads/[name]-filled.png \
+  --target-size 1024 \
+  --bg-color auto \
+  --max-margin 5
+
+# Stage B — Add deterministic 8% breathing margin so subject doesn't butt against the canvas
+# edges. This is the critical fix for the 2026-04-27 "flat against the side" failure.
+# 8% padding on a 1024 canvas = 82px breathing room each side, then resized back to 1024.
+magick ~/Downloads/[name]-filled.png -bordercolor none -border 8%x8% \
+  -resize 1024x1024 \
+  ~/Downloads/[name]-padded.png
+
+# Verify final visible margin band (should be 7–12% on each edge)
+bun ~/.claude/skills/Art/Tools/FillFrame.ts \
+  ~/Downloads/[name]-padded.png \
+  ~/Downloads/[name]-padded.png \
+  --report-only \
+  --max-margin 12 \
+  --bg-color auto
+
+# If Stage A exit code is non-zero (margins still > 5% after refill), REGENERATE with a
+# stronger composition prompt — do NOT ship a wallpaper-margin image.
+# If Stage B verify reports any edge margin < 5% or > 12%, adjust the --border percentage.
+
+mv ~/Downloads/[name]-padded.png ~/Downloads/[name].png
+```
+
+**Skip conditions: NONE.** Both stages run on every Essay-workflow image, every time. Stage A cost ~200ms, Stage B ~100ms. The cost of skipping is shipping either wallpaper-margin garbage (Stage A skip) or edge-clipped subject (Stage B skip). Both have happened in production; both are documented failures.
+
+
+
 ### Why This Step Matters
 
 Generated images at 2K resolution (2048x2048) are 6-8MB each - far too large for web use. Optimization reduces file sizes by 90-95% while maintaining visual quality, ensuring fast page loads and better user experience.
@@ -572,6 +738,13 @@ Generated images at 2K resolution (2048x2048) are 6-8MB each - far too large for
 **For ALL blog header images, automatically execute these commands:**
 
 ```bash
+# 0. 🚨 MANDATORY: Stamp KAI signature programmatically
+# AI models CANNOT reliably render text — they hallucinate garbled signatures.
+# This step is NOT optional. Every image MUST be signed "KAI".
+magick "~/Downloads/[name].jpg" -gravity SouthEast -font "Bradley-Hand-Bold" -pointsize 50 -fill "rgba(200,200,200,0.5)" -annotate +35+25 "" "~/Downloads/[name].jpg"
+# Also stamp the thumbnail version (use darker text for sepia bg)
+magick "~/Downloads/[name]-thumb.png" -gravity SouthEast -font "Bradley-Hand-Bold" -pointsize 50 -fill "rgba(80,60,40,0.5)" -annotate +35+25 "" "~/Downloads/[name]-thumb.png"
+
 # 1. Resize main image from 2K (2048x2048) to 1K (1024x1024) for web display
 magick "~/Downloads/[name].png" -resize 1024x1024 "~/Downloads/[name]-1024.png"
 
@@ -674,9 +847,59 @@ brew install webp
 
 ### Open and Inspect
 
+**🚨🚨🚨 AI INSPECTION GATE — MANDATORY 🚨🚨🚨**
+
+`open` launches the macOS Preview app on the principal's machine. **You cannot see what `open` shows.** That is a verification for the principal, not for you. To verify the image yourself you MUST load it into your own context with the Read tool:
+
+```
+Read("/path/to/generated-image.png")
+# OR for the JPEG fallback when nano-banana-pro returns JPEG:
+Read("/path/to/generated-image.jpg")
+```
+
+The Read tool renders the image inline and gives you actual vision of the pixels. Without this, the rest of this checklist is theatre — you will rubber-stamp a broken image because you literally cannot see it.
+
+**Hard rule: if you have not called `Read` on the image file in this turn, you have not inspected the image. Do not proceed to the checklist. Do not write the post. Do not say "looks good." Call Read first.**
+
+Optionally also run `open` for the principal:
+
 ```bash
 open /path/to/generated-image.png
 ```
+
+### 🚨🚨🚨 CONCEPT FIDELITY GATE (MANDATORY — RUN BEFORE THE CHECKLIST) 🚨🚨🚨
+
+**The image must carry the CONTENT'S argument, not just look pretty. Reading the image alone, a stranger should be able to intuit what the essay is about. If they can't, the image fails — regardless of how editorial or polished it looks.**
+
+This is the gate that catches "beautiful but wrong" images — where every visual checkbox passes but the picture doesn't actually argue the essay. It runs BEFORE the technical checklist and BEFORE the composition checklist.
+
+**Procedure:**
+
+1. **Re-read the thesis brief** you used in Step 5 (the 2–4 sentences you fed both models). Hold it in mind.
+2. **Read the image** with the Read tool — actually load the pixels into your context, not just `open` it.
+3. **Answer 4 questions in writing** for each candidate (and for the chosen winner before shipping):
+
+| # | Question | Pass criterion |
+|---|----------|----------------|
+| 1 | What argument does this image make? | The argument should match the essay's thesis. If the image argues something else (or nothing), FAIL. |
+| 2 | What would a stranger who hasn't read the essay intuit from this image alone? | The intuition should be in the same direction as the thesis. "I have no idea" or "the opposite" = FAIL. |
+| 3 | Which specific concepts from the thesis brief appear in the image? Which are missing? | Score concept-by-concept. If a load-bearing concept is missing (e.g., the corporate agent in a layoff piece, the augmentation in a productivity piece), FAIL — even if other concepts are present. |
+| 4 | Is the emotional register in the image the register the essay needs? | Doomy when the essay is empowering = FAIL. Triumphant when the essay is diagnostic = FAIL. The image's mood and the essay's mood must align. |
+
+4. **If candidates A/B/C/D all fail** → do not ship the best of a bad lot. Regenerate with sharpened prompts that name the missing concept explicitly (e.g., "the visual MUST include a faded representation of the corporate agent doing the shedding"). The most common failure is the prompt not naming the load-bearing concept; the second most common is the model latching onto a visually pretty but argument-irrelevant element (a flame, a mountain, a brain).
+
+**🚨 4-TURN ITERATION CAP — HARD STOP**
+
+If 4 generation rounds (≈4 candidates × 4 rounds = up to 16 images) still haven't produced a candidate that clears the Concept Fidelity Gate, **STOP**. Do not keep grinding. Surface the situation to the principal:
+
+- What thesis brief you've been using
+- The 4 prompts you tried, with the failure mode of each round
+- Which concepts kept failing to land
+- A proposed pivot: different thesis brief? different model? different metaphor entirely? skip the image and use the UL sepia logo default?
+
+The cap exists because compute spent on 16+ failed generations is compute that should have been a 5-minute conversation about whether the visual brief is actually achievable. After 4 rounds of failure, the prompt isn't the problem — the brief is.
+
+---
 
 ### 🧠 CRITICAL ANALYSIS (DO THIS FIRST — BEFORE THE CHECKLIST)
 
@@ -773,11 +996,11 @@ open /path/to/generated-image.png
 - [ ] Overall atmosphere matches intended emotion
 
 **COMPOSITION (all required):**
-- [ ] **FULL FRAME** — subjects nearly touch all edges, NO large empty margins
+- [ ] **FULL FRAME** — verified by FillFrame.ts exit-code-0 in Step 7.0 (NOT a manual eyeball check)
 - [ ] **SUBJECTS LARGE** — dominant, filling the available space
 - [ ] **NO BACKGROUND FILL** — floats in empty/transparent space (but subjects are LARGE)
 - [ ] **KAI SIGNATURE** — small cursive charcoal in BOTTOM RIGHT CORNER
-- [ ] **MARGIN CHECK** — is there more than 20% empty space on any edge? If yes, REGENERATE
+- [ ] **MARGIN CHECK** — FillFrame.ts hard-gate in Step 7.0 must have passed (max-margin ≤ 5%). If it failed, you should have already regenerated, not reached this checklist.
 
 **QUALITY (all required):**
 - [ ] Could hang in a gallery next to Piranesi
@@ -843,7 +1066,7 @@ open /path/to/generated-image.png
 | What's lost | Melancholy | 40:60 | Fading, dissolving, trailing off |
 | Community | Connection | 90:10 | Warm, intimate, multiple figures |
 
-### The Brand Look Checklist
+### The UL Look Checklist
 
 Before submitting any image:
 - ✅ **Subject matches CONTENT** — drew what the piece is ABOUT (not defaulting to architecture)

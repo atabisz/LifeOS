@@ -388,7 +388,7 @@ function generateRecommendation(update: Update): string {
   // MCP - Core infrastructure
   if (titleLower.includes('mcp') || source.toLowerCase().includes('mcp')) {
     return `**PAI Impact:** HIGH - MCP infrastructure enhancement\n` +
-      `**Why:** PAI uses MCP servers for chrome-devtools, brightdata, Ref docs, content access, and Stripe. Changes to MCP spec/docs affect our integrations.\n` +
+      `**Why:** PAI uses MCP servers for brightdata, Ref docs, content access, and Stripe. Changes to MCP spec/docs affect our integrations.\n` +
       `**Action:** Assess compatibility with existing MCP servers in .mcp.json. Look for new MCP capabilities to expand PAI's tooling.`;
   }
 
@@ -580,7 +580,7 @@ function generateNarrative(updates: Update[]): string {
     const highMcp = mcpUpdates.filter(u => u.priority === 'HIGH').length;
     if (highMcp > 0) {
       narrative += `**🔧 IMPORTANT: MCP Infrastructure Changes**\n`;
-      narrative += `**${highMcp} HIGH-priority MCP updates** detected. Since PAI uses MCP servers for chrome-devtools, brightdata, Ref, content, and Stripe, `;
+      narrative += `**${highMcp} HIGH-priority MCP updates** detected. Since PAI uses MCP servers for brightdata, Ref, content, and Stripe, `;
       narrative += `protocol changes could affect our integrations. `;
 
       const mcpRelease = mcpUpdates.find(u => u.type === 'release');

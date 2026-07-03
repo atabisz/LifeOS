@@ -1,6 +1,7 @@
 ---
 name: Delegation
-description: Parallelize work via background/foreground agents, built-in types, custom agents, or agent teams/swarms. USE WHEN 3+ independent workstreams, parallel execution, agent specialization, Extended+ effort, agent team, swarm, create an agent team.
+description: "Parallelize work via six patterns: built-in agents (Engineer/Architect/Algorithm/Explore/Plan via Task), worktree-isolated agents (conflict-free parallel file edits), background agents (run_in_background: true, non-blocking), custom agents (ComposeAgent via Agents skill → Task general-purpose), agent teams (TeamCreate + TaskCreate + SendMessage for multi-turn peer coordination), and parallel task dispatch (N identical operations). Two-tier delegation: lightweight (haiku, max_turns=3, one-shot extraction/classification) vs full (multi-step, tool use, iteration). Decision rule — agents need to talk to each other or share state → Teams; independent one-shot work → Subagents. Auto-invoked by Algorithm when 3+ independent workstreams exist at Extended+ effort. USE WHEN 3+ workstreams, parallel execution, agent specialization, agent team, swarm, spawn agents, create team, fan out, divide and conquer, multi-agent, coordinate agents. NOT FOR single-agent custom personality composition (use Agents skill)."
+effort: medium
 ---
 
 # Delegation — Agent Orchestration & Parallelization
@@ -9,9 +10,9 @@ description: Parallelize work via background/foreground agents, built-in types, 
 
 ## 🚨 CRITICAL ROUTING — Two COMPLETELY Different Systems
 
-| {PRINCIPAL.NAME} Says | System | Tool | What Happens |
+| the user Says | System | Tool | What Happens |
 |-------------|--------|------|-------------|
-| "**custom agents**", "spin up agents", "launch agents" | **Agents Skill** (ComposeAgent) | `Task(subagent_type="general-purpose", prompt=<ComposeAgent output>)` | Unique personalities, voices, colors via trait composition |
+| "**custom agents**", "**specialized agents**", "spin up agents", "launch agents" | **Agents Skill** (ComposeAgent) | `Task(subagent_type="general-purpose", prompt=<ComposeAgent output>)` | Unique personalities, voices, colors via trait composition |
 | "**create an agent team**", "**agent team**", "**swarm**" | **Claude Code Teams** | `TeamCreate` → `TaskCreate` → `SendMessage` | Persistent team with shared task list, message coordination, multi-turn collaboration |
 
 **These are NOT the same thing:**
@@ -26,10 +27,13 @@ description: Parallelize work via background/foreground agents, built-in types, 
 - **Large codebase changes** spanning 5+ files benefit from parallel workers
 - **Research + execution** can proceed simultaneously
 - **"Create an agent team"** — use TeamCreate for persistent coordinated teams
+- **Unattended autonomous work where auditability matters more than speed** — spawn an Observer team (Agents skill → SPAWNOBSERVERS) alongside the primary agent, reading the tool-activity audit log, voting continue/halt/escalate. ONLY use when BOTH (a) time is not a constraint and (b) auditability is the primary requirement. Never for interactive or time-sensitive work. See Agents/SKILL.md "Observer Team Archetype" for shape and guardrails.
 
 ## Delegation Patterns
 
 ### 1. Built-In Agents
+
+**⚠️ Built-in agents are for internal workflow routing ONLY.** When the user asks for custom, specialized, or uniquely-voiced agents, use the Agents skill (section 4 below) instead.
 
 Use `Task(subagent_type="AgentType")` with these specialized agents:
 
@@ -119,6 +123,25 @@ Task(subagent_type="general-purpose", prompt=<ComposeAgent JSON .prompt field>)
 - Parent coordinates via `SendMessage`, reconciles results
 - Teammates go idle between turns — send messages to wake them
 
+### When to Use Teams vs Subagents (Decision Matrix)
+
+| Factor | Subagents (Task) | Agent Teams (TeamCreate) |
+|--------|------------------|--------------------------|
+| **Communication** | Fire-and-forget, no peer messaging | Persistent messaging between teammates |
+| **Context** | Fresh context each spawn, limited window | Full context window per teammate, preserved across turns |
+| **Coordination** | Parent collects results, no shared state | Shared task list, direct peer DMs, idle/wake cycle |
+| **Duration** | Single-turn execution | Multi-turn, iterative work with course corrections |
+| **Overhead** | Low — spawn and forget | Higher — team setup, task creation, message routing |
+| **Best for** | Parallel research, one-shot analysis, simple delegation | Complex multi-file changes, iterative debugging, cross-layer coordination |
+
+**Decision rule:** If agents need to talk to each other or iterate on shared work → Teams. If each agent does independent one-shot work → Subagents.
+
+**Concrete examples:**
+- "Research 4 topics in parallel" → **Subagents** (independent, no coordination needed)
+- "Build a feature spanning API + UI + tests with shared state" → **Teams** (cross-layer, needs coordination)
+- "Run 10 file updates with same pattern" → **Subagents** (parallel, identical, independent)
+- "Debug a complex issue with competing hypotheses" → **Teams** (need to share findings, adjust approach)
+
 ### 6. Parallel Task Dispatch
 
 For N identical operations (e.g., updating 10 files with the same pattern):
@@ -186,4 +209,41 @@ Task(subagent_type="general-purpose", prompt="...")  # or specialized agent type
 - Don't create teams for fewer than 3 independent workstreams
 - Don't send agents work without full context — they start fresh
 - Don't use built-in agent names for custom agents
+- Don't use built-in agent types (Designer, Architect, Engineer) when user asks for specialized or custom agents — always use ComposeAgent via the Agents skill
 - Don't use full delegation for one-shot extraction/classification — use lightweight tier
+
+## Gotchas
+
+- **Delegation uses Claude Code's built-in TeamCreate** — NOT the Agents skill's ComposeAgent. These are different systems.
+- **3+ independent workstreams warrant delegation.** For 1-2 tasks, direct work is faster than team coordination overhead.
+- **Agent teams share a task list.** Use TaskCreate/TaskUpdate for coordination, not ad-hoc messages.
+- **Teams overkill for single-file tasks.** (Mar 2026 reflection: "one agent that can both read code and write JSX is better than three specialists who can't coordinate")
+
+## Examples
+
+**Example 1: Parallel implementation**
+```
+User: "build the frontend and backend in parallel"
+→ Creates team via TeamCreate
+→ Spawns frontend and backend agents
+→ Shared task list for coordination
+→ Agents work independently, merge results
+```
+
+**Example 2: Research swarm**
+```
+User: "launch an agent team to research these 5 topics"
+→ Creates team with 5 research agents
+→ Each agent handles one topic independently
+→ Results synthesized by team lead
+```
+
+## Execution Log
+
+After completing any workflow, append a single JSONL entry:
+
+```bash
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Delegation","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+```
+
+Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

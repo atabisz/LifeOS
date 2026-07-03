@@ -4,9 +4,30 @@ import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 
-const INBOX = join(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/PAI/health/inbox")
-const PROCESSED = join(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/PAI/health/processed")
-const SNAPSHOTS = join(homedir(), ".claude/PAI/USER/HEALTH/snapshots")
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
+
+// iCloud Drive lives in different places per OS. macOS: the CloudDocs container
+// under ~/Library. Windows (iCloud for Windows): ~/iCloudDrive. An explicit
+// PAI_HEALTH_ROOT override wins on every OS so the pipeline works with any sync
+// tool (Dropbox, OneDrive, a plain folder). Without a valid root on Windows the
+// old hardcoded macOS path silently pointed at a nonexistent dir → empty ingest.
+function healthRoot(): string {
+  const override = process.env.PAI_HEALTH_ROOT
+  if (override) return override
+  if (process.platform === "darwin") {
+    return join(HOME, "Library/Mobile Documents/com~apple~CloudDocs/PAI/health")
+  }
+  if (process.platform === "win32") {
+    return join(HOME, "iCloudDrive/PAI/health")
+  }
+  // Linux / other: no iCloud — default to a local folder under HOME.
+  return join(HOME, "PAI/health")
+}
+
+const HEALTH_ROOT = healthRoot()
+const INBOX = join(HEALTH_ROOT, "inbox")
+const PROCESSED = join(HEALTH_ROOT, "processed")
+const SNAPSHOTS = join(HOME, ".claude/PAI/USER/HEALTH/snapshots")
 
 type HealthSnapshot = {
   date?: string

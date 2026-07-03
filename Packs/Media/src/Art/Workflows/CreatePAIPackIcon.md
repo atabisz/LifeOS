@@ -5,7 +5,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the CreatePAIPackIcon workflow in the Art skill to generate pack icons"}' \
   > /dev/null 2>&1 &
@@ -91,7 +91,7 @@ BACKGROUND: Dark (#0a0a0f) - will be removed for transparency.
 
 **Command:**
 ```bash
-bun run ~/.claude/skills/Media/Art/Tools/Generate.ts \
+bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --model nano-banana-pro \
   --prompt "[YOUR_PROMPT]" \
   --size 1K \
@@ -132,7 +132,7 @@ file ${PROJECTS_DIR}/PAI/Packs/icons/[PACK_NAME].png
 ### Example 1: Hook System Pack
 
 ```bash
-bun run ~/.claude/skills/Media/Art/Tools/Generate.ts \
+bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --model nano-banana-pro \
   --prompt "A stylized hook or fishing hook shape representing event hooks in software, simple flat icon design, 256x256 pixels. COLOR PALETTE: Primary electric blue (#4a90d9), Accent purple (#8b5cf6) sparingly. STYLE: Modern flat icon, simple enough to read at 64x64, no text, centered. BACKGROUND: Dark (#0a0a0f)." \
   --size 1K \
@@ -144,7 +144,7 @@ bun run ~/.claude/skills/Media/Art/Tools/Generate.ts \
 ### Example 2: Core Install Pack
 
 ```bash
-bun run ~/.claude/skills/Media/Art/Tools/Generate.ts \
+bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --model nano-banana-pro \
   --prompt "A download arrow pointing into a foundation/base structure representing core installation, simple flat icon design, 256x256 pixels. COLOR PALETTE: Primary electric blue (#4a90d9), Accent purple (#8b5cf6) sparingly. STYLE: Modern flat icon, simple enough to read at 64x64, no text, centered. BACKGROUND: Dark (#0a0a0f)." \
   --size 1K \
@@ -156,7 +156,7 @@ bun run ~/.claude/skills/Media/Art/Tools/Generate.ts \
 ### Example 3: Memory System Pack
 
 ```bash
-bun run ~/.claude/skills/Media/Art/Tools/Generate.ts \
+bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --model nano-banana-pro \
   --prompt "A brain with memory/data flowing in and out representing an AI memory system, simple flat icon design, 256x256 pixels. COLOR PALETTE: Primary electric blue (#4a90d9), Accent purple (#8b5cf6) sparingly. STYLE: Modern flat icon, simple enough to read at 64x64, no text, centered. BACKGROUND: Dark (#0a0a0f)." \
   --size 1K \
@@ -207,7 +207,7 @@ Before marking icon complete:
 
 ## Related Workflows
 
-- `the PAI release workflow` - Release workflow (may include icon generation)
+- `~/.claude/skills/_PAI/Workflows/CreateRelease.md` - Release workflow (may include icon generation)
 
 *Note: Previously referenced CreatePack.md, ValidatePack.md, and PAIIntegrityCheck.md have been removed.*
 

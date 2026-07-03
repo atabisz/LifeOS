@@ -5,7 +5,7 @@ Compare multiple models on the same prompt to determine the best performer.
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the CompareModels workflow in the Evals skill to compare model performance"}' \
   > /dev/null 2>&1 &
@@ -46,7 +46,7 @@ models:
 
 ### Step 3: Create Model Comparison Config
 
-Create `~/.claude/skills/Utilities/Evals/UseCases/<name>/model-comparisons/<comparison-name>.yaml`:
+Create `~/.claude/skills/Evals/UseCases/<name>/model-comparisons/<comparison-name>.yaml`:
 
 ```yaml
 model_comparison:
@@ -97,7 +97,7 @@ model_comparison:
 **Option A: CLI (Sequential)**
 
 ```bash
-bun run ~/.claude/skills/Utilities/Evals/EvalServer/cli-run.ts \
+bun run ~/.claude/skills/Evals/EvalServer/cli-run.ts \
   --use-case <name> \
   --models claude-3-5-sonnet-20241022,gpt-4o,gemini-1.5-pro
 ```
@@ -106,15 +106,15 @@ bun run ~/.claude/skills/Utilities/Evals/EvalServer/cli-run.ts \
 
 ```bash
 # Run each model in parallel for speed
-bun run ~/.claude/skills/Utilities/Evals/EvalServer/cli-run.ts \
+bun run ~/.claude/skills/Evals/EvalServer/cli-run.ts \
   --use-case <name> \
   --model claude-3-5-sonnet-20241022 &
 
-bun run ~/.claude/skills/Utilities/Evals/EvalServer/cli-run.ts \
+bun run ~/.claude/skills/Evals/EvalServer/cli-run.ts \
   --use-case <name> \
   --model gpt-4o &
 
-bun run ~/.claude/skills/Utilities/Evals/EvalServer/cli-run.ts \
+bun run ~/.claude/skills/Evals/EvalServer/cli-run.ts \
   --use-case <name> \
   --model gemini-1.5-pro &
 

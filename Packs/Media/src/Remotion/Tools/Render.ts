@@ -12,8 +12,8 @@ export interface RenderOptions {
   compositionId: string
   /** Output file path */
   outputPath: string
-  /** Video codec */
-  codec?: 'h264' | 'h265' | 'vp8' | 'vp9' | 'prores' | 'gif'
+  /** Video codec. AV1 not supported on Linux ARM64 GNU or on Lambda. */
+  codec?: 'h264' | 'h265' | 'av1' | 'vp8' | 'vp9' | 'prores' | 'gif' | 'h264-mkv'
   /** Constant Rate Factor (quality, lower = better, 0-51) */
   crf?: number
   /** Frames per second */
@@ -38,6 +38,12 @@ export interface RenderOptions {
   muted?: boolean
   /** Audio codec */
   audioCodec?: 'aac' | 'mp3' | 'opus' | 'wav' | 'pcm'
+  /** Audio sample rate in Hz (e.g. 44100, 48000) */
+  sampleRate?: number
+  /** Audio bitrate (e.g. "128k") */
+  audioBitrate?: string
+  /** Video bitrate (e.g. "4M") */
+  videoBitrate?: string
   /** Number of render threads */
   concurrency?: number
   /** Verbose output */
@@ -67,7 +73,7 @@ export interface RenderResult {
  * @returns Render result
  */
 export async function render(options: RenderOptions): Promise<RenderResult> {
-  const args: string[] = ['npx', 'remotion', 'render', options.compositionId, options.outputPath]
+  const args: string[] = ['bunx', 'remotion', 'render', options.compositionId, options.outputPath]
 
   if (options.codec) args.push('--codec', options.codec)
   if (options.crf !== undefined) args.push('--crf', String(options.crf))
@@ -80,6 +86,9 @@ export async function render(options: RenderOptions): Promise<RenderResult> {
   if (options.scale) args.push('--scale', String(options.scale))
   if (options.muted) args.push('--muted')
   if (options.audioCodec) args.push('--audio-codec', options.audioCodec)
+  if (options.sampleRate) args.push('--sample-rate', String(options.sampleRate))
+  if (options.audioBitrate) args.push('--audio-bitrate', options.audioBitrate)
+  if (options.videoBitrate) args.push('--video-bitrate', options.videoBitrate)
   if (options.concurrency) args.push('--concurrency', String(options.concurrency))
 
   if (options.inputProps) {
@@ -123,7 +132,7 @@ export async function renderStill(options: {
   jpegQuality?: number
   scale?: number
 }): Promise<RenderResult> {
-  const args: string[] = ['npx', 'remotion', 'still', options.compositionId, options.outputPath]
+  const args: string[] = ['bunx', 'remotion', 'still', options.compositionId, options.outputPath]
 
   if (options.frame !== undefined) args.push('--frame', String(options.frame))
   if (options.imageFormat) args.push('--image-format', options.imageFormat)
@@ -162,7 +171,7 @@ export async function listCompositions(projectDir?: string): Promise<Composition
   const cwd = projectDir || process.cwd()
 
   try {
-    const result = await $`npx remotion compositions --json`.cwd(cwd).text()
+    const result = await $`bunx remotion compositions --json`.cwd(cwd).text()
     return JSON.parse(result)
   } catch (error: any) {
     console.error('Failed to list compositions:', error.message)
@@ -180,7 +189,7 @@ export async function startStudio(options?: {
   port?: number
   browserArgs?: string[]
 }): Promise<void> {
-  const args: string[] = ['npx', 'remotion', 'studio']
+  const args: string[] = ['bunx', 'remotion', 'studio']
 
   if (options?.port) args.push('--port', String(options.port))
 
@@ -202,7 +211,7 @@ export async function createProject(options: {
   template?: 'blank' | 'hello-world' | 'three' | 'audiogram' | 'tts'
   outputDir?: string
 }): Promise<{ success: boolean; path: string; error?: string }> {
-  const args: string[] = ['npx', 'create-video@latest', options.name]
+  const args: string[] = ['bunx', 'create-video@latest', options.name]
 
   if (options.template) {
     args.push('--template', options.template)
@@ -235,7 +244,7 @@ export async function upgrade(projectDir?: string): Promise<{ success: boolean; 
   const cwd = projectDir || process.cwd()
 
   try {
-    await $`npx remotion upgrade`.cwd(cwd).text()
+    await $`bunx remotion upgrade`.cwd(cwd).text()
     return { success: true }
   } catch (error: any) {
     return {
@@ -256,7 +265,7 @@ export async function getVideoMetadata(videoPath: string): Promise<{
 } | null> {
   try {
     // This requires @remotion/media-utils in the project
-    const result = await $`npx remotion parse-video ${videoPath} --json`.text()
+    const result = await $`bunx remotion parse-video ${videoPath} --json`.text()
     return JSON.parse(result)
   } catch {
     return null
@@ -268,7 +277,7 @@ export async function getVideoMetadata(videoPath: string): Promise<{
  */
 export async function getAudioDuration(audioPath: string): Promise<number | null> {
   try {
-    const result = await $`npx remotion parse-audio ${audioPath} --json`.text()
+    const result = await $`bunx remotion parse-audio ${audioPath} --json`.text()
     const data = JSON.parse(result)
     return data.durationInSeconds
   } catch {

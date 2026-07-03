@@ -20,7 +20,7 @@
 
 import { spawn, spawnSync } from "bun";
 import { getIdentity, getStartupCatchphrase } from "../../../.claude/hooks/lib/identity";
-import { existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync, readlinkSync } from "fs";
 import { homedir } from "os";
 import { join, basename } from "path";
 
@@ -180,9 +180,10 @@ function getCurrentProfile(): string | null {
   try {
     const stats = lstatSync(ACTIVE_MCP);
     if (stats.isSymbolicLink()) {
-      const target = readFileSync(ACTIVE_MCP, "utf-8");
-      // For symlink, we need the real target name
-      const realpath = Bun.spawnSync(["readlink", ACTIVE_MCP]).stdout.toString().trim();
+      // Resolve the symlink target with Node's readlinkSync — portable across
+      // macOS/Linux/Windows. The old `readlink` binary spawn does not exist on
+      // native Windows (no coreutils), so this threw/returned empty there.
+      const realpath = readlinkSync(ACTIVE_MCP);
       return basename(realpath).replace(".mcp.json", "");
     }
     return "custom";
@@ -466,18 +467,26 @@ async function cmdUpdate() {
 
   log("Updating Claude Code...", "🔄");
 
-  // Step 1: Update Bun
+  const isWindows = process.platform === "win32";
+
+  // Step 1: Update Bun. On macOS the canonical install is Homebrew; on Windows
+  // (and Linux) `brew` does not exist, so use bun's built-in self-updater.
   log("Step 1/2: Updating Bun...", "📦");
-  const bunResult = spawnSync(["brew", "upgrade", "bun"]);
+  const bunResult = isWindows
+    ? spawnSync(["bun", "upgrade"])
+    : spawnSync(["brew", "upgrade", "bun"]);
   if (bunResult.exitCode !== 0) {
     log("Bun update skipped (may already be latest)", "⚠️");
   } else {
     log("Bun updated", "✅");
   }
 
-  // Step 2: Update Claude Code
+  // Step 2: Update Claude Code. The `curl | bash` bootstrap is POSIX-only; on
+  // Windows use the official PowerShell installer instead of a dead curl|bash.
   log("Step 2/2: Installing latest Claude Code...", "🤖");
-  const claudeResult = spawnSync(["bash", "-c", "curl -fsSL https://claude.ai/install.sh | bash"]);
+  const claudeResult = isWindows
+    ? spawnSync(["powershell", "-NoProfile", "-Command", "irm https://claude.ai/install.ps1 | iex"])
+    : spawnSync(["bash", "-c", "curl -fsSL https://claude.ai/install.sh | bash"]);
   if (claudeResult.exitCode !== 0) {
     error("Claude Code installation failed");
   }

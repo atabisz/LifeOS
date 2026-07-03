@@ -10,9 +10,16 @@
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { parse as parseYaml } from "yaml";
 
-const PAI_DA_DIR = join(process.env.HOME!, ".claude", "PAI", "USER", "DA");
+// Resolve relative to this script's own location. This tool consumes what
+// DAInterview.ts writes, so it must resolve the same directory the same way —
+// DAInterview.ts derives from import.meta.url too. Script ships at
+// PAI/TOOLS/DAIdentityGenerator.ts, so PAI/USER/DA is two levels up.
+// No $HOME assumption — works on Windows (where HOME is often unset) and from
+// a fresh clone or an installed location alike.
+const PAI_DA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "USER", "DA");
 
 function loadYaml<T>(path: string): T {
   if (!existsSync(path)) {

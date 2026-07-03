@@ -3,7 +3,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Algorithm Upgrade workflow to analyze and propose improvements to the PAI Algorithm"}' \
   > /dev/null 2>&1 &
@@ -29,7 +29,7 @@ Algorithm Reflections (JSONL)     Current Algorithm Spec
 │ Q3: Fundamental gaps     │     │ ISC requirements         │
 │ Sentiment + budget data  │     │ Capability matrix        │
 └──────────────────────────┘     │ Quality gates            │
-           │                     │ PRD integration          │
+           │                     │ ISA integration          │
            └──────────┬──────────┘
                       ▼
         ┌─────────────────────────────┐
@@ -53,41 +53,109 @@ Reflections map to Algorithm sections. This is the routing table for where fixes
 | Context recovery, prior work missed | OBSERVE phase | `━━━ OBSERVE ━━━`, `**CONTEXT RECOVERY**` |
 | Verification gaps, claims without proof | VERIFY phase | `━━━ VERIFY ━━━` |
 | Plan mode, exploration depth | PLAN phase, Plan Mode | `━━━ PLAN ━━━`, `## Plan Mode Integration` |
-| PRD issues, sync problems | PRD Integration | `## PRD Integration` |
+| ISA issues, sync problems | ISA Integration | `## ISA Integration` |
 | Phase merging, discrete violations | Phase Discipline | `## Discrete Phase Enforcement`, `## Phase Discipline Checklist` |
 | Voice, notifications | Voice Announcements | `## Voice Phase Announcements` |
-| Loop mode, iteration | Loop Mode, PRD Status | `### Multi-Iteration`, PRD status progression |
+| Loop mode, iteration | Loop Mode, ISA Status | `### Multi-Iteration`, ISA status progression |
 | Silent stalls, hanging | No Silent Stalls | `## No Silent Stalls` |
 
 ---
 
 ## Execution
 
-### Step 1: Read Current Algorithm State
+### Step 1: Read & Deeply Understand Current Algorithm
+
+The algorithm changes frequently. Every upgrade analysis MUST start by reading and internalizing the current version — not from memory, not from assumptions.
 
 ```
-Read the current Algorithm version and spec:
+1. Read PAI/ALGORITHM/LATEST to get current version string (e.g., "v3.7.0")
+2. Read PAI/ALGORITHM/v{VERSION}.md — the FULL spec, every line
+3. Produce a structured digest:
 
-1. Read PAI/Algorithm/LATEST to get current version
-2. Read PAI/Algorithm/v{VERSION}.md (the full spec)
-3. Extract section headers and key rules into a structured map
+   ALGORITHM DIGEST: v{VERSION}
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Phases: [list each phase with its key mandate]
+   Quality Gates: [list each gate with its pass/fail criteria]
+   ISC Rules: [summarize ISC construction and verification rules]
+   Effort Levels: [list levels and their budget constraints]
+   Capability System: [how capabilities are selected]
+   Agent Rules: [when/how subagents are spawned]
+   ISA Integration: [how ISAs are created and tracked]
+   Voice/Notification: [announcement rules]
+   Loop Mode: [multi-iteration rules]
+   Key Guardrails: [rules that constrain behavior — phase discipline, no silent stalls, etc.]
 
-Report: "Current Algorithm: v{VERSION} — {N} sections, {M} rules"
+   DESIGN DECISIONS (important for upgrade analysis):
+   - [List 5-10 deliberate design choices visible in the spec,
+      e.g., "OBSERVE must complete before PLAN", "ISC requires anti-criteria",
+      "Extended effort gets agent parallelization"]
+
+This digest is the baseline. Every upgrade proposal must be compared against it
+to avoid proposing changes that contradict existing design intent.
 ```
 
-### Step 2: Mine Reflections with Algorithm Focus
+### Step 2: Gather All Learning Signals
 
-Spawn 1 agent:
+The learning system captures signals across multiple sources. Read ALL of them — not just reflections.
+
+#### 2a: Algorithm Reflections (primary)
 
 ```
-Use Task tool with subagent_type=general-purpose:
+Read ~/.claude/PAI/MEMORY/LEARNING/REFLECTIONS/algorithm-reflections.jsonl
+Parse each line as JSON. This is the richest source — Q1/Q2/Q3 self-reflection after each Algorithm run.
+```
 
-"Mine algorithm reflections specifically for Algorithm improvement patterns.
+#### 2b: Rating Signals
 
-Read MEMORY/LEARNING/REFLECTIONS/algorithm-reflections.jsonl
+```
+Read ~/.claude/PAI/MEMORY/LEARNING/SIGNALS/ratings.jsonl
+Focus on entries with rating <= 5. Extract the response_preview and sentiment_summary
+to understand WHAT went wrong from the user's perspective (not just the algorithm's self-assessment).
+```
+
+#### 2c: Algorithm-Specific Learnings
+
+```
+Read all files in ~/.claude/PAI/MEMORY/LEARNING/ALGORITHM/ (latest month first, then previous month)
+These are detailed learning captures from low-sentiment sessions — they contain root cause analysis
+that reflections alone may miss.
+```
+
+#### 2d: Failure Patterns
+
+```
+Read ~/.claude/PAI/MEMORY/LEARNING/FAILURES/ (latest month, plus ROOT_CAUSE_ANALYSIS.md)
+These capture recurring failure patterns. Cross-reference against the Algorithm digest from Step 1
+to identify which Algorithm rules SHOULD have prevented these failures but didn't.
+```
+
+### Step 3: Classify All Signals Against Current Algorithm
+
+Using the Algorithm digest from Step 1 and ALL learning data from Step 2, spawn 1 agent:
+
+```
+Use Agent tool with subagent_type=general-purpose:
+
+"Analyze all learning signals against the current Algorithm spec.
+
+You have four data sources to analyze:
+
+SOURCE 1: algorithm-reflections.jsonl (Step 2a)
+Read ~/.claude/PAI/MEMORY/LEARNING/REFLECTIONS/algorithm-reflections.jsonl
 Parse each line as JSON.
+For EACH entry, analyze Q2 (algorithm improvements).
 
-For EACH entry, analyze Q2 (algorithm improvements) and classify the theme using this routing table:
+SOURCE 2: Low-rated sessions from ratings.jsonl (Step 2b)
+Read ~/.claude/PAI/MEMORY/LEARNING/SIGNALS/ratings.jsonl
+Filter to rating <= 5. For each, extract what went wrong.
+
+SOURCE 3: Algorithm learning files (Step 2c)
+Read files in ~/.claude/PAI/MEMORY/LEARNING/ALGORITHM/ (2026-03/ then 2026-02/)
+
+SOURCE 4: Failure patterns (Step 2d)
+Read ~/.claude/PAI/MEMORY/LEARNING/FAILURES/ latest month + ROOT_CAUSE_ANALYSIS.md
+
+For EACH signal across ALL sources, classify the theme using this routing table:
 
 SECTION ROUTING:
 - ISC quality/criteria issues → 'ISC'
@@ -97,7 +165,7 @@ SECTION ROUTING:
 - Context recovery issues → 'OBSERVE'
 - Verification gaps → 'VERIFY'
 - Plan mode issues → 'PLAN'
-- PRD/sync issues → 'PRD'
+- ISA/sync issues → 'ISA'
 - Phase discipline issues → 'PHASE_DISCIPLINE'
 - Voice/notification issues → 'VOICE'
 - Loop/iteration issues → 'LOOP'
@@ -136,18 +204,52 @@ If file doesn't exist or is empty, return { 'entries_analyzed': 0 }
 EFFORT LEVEL: Return within 60 seconds."
 ```
 
-### Step 3: Cross-Reference Reflections Against Spec
+### Step 3.5: Claude Code Freshness Validation
 
-For each theme from Step 2:
+Before proposing Algorithm changes, verify that the Algorithm's Claude Code references (Platform Capabilities table, agent types, hook events, slash commands) are current:
 
-1. **Locate the section** in the Algorithm spec using the routing table
-2. **Read the current text** of that section
-3. **Identify the gap** between what the spec says and what reflections say goes wrong
-4. **Draft the fix** — specific text changes to the Algorithm spec
+```
+Use Agent tool with subagent_type=claude-code-guide:
 
-### Step 4: Generate Upgrade Proposals
+"The PAI Algorithm has a Platform Capabilities table referencing Claude Code features.
+Read the current Algorithm spec at ~/.claude/PAI/ALGORITHM/v{VERSION}.md (get version from ~/.claude/PAI/ALGORITHM/LATEST).
 
-For each theme with 2+ occurrences (or 1 if HIGH signal):
+Verify that:
+1. All subagent_type values in the table are valid current types
+2. All slash commands referenced (e.g., /simplify, /batch, /debug) still exist
+3. Hook event types referenced match the current Claude Code hook API
+4. Any Claude Code features mentioned are current (not deprecated or renamed)
+5. Any MISSING Claude Code features that should be in the Algorithm's awareness
+
+Return:
+{
+  'stale_references': [{'reference': '...', 'current_state': '...', 'fix': '...'}],
+  'missing_features': [{'feature': '...', 'why_relevant': '...', 'proposed_entry': '...'}],
+  'confirmed_current': ['list of references that are still accurate']
+}
+
+EFFORT LEVEL: Return within 60 seconds."
+```
+
+Include any stale references or missing features as additional upgrade proposals in Step 5, tagged with source `claude-code-guide` and priority based on staleness impact.
+
+### Step 4: Cross-Reference Signals Against Current Algorithm Spec
+
+For each theme from Step 3, using the Algorithm digest from Step 1:
+
+1. **Locate the section** in the current Algorithm spec (v{VERSION}.md) using the routing table
+2. **Read the current text** of that section — quote it exactly
+3. **Compare against the digest's Design Decisions** — is this a known design choice being violated, or a genuine gap?
+4. **Identify the gap** — what does the spec say vs. what actually goes wrong? Is the rule missing, too weak, ambiguous, or just not enforced?
+5. **Draft the fix** — specific text changes to the Algorithm spec, with before/after
+
+IMPORTANT: Do not propose changes that contradict existing design decisions
+unless the learning data shows those decisions are fundamentally wrong.
+A rule that exists but isn't followed needs enforcement, not removal.
+
+### Step 5: Generate Upgrade Proposals
+
+For each theme with 2+ occurrences across ALL sources (or 1 if HIGH signal):
 
 ```
 ALGORITHM UPGRADE PROPOSAL #{N}
@@ -172,7 +274,7 @@ Evidence:
 - [{timestamp}] {task} — "{Q2 quote}"
 ```
 
-### Step 5: Version Bump Assessment
+### Step 6: Version Bump Assessment
 
 Based on upgrade proposals:
 
@@ -225,7 +327,7 @@ Ideas that require fundamental changes, not just spec edits:
 - [ ] Review proposals
 - [ ] Apply approved changes to Algorithm spec
 - [ ] Bump version if warranted
-- [ ] Run `bun PAI/Tools/RebuildPAI.ts` to rebuild
+- [ ] `PAI_ARCHITECTURE_SUMMARY.md` auto-regenerates via DocIntegrity on Stop; no manual rebuild
 ```
 
 ---

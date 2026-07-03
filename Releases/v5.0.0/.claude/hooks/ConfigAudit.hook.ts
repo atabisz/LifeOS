@@ -20,6 +20,7 @@ import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } fr
 import { join } from 'path';
 import { paiPath, getSettingsPath } from './lib/paths';
 import { getISOTimestamp } from './lib/time';
+import { tmp } from './lib/portable';
 
 interface ConfigChangeInput {
   session_id: string;
@@ -42,7 +43,7 @@ interface ConfigChangeEvent {
 
 const OBS_DIR = paiPath('MEMORY', 'OBSERVABILITY');
 const AUDIT_FILE = join(OBS_DIR, 'config-changes.jsonl');
-const SNAPSHOT_PATH = '/tmp/pai-settings-snapshot.json';
+const SNAPSHOT_PATH = join(tmp(), 'pai-settings-snapshot.json');
 
 // Sensitive keys that warrant extra logging
 const SENSITIVE_KEYS = new Set([

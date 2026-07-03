@@ -1,6 +1,7 @@
 ---
 name: Prompting
-description: Meta-prompting system that generates optimized prompts using templates, standards, and patterns. Produces structured prompts with role, context, and output format. USE WHEN meta-prompting, template generation, prompt optimization, programmatic prompt composition, render template, validate template, prompt engineering.
+description: "Meta-prompting standard library — the PAI system for generating, optimizing, and composing prompts programmatically. Owns three pillars: Standards (Anthropic Claude 4.x best practices, context engineering principles, 1,500+ paper synthesis, Fabric pattern system, markdown-first / no-XML-tags); Templates (Handlebars-based — Briefing.hbs, Structure.hbs, Gate.hbs, DynamicAgent.hbs, and eval-specific templates Judge.hbs, Rubric.hbs, TestCase.hbs, Comparison.hbs, Report.hbs used by Agents and Evals skills); and Tools (RenderTemplate.ts for CLI/TypeScript rendering with data-content separation). Philosophy: prompts that write prompts — structure is code, content is data. Delivered 65% token reduction across PAI (53K → 18K tokens) via template extraction. Output is always a prompt to be used elsewhere, not final content. Reference files: Standards.md (complete prompt engineering guide), Tools/RenderTemplate.ts (rendering implementation). NOT FOR generating final content or answers — this skill produces prompts only (for content, use the appropriate domain skill). USE WHEN meta-prompting, template generation, prompt optimization, prompt engineering, write a prompt for, generate an agent prompt, create system prompt, programmatic prompt, Handlebars template, optimize this prompt, prompt hygiene, context engineering, eval prompt, judge prompt, agent briefing."
+effort: medium
 ---
 
 ## Customization
@@ -17,7 +18,7 @@ If this directory exists, load and apply any PREFERENCES.md, configurations, or 
 
 1. **Send voice notification**:
    ```bash
-   curl -s -X POST http://localhost:8888/notify \
+   curl -s -X POST http://localhost:31337/notify \
      -H "Content-Type: application/json" \
      -d '{"message": "Running the WORKFLOWNAME workflow in the Prompting skill to ACTION"}' \
      > /dev/null 2>&1 &
@@ -63,7 +64,7 @@ Complete prompt engineering documentation based on:
 
 ```typescript
 // skills/Agents/Tools/ComposeAgent.ts
-import { renderTemplate } from '~/.claude/skills/Utilities/Prompting/Tools/RenderTemplate.ts';
+import { renderTemplate } from '${CLAUDE_SKILL_DIR}/Tools/RenderTemplate.ts';
 
 const prompt = renderTemplate('Primitives/Briefing.hbs', {
   briefing: { type: 'research' },
@@ -178,3 +179,19 @@ The templating system eliminated **~35,000 tokens (65% reduction)** across PAI:
 ---
 
 **Philosophy:** Prompts that write prompts. Structure is code, content is data. Meta-prompting enables dynamic composition where the same template with different data generates specialized agents, workflows, and evaluation frameworks. This is core PAI DNA - programmatic prompt generation at scale.
+
+## Gotchas
+
+- **Meta-prompting generates PROMPTS, not content.** The output is a prompt that gets used elsewhere — not the final deliverable.
+- **Templates should be model-agnostic.** Don't write prompts that depend on specific model quirks.
+- **Test generated prompts before declaring them ready.** A prompt that looks good may perform poorly.
+
+## Execution Log
+
+After completing any workflow, append a single JSONL entry:
+
+```bash
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Prompting","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+```
+
+Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

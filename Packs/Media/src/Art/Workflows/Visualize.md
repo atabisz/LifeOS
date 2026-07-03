@@ -5,7 +5,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Visualize workflow in the Art skill to create visualizations"}' \
   > /dev/null 2>&1 &
@@ -98,10 +98,9 @@ TRANSPARENT: Use Images skill to remove background for overlay use
 **For transparent background** — use the **Images skill** for background removal:
 
 ```bash
-bun ~/.claude/PAI/Tools/RemoveBg.ts /path/to/visualization.png
+bun ~/.claude/PAI/TOOLS/RemoveBg.ts /path/to/visualization.png
 ```
 
-**See:** `~/.claude/skills/Images/Workflows/BackgroundRemoval.md` for full documentation.
 
 ### Title/Subtitle Alignment
 
@@ -406,7 +405,7 @@ Apply 3-tier system across all elements:
 - **Tier 3 (Advocate Condensed Italic):** Annotations, insights, editorial voice
 
 #### D. Color Strategy
-Maintain brand aesthetic while supporting information hierarchy:
+Maintain UL aesthetic while supporting information hierarchy:
 - **Black #000000:** Primary structure (chart axes, borders, main elements)
 - **Purple #4A148C:** Critical insights, key data points, optimal zones
 - **Teal #00796B:** Secondary data, supporting elements, context
@@ -633,7 +632,7 @@ open /path/to/visualization.png
 
 #### Design Quality
 - [ ] **Professional deliverable:** Client/publication ready
-- [ ] **brand aesthetic maintained:** Flat colors, appropriate hand-drawn vs precise
+- [ ] **UL aesthetic maintained:** Flat colors, appropriate hand-drawn vs precise
 - [ ] **Typography hierarchy clear:** 3 tiers obviously distinct
 - [ ] **Color strategic:** Purple/teal highlight key elements, not overwhelming
 - [ ] **Composition balanced:** Visual weight distributed appropriately
@@ -660,7 +659,7 @@ open /path/to/visualization.png
 | **Message unclear** | No clear visual hierarchy | Strengthen primary element (make larger, add purple), reduce secondary |
 | **Text unreadable** | Font too small or wrong tier | Increase label sizes, strengthen typography tier differentiation |
 | **Data imprecise** | Chart rendering issues | Add specific data points in prompt, request precision explicitly |
-| **Looks generic** | Missing brand aesthetic | Add hand-drawn editorial elements, strategic purple/teal, flatten any gradients |
+| **Looks generic** | Missing UL aesthetic | Add hand-drawn editorial elements, strategic purple/teal, flatten any gradients |
 | **Elements disconnected** | Poor composition | Redesign spatial layout, add visual connectors (arrows, borders, grouping) |
 | **Color chaos** | Too much color everywhere | Limit purple to 2-3 key elements, teal to 1-2 supporting, rest black/charcoal |
 | **Not professional** | Too sketchy or too rigid | Balance: data viz precise, editorial elements hand-drawn, clean typography |

@@ -5,7 +5,7 @@
 
 import { BaseGrader, registerGrader, type GraderContext } from '../Base.ts';
 import type { GraderConfig, GraderResult, NaturalLanguageAssertParams } from '../../Types/index.ts';
-import { inference, type InferenceLevel } from '../../../PAI/Tools/Inference';
+import { inference, type InferenceLevel } from '../../../../PAI/TOOLS/Inference.ts';
 
 export class NaturalLanguageAssertGrader extends BaseGrader {
   type = 'natural_language_assert' as const;
@@ -24,6 +24,8 @@ export class NaturalLanguageAssertGrader extends BaseGrader {
     // Map model preference to inference level (default to standard/Sonnet)
     const levelMap: Record<string, InferenceLevel> = {
       'claude-haiku-4-5-20251001': 'fast',
+      'claude-sonnet-4-6': 'standard',
+      'claude-opus-4-6': 'smart',
       'claude-sonnet-4-20250514': 'standard',
       'claude-opus-4-20250514': 'smart',
     };

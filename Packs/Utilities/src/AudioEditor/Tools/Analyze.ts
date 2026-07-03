@@ -11,43 +11,8 @@
  * Output: JSON edit decision list at <transcript>.edits.json
  */
 
-import { existsSync, readFileSync } from "fs";
-import { basename, dirname, join, resolve } from "path";
-import { homedir } from "os";
-
-// ============================================================================
-// Environment Loading — keys from ~/.config/PAI/.env
-// ============================================================================
-
-function loadEnv(): void {
-  const envPath = process.env.PAI_CONFIG_DIR
-    ? resolve(process.env.PAI_CONFIG_DIR, ".env")
-    : resolve(homedir(), ".config/PAI/.env");
-  try {
-    const content = readFileSync(envPath, "utf-8");
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eqIndex = trimmed.indexOf("=");
-      if (eqIndex === -1) continue;
-      const key = trimmed.slice(0, eqIndex).trim();
-      let value = trimmed.slice(eqIndex + 1).trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-      if (!process.env[key]) {
-        process.env[key] = value;
-      }
-    }
-  } catch {
-    // Silently continue if .env doesn't exist
-  }
-}
-
-loadEnv();
+import { existsSync } from "fs";
+import { inference } from "../../../PAI/TOOLS/Inference.ts";
 
 interface Chunk {
   text: string;
@@ -76,12 +41,6 @@ if (!inputFile) {
 
 if (!existsSync(inputFile)) {
   console.error(`File not found: ${inputFile}`);
-  process.exit(1);
-}
-
-const apiKey = process.env.ANTHROPIC_API_KEY;
-if (!apiKey) {
-  console.error("ANTHROPIC_API_KEY not found. Set it in ~/.config/PAI/.env");
   process.exit(1);
 }
 
@@ -233,36 +192,20 @@ for (let windowStart = 0; windowStart < chunks.length; windowStart += WINDOW_SIZ
   );
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [
-          {
-            role: "user",
-            content: `Analyze this transcript section and return the JSON array of edits:\n\n${windowText}`,
-          },
-        ],
-      }),
+    const result = await inference({
+      systemPrompt,
+      userPrompt: `Analyze this transcript section and return the JSON array of edits:\n\n${windowText}`,
+      level: "standard",
+      timeout: 120_000,
     });
 
-    if (!response.ok) {
-      const err = await response.text();
-      console.error(`\n  API error: ${response.status} ${err}`);
+    if (!result.success) {
+      console.error(`\n  Inference error: ${result.error}`);
       continue;
     }
 
-    const data = (await response.json()) as any;
-    const text = data.content?.[0]?.text || "[]";
+    const text = result.output || "[]";
 
-    // Parse JSON from response (handle potential markdown wrapping)
     let edits: EditDecision[];
     try {
       const jsonMatch = text.match(/\[[\s\S]*\]/);

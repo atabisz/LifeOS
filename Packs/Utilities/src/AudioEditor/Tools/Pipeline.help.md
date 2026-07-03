@@ -5,7 +5,7 @@ End-to-end audio editing pipeline that chains all tools: Transcribe -> Analyze -
 ## Usage
 
 ```bash
-bun ~/.claude/skills/Utilities/AudioEditor/Tools/Pipeline.ts <audio-file> [options]
+bun ~/.claude/skills/AudioEditor/Tools/Pipeline.ts <audio-file> [options]
 ```
 
 ## Options

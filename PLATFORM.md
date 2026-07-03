@@ -2,7 +2,7 @@
 
 This document tracks all platform-specific code and dependencies across PAI, providing a roadmap for cross-platform support.
 
-**Last Updated:** 2026-01-01
+**Last Updated:** 2026-07-02
 **Maintainer:** Community contributions welcome
 
 ---
@@ -13,7 +13,7 @@ This document tracks all platform-specific code and dependencies across PAI, pro
 |----------|--------|-------|
 | **macOS** | ✅ Fully Supported | Primary development platform |
 | **Linux** | ✅ Fully Supported | Ubuntu/Debian tested, other distros via community |
-| **Windows** | ❌ Not Supported | Community contributions welcome |
+| **Windows** | ✅ Supported | Verified on Windows 11 + `windows-latest` CI (hook launch parity, `0 LAUNCH-FAIL`). Requires Git Bash + Bun; some optional heavy binaries (ffmpeg, whisper, magick) degrade gracefully with a warning if absent. Newer than mac/Linux — see item 22 for the details of what landed. |
 
 ---
 
@@ -123,22 +123,19 @@ This document tracks all platform-specific code and dependencies across PAI, pro
 
 ---
 
-### ❌ UNSUPPORTED (Windows - Community Contributions Welcome)
+### ✅ WINDOWS SUPPORT LANDED (2026-07-02)
 
-22. ❌ Windows support entirely absent
-    - **Audio:** No Windows Media Player integration
-    - **Notifications:** No Windows Toast notifications
-    - **Auto-start:** No Task Scheduler implementation
-    - **Shell scripts:** Assume bash (not cmd/PowerShell)
-    - **Priority:** Medium - depends on community interest
+22. ✅ Windows support implemented and CI-verified
+    - **Audio:** MCI playback via PowerShell helpers (`PULSE/VoiceServer/play-mp3.ps1`, `play-wav.ps1`); `voice.ts` has a `process.platform === "win32"` branch.
+    - **Auto-start:** `PULSE/start-pulse-hidden.vbs` starts the Pulse daemon hidden at logon (the Windows equivalent of the LaunchAgent/systemd unit).
+    - **Shell scripts / hooks:** the installer normalizes each hook's interpreter per-OS at config-generation time (`PAI-Install/engine/actions.ts` `normalizePaiHookCommands` — Windows adds a `bun.exe`/`bash` prefix; mac/Linux is a byte-identical no-op). Claude Code launches hooks through Git Bash `sh`, which is required on Windows.
+    - **CI:** `.github/workflows/windows-smoke.yml` runs the hook launch-parity smoke test on `windows-latest`; the first live run is green (`0 LAUNCH-FAIL`).
+    - **How it was done:** see the field report [WINDOWS-INSTALL.md](docs/WINDOWS-INSTALL.md) and the implementation plan [WINDOWS-SUPPORT-PLAN.md](docs/WINDOWS-SUPPORT-PLAN.md).
 
-**How to Contribute Windows Support:**
-1. Add Windows audio playback (Windows Media Player, ffplay, or native APIs)
-2. Implement Windows Toast notifications
-3. Create Task Scheduler auto-start alternative
-4. Convert bash scripts to cross-platform Bun/TypeScript
-5. Test on Windows 10/11
-6. Submit PR following PAI contribution guidelines
+    **Remaining gaps (community contributions welcome):**
+    - **Notifications:** no native Windows Toast integration yet (voice + Pulse dashboard work; toast is the open item).
+    - **Optional heavy binaries** (ffmpeg, whisper, magick, GNU `timeout`) degrade gracefully with a warning rather than being bundled — install them for full media/eval functionality.
+    - **Breadth of testing:** verified on Windows 11 + `windows-latest` CI; older Windows and diverse toolchains are still community-tested.
 
 ---
 
@@ -191,16 +188,14 @@ Contributors fixing platform issues should:
 - macOS: Tested by Daniel Miessler
 - Linux (Ubuntu/WSL2): Tested by contributors
 - Linux (other distros): Community testing
-- Windows: Untested
+- Windows (11): Tested — live install + `windows-latest` CI hook launch-parity (`0 LAUNCH-FAIL`); older Windows community-tested
 
 ---
 
 ## Future Work
 
 **High Priority:**
-- Windows audio playback support
-- Windows notification support
-- Windows auto-start mechanism
+- Windows native Toast notification support (audio playback ✅ and auto-start ✅ landed 2026-07-02 — see item 22)
 
 **Medium Priority:**
 - Test on non-Ubuntu Linux distros (Fedora, Arch, etc.)

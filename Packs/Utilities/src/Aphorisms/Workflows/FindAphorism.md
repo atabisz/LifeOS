@@ -5,7 +5,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the FindAphorism workflow in the Aphorisms skill to find quotes"}' \
   > /dev/null 2>&1 &
@@ -75,7 +75,7 @@ Use deep thinking for deep thematic analysis. Identify:
    - Excellence & Mastery
 
 5. **Audience Context** - Who is this for?
-   - {YOUR_BUSINESS_NAME} newsletter subscribers (technical, curious, rationalist)
+   - newsletter readers (technical, curious, rationalist)
    - Blog readers (varied technical background)
    - Social media audience (quick insights)
 

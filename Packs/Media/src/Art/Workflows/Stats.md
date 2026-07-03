@@ -1,11 +1,11 @@
 # Illustrated Statistics Workflow
 
-**Single striking statistics illustrated as visual data points using brand aesthetic.**
+**Single striking statistics illustrated as visual data points using UL aesthetic.**
 
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Stats workflow in the Art skill to create stat cards"}' \
   > /dev/null 2>&1 &

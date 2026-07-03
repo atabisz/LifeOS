@@ -12,10 +12,11 @@
 
 import { join, resolve } from "path"
 import { existsSync, mkdirSync } from "fs"
+import { homedir } from "os"
 
-const HOME = process.env.HOME ?? "~"
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const PAI_DIR = join(HOME, ".claude", "PAI")
-const PULSE_DIR = join(PAI_DIR, "PULSE")
+const PULSE_DIR = join(PAI_DIR, "Pulse")
 
 // ── Helpers ──
 
@@ -406,6 +407,27 @@ ${"═".repeat(50)}
   PAI Pulse Worker Setup
   Goal: Working AI employee in under 30 minutes
 ${"═".repeat(50)}`)
+
+  // This provisioning flow is macOS-specific: it edits /etc/hosts via sudo,
+  // installs mkcert via Homebrew, and registers a launchd service — none of
+  // which exist on native Windows. Rather than throw raw errors mid-run (a
+  // missing /etc/hosts read, a failed `sudo`/`brew` spawn), fail loud-and-clean
+  // on win32 with the manual-setup pointer. A native Windows Pulse-worker
+  // installer (hosts file + a Windows cert store + a service/scheduled task) is
+  // a separate, deliberate piece of work — gated off here, not silently broken.
+  if (process.platform === "win32") {
+    heading("Windows — automated setup not available")
+    warn("PULSE/setup.ts provisions a Pulse worker on macOS (sudo /etc/hosts, mkcert via Homebrew, launchd).")
+    warn("None of those exist on native Windows, so this automated flow is gated off here.")
+    console.log(`
+  To run a Pulse worker on Windows, set it up manually:
+    1. Add a hosts entry:  127.0.0.1  pai   (edit C:\\Windows\\System32\\drivers\\etc\\hosts as Administrator)
+    2. Generate local TLS certs into Pulse/certs (e.g. mkcert for Windows, or your own CA).
+    3. Configure Pulse/.env and PULSE.toml (see the macOS steps in this file for the shape).
+    4. Start Pulse with:  bun run Pulse/pulse.ts   (or register it as a scheduled task / service).
+  `)
+    process.exit(0)
+  }
 
   const startTime = Date.now()
 

@@ -16,15 +16,25 @@
 import { spawn } from "child_process"
 import { join } from "path"
 import { existsSync, readFileSync } from "fs"
+import { unlink } from "fs/promises"
+import { tmpdir, homedir } from "os"
 import { log } from "../lib"
+
+// HOME (Git Bash) → USERPROFILE (native Windows login/autostart) → os.homedir().
+// A literal "~" fallback builds a relative path that materializes a stray "~"
+// directory under the cwd when HOME is unset. Mirrors pulse.ts.
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 
 // ── Public Config Interface ──
 
 export interface VoiceConfig {
   enabled: boolean
+  tts_provider?: "elevenlabs" | "piper"
   elevenlabs_api_key?: string
   default_voice_id?: string
   pronunciations_path?: string
+  piper_binary?: string
+  piper_voice_model?: string
 }
 
 // ── Internal Types ──
@@ -155,6 +165,44 @@ function checkRateLimit(ip: string): boolean {
   return true
 }
 
+// ── Playback Serialization ──
+//
+// Concurrency model: Bun.serve runs concurrent /notify handlers in parallel, so
+// two agents voicing actions at once would each spawn a player process and the
+// clips would overlap. We serialize ONLY the playback stage: TTS generation
+// (the ElevenLabs network round-trip) still runs concurrently, but audio plays
+// through a single FIFO queue — one clip at a time, in request-arrival order.
+// Generating message N+1 while message N is still playing minimizes dead air.
+//
+// The queue is an in-memory promise-chain tail. JS is single-threaded, so
+// "read tail → advance tail" within enqueuePlayback() is atomic, and chaining
+// synchronously (before awaiting the audio buffer) is what pins arrival order —
+// otherwise a fast-generating later message could jump ahead of a slow earlier
+// one. The tail advances through an error-swallowing link so a rejected task
+// (failed synth, crashed player) can never wedge the queue; the caller still
+// sees the real outcome via the returned promise.
+//
+// Deferred upgrade path: this is single-process only. Coordinating playback
+// across multiple Pulse instances would need a shared lock (file/socket/Redis);
+// out of scope here — in-memory, best-effort, resets on restart.
+
+let playbackTail: Promise<void> = Promise.resolve()
+
+function enqueuePlayback<T>(task: () => Promise<T>): Promise<T> {
+  // Claim the FIFO slot synchronously: this task runs only after the current
+  // tail settles. Capture the caller-facing result before swallowing errors on
+  // the tail so one failure doesn't block the next message. Ordering is by
+  // slot-claim time (when a caller reaches this line), not HTTP wire-arrival —
+  // in practice identical since nothing slow awaits between request entry and
+  // the enqueue call.
+  const result = playbackTail.then(task)
+  playbackTail = result.then(
+    () => undefined,
+    () => undefined,
+  )
+  return result
+}
+
 // ── Pronunciation System ──
 
 function escapeRegex(str: string): string {
@@ -162,7 +210,7 @@ function escapeRegex(str: string): string {
 }
 
 function loadPronunciations(customPath?: string): void {
-  const paiDir = join(process.env.HOME ?? "~", ".claude", "PAI")
+  const paiDir = join(HOME, ".claude", "PAI")
   const userPronPath = customPath ?? join(paiDir, "USER", "pronunciations.json")
 
   try {
@@ -195,7 +243,7 @@ function applyPronunciations(text: string): string {
 // ── Voice Config from settings.json ──
 
 function loadVoiceConfigFromSettings(): LoadedVoiceConfig {
-  const settingsPath = join(process.env.HOME ?? "~", ".claude", "settings.json")
+  const settingsPath = join(HOME, ".claude", "settings.json")
 
   try {
     if (!existsSync(settingsPath)) {
@@ -347,25 +395,117 @@ async function generateSpeech(
 // ── Audio Playback ──
 
 async function playAudio(audioBuffer: ArrayBuffer, volume: number = FALLBACK_VOLUME): Promise<void> {
-  const tempFile = `/tmp/voice-${Date.now()}.mp3`
-
+  const tempFile = join(tmpdir(), `voice-${Date.now()}.mp3`)
   await Bun.write(tempFile, audioBuffer)
 
-  return new Promise((resolve, reject) => {
-    const proc = spawn("/usr/bin/afplay", ["-v", volume.toString(), tempFile])
+  const cleanup = () => { unlink(tempFile).catch(() => {}) }
 
+  // Platform-specific player selection
+  let cmd: string
+  let args: string[]
+  if (process.platform === "darwin") {
+    cmd = "/usr/bin/afplay"
+    args = ["-v", volume.toString(), tempFile]
+  } else if (process.platform === "win32") {
+    // MCI (Media Control Interface) via play-mp3.ps1 helper. Volume ignored on
+    // Windows — Windows TTS volume should be set via system mixer, not here.
+    cmd = "powershell.exe"
+    args = [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy", "Bypass",
+      "-File", join(import.meta.dir, "play-mp3.ps1"),
+      "-Path", tempFile,
+    ]
+  } else {
+    // Linux/other — try common players in order: paplay (PulseAudio), aplay, ffplay
+    cmd = "sh"
+    args = ["-c", `paplay "${tempFile}" 2>/dev/null || aplay "${tempFile}" 2>/dev/null || ffplay -nodisp -autoexit "${tempFile}" 2>/dev/null`]
+  }
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, args)
     proc.on("error", (error) => {
-      log("error", "Voice: error playing audio", { error: String(error) })
+      cleanup()
+      log("error", "Voice: error playing audio", { error: String(error), platform: process.platform })
       reject(error)
     })
-
     proc.on("exit", (code) => {
-      spawn("/bin/rm", [tempFile])
-      if (code === 0) {
-        resolve()
-      } else {
-        reject(new Error(`afplay exited with code ${code}`))
+      cleanup()
+      if (code === 0) resolve()
+      else reject(new Error(`audio player exited with code ${code}`))
+    })
+  })
+}
+
+// ── Piper (Local Neural TTS) ──
+
+async function generateAndPlayPiper(text: string): Promise<void> {
+  const piperBinary = moduleConfig.piper_binary
+  const voiceModel = moduleConfig.piper_voice_model
+  if (!piperBinary) throw new Error("Piper binary path not configured (piper_binary)")
+  if (!voiceModel) throw new Error("Piper voice model path not configured (piper_voice_model)")
+  if (!existsSync(piperBinary)) throw new Error(`Piper binary not found: ${piperBinary}`)
+  if (!existsSync(voiceModel)) throw new Error(`Piper voice model not found: ${voiceModel}`)
+
+  const pronouncedText = applyPronunciations(text)
+  if (pronouncedText !== text) {
+    log("info", `Voice pronunciation: "${text}" -> "${pronouncedText}"`)
+  }
+
+  const wavFile = join(tmpdir(), `piper-${Date.now()}.wav`)
+  const cleanup = () => { unlink(wavFile).catch(() => {}) }
+
+  // 1. Synthesize: piper reads text from stdin, writes WAV to --output_file
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(piperBinary, ["--model", voiceModel, "--output_file", wavFile, "--quiet"])
+    let stderr = ""
+    proc.stderr?.on("data", (chunk) => { stderr += chunk.toString() })
+    proc.on("error", (error) => {
+      cleanup()
+      reject(new Error(`Piper spawn failed: ${error.message}`))
+    })
+    proc.on("exit", (code) => {
+      if (code === 0) resolve()
+      else {
+        cleanup()
+        reject(new Error(`Piper exited with code ${code}: ${stderr.slice(0, 500)}`))
       }
+    })
+    proc.stdin?.write(pronouncedText)
+    proc.stdin?.end()
+  })
+
+  // 2. Play the WAV
+  let cmd: string
+  let args: string[]
+  if (process.platform === "win32") {
+    cmd = "powershell.exe"
+    args = [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy", "Bypass",
+      "-File", join(import.meta.dir, "play-wav.ps1"),
+      "-Path", wavFile,
+    ]
+  } else if (process.platform === "darwin") {
+    cmd = "/usr/bin/afplay"
+    args = [wavFile]
+  } else {
+    cmd = "sh"
+    args = ["-c", `paplay "${wavFile}" 2>/dev/null || aplay "${wavFile}" 2>/dev/null || ffplay -nodisp -autoexit "${wavFile}" 2>/dev/null`]
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const proc = spawn(cmd, args)
+    proc.on("error", (error) => {
+      cleanup()
+      reject(error)
+    })
+    proc.on("exit", (code) => {
+      cleanup()
+      if (code === 0) resolve()
+      else reject(new Error(`audio player exited with code ${code}`))
     })
   })
 }
@@ -374,6 +514,7 @@ async function playAudio(audioBuffer: ArrayBuffer, volume: number = FALLBACK_VOL
 
 async function showDesktopNotification(title: string, message: string): Promise<void> {
   if (!voiceConfig.desktopNotifications) return
+  if (process.platform !== "darwin") return  // osascript is macOS-only
 
   try {
     const escapedTitle = escapeForAppleScript(title)
@@ -415,7 +556,22 @@ async function sendNotification(
   let voicePlayed = false
   let voiceError: string | undefined
 
-  if (voiceEnabled && moduleConfig.elevenlabs_api_key) {
+  const provider = moduleConfig.tts_provider || "elevenlabs"
+
+  if (voiceEnabled && provider === "piper") {
+    try {
+      log("info", "Voice: generating speech via Piper", { model: moduleConfig.piper_voice_model })
+      // Piper couples synth+play in one call, so the whole thing runs inside the
+      // FIFO playback slot (Piper synth is local/fast — losing concurrent-gen is
+      // marginal). Serializing here still guarantees clips never overlap.
+      await enqueuePlayback(() => generateAndPlayPiper(safeMessage))
+      voicePlayed = true
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error)
+      log("error", "Voice: Piper failed", { error: msg })
+      voiceError = msg
+    }
+  } else if (voiceEnabled && moduleConfig.elevenlabs_api_key) {
     try {
       const voice = voiceId || defaultVoiceId
 
@@ -473,8 +629,19 @@ async function sendNotification(
         volume: resolvedVolume,
       })
 
-      const audioBuffer = await generateSpeech(safeMessage, voice, resolvedSettings)
-      await playAudio(audioBuffer, resolvedVolume)
+      // Start TTS generation immediately (concurrent across requests), then
+      // claim a FIFO playback slot. enqueuePlayback chains synchronously, so the
+      // slot is reserved in arrival order even though generation may finish out
+      // of order. Playback of clip N+1 thus overlaps generation, not clip N.
+      const audioBufferPromise = generateSpeech(safeMessage, voice, resolvedSettings)
+      // Mark the buffer promise handled so a generation failure while this
+      // request waits for its slot doesn't raise an unhandled-rejection; the
+      // real error is re-surfaced when the queued task awaits it below.
+      audioBufferPromise.catch(() => {})
+      await enqueuePlayback(async () => {
+        const audioBuffer = await audioBufferPromise
+        await playAudio(audioBuffer, resolvedVolume)
+      })
       voicePlayed = true
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error)
@@ -519,8 +686,13 @@ export function startVoice(config: VoiceConfig): void {
     return
   }
 
-  if (!config.elevenlabs_api_key) {
+  const provider = config.tts_provider || "elevenlabs"
+  if (provider === "elevenlabs" && !config.elevenlabs_api_key) {
     log("warn", "Voice module: ELEVENLABS_API_KEY not set in config or env")
+  }
+  if (provider === "piper") {
+    if (!config.piper_binary) log("warn", "Voice module: piper_binary not set in config")
+    if (!config.piper_voice_model) log("warn", "Voice module: piper_voice_model not set in config")
   }
 
   // Load pronunciation rules
@@ -545,12 +717,16 @@ export function startVoice(config: VoiceConfig): void {
  * Health check for the voice subsystem.
  */
 export function voiceHealth(): Record<string, unknown> {
+  const provider = moduleConfig.tts_provider || "elevenlabs"
   return {
     initialized,
     enabled: moduleConfig.enabled,
-    voice_system: "ElevenLabs",
+    voice_system: provider === "piper" ? "Piper" : "ElevenLabs",
+    tts_provider: provider,
     default_voice_id: defaultVoiceId,
     api_key_configured: !!moduleConfig.elevenlabs_api_key,
+    piper_binary: moduleConfig.piper_binary,
+    piper_voice_model: moduleConfig.piper_voice_model,
     pronunciation_rules: pronunciationRules.length,
     configured_voices: Object.keys(voiceConfig.voices),
     desktop_notifications: voiceConfig.desktopNotifications,
@@ -652,7 +828,7 @@ export async function handleVoiceRequest(req: Request): Promise<Response | null>
       // /notify/personality honest with whatever the user last selected.
       let voiceId: string | null = null
       try {
-        const settingsFile = join(process.env.HOME ?? "~", ".claude", "settings.json")
+        const settingsFile = join(HOME, ".claude", "settings.json")
         const settings = JSON.parse(readFileSync(settingsFile, "utf-8"))
         const main = settings?.daidentity?.voices?.main
         const vid = (main?.voiceId || main?.VOICE_ID || main?.voice_id) as string | undefined

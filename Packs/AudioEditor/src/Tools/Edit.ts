@@ -39,6 +39,16 @@ if (!existsSync(audioFile) || !existsSync(editsFile)) {
   process.exit(1);
 }
 
+// Preflight: ffmpeg + ffprobe must be on PATH. Bun.which resolves PATH+PATHEXT
+// on every OS, so this is portable. Warn visibly rather than let the raw spawn
+// error surface — a missing binary should read as "install ffmpeg", not a crash.
+for (const bin of ["ffmpeg", "ffprobe"]) {
+  if (Bun.which(bin) === null) {
+    console.error(`${bin} not found on PATH. Install ffmpeg: https://ffmpeg.org/download.html (macOS: brew install ffmpeg · Windows: winget install ffmpeg)`);
+    process.exit(1);
+  }
+}
+
 const ext = extname(audioFile);
 const base = basename(audioFile, ext);
 const dir = dirname(audioFile);

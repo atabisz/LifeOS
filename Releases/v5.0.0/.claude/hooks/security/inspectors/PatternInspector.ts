@@ -5,6 +5,7 @@ import { parse as parseYaml } from 'yaml';
 import type { Inspector, InspectionContext, InspectionResult } from '../types';
 import { ALLOW, deny, requireApproval, alert } from '../types';
 import { paiPath } from '../../lib/paths';
+import { stripEnvVarPrefix, commandPositionViews } from '../command-normalize';
 
 // ── Types ──
 
@@ -63,14 +64,11 @@ function loadPatterns(): PatternsConfig | null {
   }
 }
 
-// ── Command Normalization ──
-
-function stripEnvVarPrefix(command: string): string {
-  return command.replace(
-    /^\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s]*)\s+)*/,
-    ''
-  );
-}
+// Command normalization is provided by the shared `command-normalize` module
+// (fixed-point strip of assignment prefixes AND the `env` binary launcher) so
+// PatternInspector and EgressInspector can never diverge. The previous inline
+// copy here only handled assignment prefixes, so `env FOO=bar rm -rf /` slipped
+// past the recursive-delete block.
 
 // ── Pattern Matching ──
 
@@ -82,13 +80,93 @@ function matchesBashPattern(command: string, pattern: string): boolean {
   }
 }
 
+// Dual-clause match (closes shell-quote/escape evasion without fabricating false
+// positives on quoted argument data). A pattern matches if EITHER:
+//   1. it matches the historical `normalized` view ANYWHERE (preserves every
+//      prior match exactly — this clause can only keep behavior, never lose it), OR
+//   2. it matches a fully-dequoted command SEGMENT anchored at the segment start
+//      (so `"rm" -rf /` → `rm -rf /` is caught in command position, while
+//      `echo rm -rf /` / `grep "rm -rf /"` is NOT — the segment's command word
+//      is echo/grep, and an anchored match won't fire mid-segment).
+// The anchored clause prepends `^\s*` to the pattern. A pattern already starting
+// with `^` is used as-is against the segment.
+function matchesBashViews(
+  views: { normalized: string; segments: string[] },
+  pattern: string
+): boolean {
+  if (matchesBashPattern(views.normalized, pattern)) return true;
+  const anchored = pattern.startsWith('^') ? pattern : `^\\s*${pattern}`;
+  for (const seg of views.segments) {
+    if (matchesBashPattern(seg, anchored)) return true;
+  }
+  return false;
+}
+
 function expandTilde(p: string): string {
   return p.startsWith('~') ? p.replace('~', homedir()) : p;
 }
 
+// Whether the target filesystem folds case. Case-insensitivity is really a
+// per-MOUNT property, not a per-OS one (Windows NTFS and macOS default APFS fold;
+// APFS Case-Sensitive / HFSX Macs and most Linux ext4 do not; ext4 `casefold`,
+// mounted NTFS/exFAT, and ciopfs make specific Linux mounts fold). Detecting it
+// per-path is expensive and unreliable, so this uses a platform proxy with an
+// explicit env-override escape-hatch:
+//   - PAI_CASE_INSENSITIVE_FS = 1 | true  → force case-fold ON  (case-insensitive Linux mount)
+//   - PAI_CASE_INSENSITIVE_FS = 0 | false → force case-fold OFF (case-SENSITIVE APFS/HFSX Mac)
+//   - unset → default: win32 and darwin fold (their default filesystems are
+//             case-insensitive); other POSIX (Linux) does not.
+// Folding is ALWAYS fail-safe here: every `paths:` category is restrictive-direction
+// (deny / alert / requireApproval — there is NO allow-direction path pattern, so the
+// worst a fold can do is match MORE, i.e. be stricter). On a case-sensitive FS the
+// only downside is over-blocking a genuinely differently-cased benign file; the env
+// override restores exact-case matching for that rare case.
+function foldsCase(): boolean {
+  // win32 is ALWAYS case-folded: NTFS (and every default Windows volume) is
+  // case-insensitive, and there is no supported case-sensitive Windows variant a
+  // PAI install runs on — so a `=0` override here would only be misconfiguration
+  // reopening the casing bypass. Clamp it: on win32, always fold (footgun closed;
+  // Forge/GPT-5.4 cross-family concern 2026-07-02).
+  if (process.platform === 'win32') return true;
+  // On POSIX case-sensitivity is genuinely per-mount, so the override is a real
+  // escape hatch (force ON for a case-insensitive Linux mount / force OFF for a
+  // case-SENSITIVE APFS/HFSX Mac):
+  //   PAI_CASE_INSENSITIVE_FS = 1 | true  → fold ON
+  //   PAI_CASE_INSENSITIVE_FS = 0 | false → fold OFF
+  //   unset → default: darwin folds (APFS default is case-insensitive), other POSIX does not.
+  const override = process.env.PAI_CASE_INSENSITIVE_FS;
+  if (override !== undefined && override !== '') {
+    return override === '1' || override.toLowerCase() === 'true';
+  }
+  return process.platform === 'darwin';
+}
+
+// Canonicalize a path/pattern before compare, closing two filesystem-equivalence
+// mismatches that otherwise let references bypass the `paths:` controls:
+//   1. Separators (win32 ONLY). resolve() yields all-backslash on Windows
+//      (`C:\Users\example\.ssh\id_ed25519`) while the tilde-expanded PATTERNS.yaml
+//      pattern is mixed-separator (`C:\Users\example/.ssh/id_*`) and the glob regex
+//      uses `[^/]*` + literal `/`, so neither `===` nor the glob ever matched. Folded
+//      win32-only because backslash is a legal filename char on POSIX — folding it
+//      there would corrupt real names.
+//   2. Case (any case-insensitive FS, per foldsCase()). On such a mount
+//      `~/.SSH/ID_ED25519` is the SAME file as `~/.ssh/id_ed25519`, but a
+//      case-SENSITIVE regex/`===` let an uppercase reference bypass a lowercase deny
+//      pattern — the same MAJOR bypass class the win32 separator bug was, on a second
+//      axis. This originally shipped win32-only (2026-07-02); the macOS/Linux residual
+//      is closed here by keying case-folding on foldsCase() rather than the OS.
+// Both `expandedPattern` and `normalizedPath` pass through this, so the fold is
+// symmetric and matching semantics are otherwise unchanged.
+function toCanonicalPath(p: string): string {
+  let out = p;
+  if (process.platform === 'win32') out = out.replace(/\\/g, '/');  // separators: win32 only
+  if (foldsCase()) out = out.toLowerCase();                          // case: case-insensitive FS
+  return out;
+}
+
 function matchesPathPattern(filePath: string, pattern: string): boolean {
-  const expandedPattern = expandTilde(pattern);
-  const normalizedPath = resolve(expandTilde(filePath));
+  const expandedPattern = toCanonicalPath(expandTilde(pattern));
+  const normalizedPath = toCanonicalPath(resolve(expandTilde(filePath)));
 
   if (pattern.includes('*')) {
     let regexStr = expandedPattern
@@ -133,23 +211,25 @@ function extractCommand(input: Record<string, unknown> | string): string {
 // ── Inspection Logic ──
 
 function inspectBash(command: string, config: PatternsConfig): InspectionResult {
-  const normalized = stripEnvVarPrefix(command);
-  if (!normalized) return ALLOW;
+  const views = commandPositionViews(command);
+  if (!views.normalized) return ALLOW;
 
+  // Trusted is matched on the historical view only — trusting a dequoted segment
+  // could let a crafted arg trip a trusted allow; keep trust conservative.
   for (const p of (config.bash.trusted || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return ALLOW;
+    if (matchesBashPattern(views.normalized, p.pattern)) return ALLOW;
   }
 
   for (const p of (config.bash.blocked || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return deny(p.reason);
+    if (matchesBashViews(views, p.pattern)) return deny(p.reason);
   }
 
   for (const p of (config.bash.confirm || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return requireApproval(p.reason);
+    if (matchesBashViews(views, p.pattern)) return requireApproval(p.reason);
   }
 
   for (const p of (config.bash.alert || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return alert(p.reason);
+    if (matchesBashViews(views, p.pattern)) return alert(p.reason);
   }
 
   return ALLOW;

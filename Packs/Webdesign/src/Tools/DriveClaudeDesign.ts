@@ -15,9 +15,9 @@ import { basename, join, resolve } from "node:path";
 type TreeNode = { ref?: string; role?: string; name?: string; text?: string; contenteditable?: boolean | string; children?: TreeNode[] };
 
 function resolveInterceptorBin(): string {
-  const found = Bun.spawnSync(["which", "interceptor"]);
-  const bin = found.stdout.toString().trim();
-  if (found.exitCode !== 0 || bin.length === 0) {
+  // Bun.which resolves against PATH + PATHEXT on every OS (portable; `which` is Unix-only).
+  const bin = Bun.which("interceptor");
+  if (!bin) {
     console.error("interceptor CLI not found on PATH — install the Interceptor skill (see ~/.claude/skills/Interceptor/SKILL.md)");
     process.exit(127);
   }

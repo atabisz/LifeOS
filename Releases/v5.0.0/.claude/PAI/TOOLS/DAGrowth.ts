@@ -13,8 +13,9 @@
  */
 
 import { join } from "path"
+import { homedir } from "os"
 
-const HOME = process.env.HOME ?? "~"
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const PAI = join(HOME, ".claude", "PAI")
 const REGISTRY_PATH = join(PAI, "USER", "DA", "_registry.yaml")
 

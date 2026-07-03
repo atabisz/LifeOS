@@ -11,7 +11,7 @@
 
 # Documentation:
 # @raycast.description Run fabric -y on the input text of a YouTube video to get the transcript from.
-# @raycast.author Daniel Miessler
+# @raycast.author {{PRINCIPAL_FULL_NAME}}
 # @raycast.authorURL https://github.com/danielmiessler
 
 # Set PATH to include common locations and $HOME/go/bin

@@ -3,7 +3,7 @@
  * CrossVendorAudit.ts — Cato's audit tool
  *
  * Bundles ISA + artifacts + tool-activity tail + Advisor verdict, pipes to
- * codex exec (GPT-5.4 read-only), parses JSON response, appends to
+ * codex exec (GPT-5.5 read-only), parses JSON response, appends to
  * MEMORY/VERIFICATION/cato-findings.jsonl, emits parsed JSON to stdout.
  *
  * Usage:
@@ -12,7 +12,7 @@
  * Algorithm v3.27 Rule 2a. E4/E5 VERIFY phase only.
  */
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFile, writeFile, readdir, appendFile, mkdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
@@ -23,12 +23,46 @@ const PAI_DIR = join(HOME, ".claude", "PAI");
 const WORK_DIR = join(PAI_DIR, "MEMORY", "WORK");
 const FINDINGS_LOG = join(PAI_DIR, "MEMORY", "VERIFICATION", "cato-findings.jsonl");
 const TOOL_ACTIVITY_LOG = join(PAI_DIR, "MEMORY", "OBSERVABILITY", "tool-activity.jsonl");
-const CODEX_BIN = join(HOME, ".bun", "bin", "codex");
+// Codex binary. On Windows the installed binary is `codex.exe` (a bare
+// extensionless path fails BOTH existsSync and spawn), so probe the real
+// per-OS filenames and fall back to PATH resolution. On macOS/Linux the bare
+// `~/.bun/bin/codex` still resolves first, so this is a no-op there.
+function resolveCodexBin(): string | null {
+  const candidates =
+    process.platform === "win32"
+      ? [
+          join(HOME, ".bun", "bin", "codex.exe"),
+          join(HOME, ".bun", "bin", "codex.cmd"),
+          join(HOME, ".bun", "bin", "codex"),
+        ]
+      : [join(HOME, ".bun", "bin", "codex")];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  // Fall back to PATH (covers npm-global installs, e.g. AppData\Roaming\npm\codex).
+  const probe = spawnSync(process.platform === "win32" ? "where" : "which", ["codex"], {
+    encoding: "utf8",
+  });
+  if (probe.status === 0) {
+    const first = (probe.stdout || "").split(/\r?\n/).map((s) => s.trim()).find(Boolean);
+    if (first && existsSync(first)) return first;
+  }
+  return null;
+}
+
+const CODEX_BIN = resolveCodexBin();
 
 const BUNDLE_TOKEN_CAP = 80_000;
 const CHARS_PER_TOKEN = 4; // rough estimate for bundle sizing
 const BUNDLE_CHAR_CAP = BUNDLE_TOKEN_CAP * CHARS_PER_TOKEN;
-const CODEX_TIMEOUT_MS = 120_000;
+// Codex runs an agentic audit (it shells out to git/rg to verify claims against
+// the tree), which lands at 80-110s wall-clock for a real audit — right at the
+// edge of the old 120s cap, causing variance-driven timeouts even when the model
+// is healthy and the bundle is small. 300s gives headroom for the agentic phase.
+// Diagnosed 2026-06-24: a trivial codex call returns in ~15s, an 8KB audit bundle
+// returned a full verdict in 104s; the cap, not bundle size or model speed, was
+// the binding constraint. See MEMORY/WORK/crossvendoraudit-timeout-fix/ISA.md.
+const CODEX_TIMEOUT_MS = 300_000;
 const TOOL_ACTIVITY_TAIL_LINES = 200;
 const ARTIFACT_PER_FILE_CAP = 30_000 * CHARS_PER_TOKEN;
 
@@ -43,7 +77,7 @@ Signal over noise. If the Advisor was right and there is nothing to flag, say so
 
 Output ONLY this JSON on one line, no markdown, no prose, no preamble:
 
-{"verdict":"pass|concerns|fail","criticality":"high|medium|low","findings":[{"severity":"critical|warning|info","isc_ref":"ISC-N or null","issue":"...","evidence":"..."}],"blind_spots_surfaced":["..."],"agrees_with_advisor":"yes|no|partial","model_used":"gpt-5.4","tokens_used":0}`;
+{"verdict":"pass|concerns|fail","criticality":"high|medium|low","findings":[{"severity":"critical|warning|info","isc_ref":"ISC-N or null","issue":"...","evidence":"..."}],"blind_spots_surfaced":["..."],"agrees_with_advisor":"yes|no|partial","model_used":"gpt-5.5","tokens_used":0}`;
 
 interface Args {
   slug: string;
@@ -187,26 +221,42 @@ function assembleBundle(isa: string, artifacts: string, toolTail: string, adviso
   return bundle;
 }
 
-function invokeCodex(bundle: string): Promise<{ stdout: string; stderr: string; code: number | null }> {
+function invokeCodex(codexBin: string, bundle: string): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolvePromise) => {
+    // A .cmd/.bat shim (npm-global installs ship one) cannot be launched by
+    // CreateProcess directly — spawn needs shell:true for it, else it throws.
+    // .exe / bare binaries launch directly (no shell) as before. Args are fixed
+    // literals and the bundle is piped via stdin, so shell:true is injection-safe.
+    const useShell = /\.(cmd|bat)$/i.test(codexBin);
+    const command = useShell ? `"${codexBin}"` : codexBin;
     const proc = spawn(
-      CODEX_BIN,
-      ["exec", "--sandbox", "read-only", "--model", "gpt-5.4", "-"],
-      { stdio: ["pipe", "pipe", "pipe"] }
+      command,
+      ["exec", "--sandbox", "read-only", "--model", "gpt-5.5", "-"],
+      { stdio: ["pipe", "pipe", "pipe"], shell: useShell }
     );
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    const finish = (r: { stdout: string; stderr: string; code: number | null }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolvePromise(r);
+    };
     const timer = setTimeout(() => {
       proc.kill("SIGTERM");
-      resolvePromise({ stdout, stderr: stderr + "\n[TIMEOUT after 120s]", code: 124 });
+      finish({ stdout, stderr: stderr + `\n[TIMEOUT after ${CODEX_TIMEOUT_MS / 1000}s]`, code: 124 });
     }, CODEX_TIMEOUT_MS);
 
+    // Without this handler a spawn failure (bad path, non-launchable shim) becomes
+    // an unhandled reject that crashes main into a noisy {"verdict":"error"};
+    // degrade to a skip-shaped exit code instead.
+    proc.on("error", (err) => {
+      finish({ stdout, stderr: stderr + `\n[SPAWN ERROR: ${err.message}]`, code: 127 });
+    });
     proc.stdout.on("data", (chunk) => (stdout += chunk.toString()));
     proc.stderr.on("data", (chunk) => (stderr += chunk.toString()));
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      resolvePromise({ stdout, stderr, code });
-    });
+    proc.on("close", (code) => finish({ stdout, stderr, code }));
     proc.stdin.write(bundle);
     proc.stdin.end();
   });
@@ -263,7 +313,7 @@ async function main() {
     process.exit(2);
   }
 
-  if (!existsSync(CODEX_BIN)) {
+  if (!CODEX_BIN) {
     const resp = { verdict: "skipped" as const, reason: "codex CLI not installed" };
     await appendFinding(args.slug, args.advisorVerdict, resp, "unknown");
     console.log(JSON.stringify(resp));
@@ -286,9 +336,9 @@ async function main() {
   ]);
   const bundle = assembleBundle(isa, artifacts, toolTail, args.advisorVerdict);
 
-  const { stdout, stderr, code } = await invokeCodex(bundle);
+  const { stdout, stderr, code } = await invokeCodex(CODEX_BIN, bundle);
   if (code === 124) {
-    const resp = { verdict: "skipped" as const, reason: "codex timeout at 120s" };
+    const resp = { verdict: "skipped" as const, reason: `codex timeout at ${CODEX_TIMEOUT_MS / 1000}s` };
     await appendFinding(args.slug, args.advisorVerdict, resp, tier);
     console.log(JSON.stringify(resp));
     return;

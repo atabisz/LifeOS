@@ -1,11 +1,11 @@
 # Visual Taxonomies & Classification Grids Workflow
 
-**Hand-drawn classification systems, taxonomies, and reference grids using brand aesthetic.**
+**Hand-drawn classification systems, taxonomies, and reference grids using UL aesthetic.**
 
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Taxonomies workflow in the Art skill to create taxonomies"}' \
   > /dev/null 2>&1 &
@@ -43,14 +43,14 @@ Visual taxonomies organize concepts into structured classification systems. Unli
 3. **Consistent typography** — 3-tier system (Advocate titles, Concourse labels, italic annotations)
 4. **Category organization** — Clear groupings with visual hierarchy
 5. **Color coding** — Strategic use of purple/teal to show categories
-6. **Editorial aesthetic** — Maintains brand flat color, black linework style
+6. **Editorial aesthetic** — Maintains UL flat color, black linework style
 7. **Scannable layout** — Easy to reference and navigate
 
 ---
 
 ## Color System for Taxonomies
 
-**Same brand palette, organized usage:**
+**Same UL palette, organized usage:**
 
 ### Structure
 ```
@@ -296,7 +296,7 @@ open /path/to/taxonomy.png
 - [ ] **Strategic color** — Purple/teal differentiate categories, not overwhelming
 - [ ] **Scannable** — Easy to find and reference specific items
 - [ ] **Hierarchical clarity** — Title > Categories > Items is obvious
-- [ ] **Flat aesthetic** — No gradients, maintains brand editorial style
+- [ ] **Flat aesthetic** — No gradients, maintains UL editorial style
 
 #### Must NOT Have
 - [ ] Perfect straight grid lines

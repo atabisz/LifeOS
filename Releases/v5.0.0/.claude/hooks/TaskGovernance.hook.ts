@@ -28,6 +28,7 @@
 import { readFileSync, appendFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { getPaiDir } from './lib/paths';
+import { tmp } from './lib/portable';
 
 const input = JSON.parse(readFileSync("/dev/stdin", "utf-8"));
 
@@ -45,7 +46,7 @@ if (!task_description || task_description.trim().length < 10) {
 // --- Rate limit: track tasks per session via temp file ---
 // CLAUDE_SESSION_ID doesn't exist in env, so we use ppid (Claude Code process)
 // and reset the counter when the session (ppid) changes.
-const trackFile = join("/tmp", "pai-task-governance.json");
+const trackFile = join(tmp(), "pai-task-governance.json");
 let taskCount = 0;
 const currentPpid = String(process.ppid);
 

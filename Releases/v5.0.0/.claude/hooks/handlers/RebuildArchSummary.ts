@@ -24,7 +24,11 @@ import { getPaiDir, getClaudeDir } from "../lib/paths";
 export async function handleRebuildArchSummary(): Promise<void> {
   const paiDir = getPaiDir();
   const claudeDir = getClaudeDir();
-  const output = join(paiDir, "DOCUMENTATION", "PAI_ARCHITECTURE_SUMMARY.md");
+  // NOTE: must match the generator's actual output filename. It was
+  // "PAI_ARCHITECTURE_SUMMARY.md" (with prefix), which never existed — so
+  // outputStat was always null and the mtime gate below was dead, rebuilding
+  // on every Stop. The generator writes "ARCHITECTURE_SUMMARY.md" (no prefix).
+  const output = join(paiDir, "DOCUMENTATION", "ARCHITECTURE_SUMMARY.md");
   const generator = join(paiDir, "Tools/ArchitectureSummaryGenerator.ts");
 
   if (!existsSync(generator)) return;

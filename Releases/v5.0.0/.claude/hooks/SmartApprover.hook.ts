@@ -18,11 +18,15 @@ import { paiPath } from './lib/paths';
 
 const HOME = homedir();
 
+// Normalize to forward slashes so prefix matching works on Windows,
+// where resolve() returns backslash-separated paths.
+const toPosix = (p: string): string => p.replace(/\\/g, '/');
+
 const TRUSTED_PREFIXES = [
-  resolve(HOME, '.claude') + '/',
-  resolve(HOME, 'Projects') + '/',
-  resolve(HOME, 'LocalProjects') + '/',
-  resolve(HOME, 'Downloads') + '/',
+  toPosix(resolve(HOME, '.claude')) + '/',
+  toPosix(resolve(HOME, 'Projects')) + '/',
+  toPosix(resolve(HOME, 'LocalProjects')) + '/',
+  toPosix(resolve(HOME, 'Downloads')) + '/',
   '/tmp/',
   '/private/tmp/',
   '/var/folders/',
@@ -64,7 +68,7 @@ function isTrustedPath(filePath: string): boolean {
   const expanded = filePath.startsWith('~')
     ? filePath.replace('~', HOME)
     : filePath;
-  const normalized = resolve(expanded);
+  const normalized = toPosix(resolve(expanded));
   return TRUSTED_PREFIXES.some(prefix => normalized.startsWith(prefix));
 }
 
@@ -109,10 +113,12 @@ async function classifyReadWrite(toolName: string, toolInput: Record<string, unk
 // ── Main ──
 
 async function main(): Promise<void> {
-  const { readFileSync } = await import('fs');
   let rawText: string;
   try {
-    rawText = readFileSync('/dev/stdin', 'utf-8');
+    // Read fd 0 (stdin) directly. The previous '/dev/stdin' path throws
+    // ENOENT on Windows, which silently no-opped the hook and surfaced a
+    // permission dialog for every Write/Edit. fd 0 is cross-platform.
+    rawText = readFileSync(0, 'utf-8');
   } catch {
     return;
   }

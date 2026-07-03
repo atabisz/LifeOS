@@ -1,11 +1,11 @@
 # Remove Background Workflow
 
-**Remove backgrounds from existing images using remove.bg API.**
+**Remove backgrounds from existing images using local rembg (no external API).**
 
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the RemoveBackground workflow in the Art skill to remove image backgrounds"}' \
   > /dev/null 2>&1 &
@@ -19,9 +19,24 @@ Running **RemoveBackground** in **Art**...
 
 Remove backgrounds from existing images to create transparent PNGs. Useful for:
 - Converting diagrams to transparent backgrounds
-- Preparing images for web display
+- Preparing images for web display (composites cleanly over the cream blog background)
 - Creating icons with transparent backgrounds
 - Cleaning up screenshots
+
+---
+
+## Tooling
+
+Local `rembg` (Python, ONNX-based, runs offline). No external API, no rate limits, no API keys.
+
+**Default binary path:** `~/.local/bin/rembg` (override with `REMBG_BIN` env var).
+
+**Install if missing:**
+```bash
+pipx install rembg          # preferred
+# or
+uv tool install rembg       # if you use uv
+```
 
 ---
 
@@ -37,35 +52,37 @@ ls -lh /path/to/image.png
 
 ### Step 2: Remove Background
 
-Use the remove.bg API to remove the background:
+Use the PAI `RemoveBg.ts` wrapper, which calls local `rembg` and handles the `.jpg → .png` rename automatically (rembg always emits PNG):
 
 ```bash
-cd /path/to/directory
+# Single file (overwrites; renames .jpg→.png)
+bun ~/.claude/PAI/TOOLS/RemoveBg.ts input-image.png
 
-curl -X POST https://api.remove.bg/v1.0/removebg \
-  -H "X-Api-Key: ${REMOVEBG_API_KEY}" \
-  -F "image_file=@input-image.png" \
-  -F "size=auto" \
-  -o output-image.png
+# Single file with explicit output path
+bun ~/.claude/PAI/TOOLS/RemoveBg.ts input-image.jpg output-image.png
+
+# Batch (overwrites each in place)
+bun ~/.claude/PAI/TOOLS/RemoveBg.ts img1.png img2.png img3.png
 ```
 
-**API Key:** Stored in `~/.config/PAI/.env` as `REMOVEBG_API_KEY`
+If you need to call `rembg` directly:
 
-**Parameters:**
-- `size=auto` - Automatic size detection (recommended)
-- `size=preview` - Smaller preview size (0.25 megapixels)
-- `size=full` - Full resolution (up to 25 megapixels)
+```bash
+~/.local/bin/rembg i input-image.png output-image.png
+```
 
 ### Step 3: Verify Transparency
 
-Check that the output file has transparency:
+Confirm the output is real PNG with an alpha channel:
 
 ```bash
-# Check file size (should be different from original)
-ls -lh output-image.png
+# MUST report "PNG image data, ... RGBA"
+file output-image.png
 
-# Verify transparency with ImageMagick (if needed)
-magick identify -verbose output-image.png | grep -A 5 "Alpha"
+# Sanity-check alpha via ImageMagick
+magick identify -format "%[channels]" output-image.png
+# → "srgba" (or contains "a") = alpha present
+# → "srgb" without "a" = NO alpha — transparency failed
 ```
 
 ### Step 4: Replace or Copy to Destination
@@ -73,8 +90,8 @@ magick identify -verbose output-image.png | grep -A 5 "Alpha"
 Either replace the original or copy to the intended destination:
 
 ```bash
-# Replace original
-cp output-image.png input-image.png
+# Replace original (after verification)
+mv output-image.png input-image.png
 
 # Or copy to specific destination
 cp output-image.png /destination/path/transparent-image.png
@@ -82,87 +99,57 @@ cp output-image.png /destination/path/transparent-image.png
 
 ---
 
-## API Credentials
-
-The remove.bg API key is stored in `~/.config/PAI/.env`:
-
-```bash
-REMOVEBG_API_KEY=your_key_here
-```
-
-**Never hardcode the API key in commands.** Always use `${REMOVEBG_API_KEY}` or load from .env.
-
----
-
 ## Examples
 
-### Example 1: Remove background from diagram
+### Example 1: Remove background from a diagram
 
 ```bash
-cd ~/Downloads
-
-curl -X POST https://api.remove.bg/v1.0/removebg \
-  -H "X-Api-Key: ${REMOVEBG_API_KEY}" \
-  -F "image_file=@TheAlgorithm.png" \
-  -F "size=auto" \
-  -o TheAlgorithm.png
+bun ~/.claude/PAI/TOOLS/RemoveBg.ts ~/Downloads/TheAlgorithm.png
 ```
 
 ### Example 2: Remove background and save with new name
 
 ```bash
-cd ${PROJECTS_DIR}/YourWebsite/cms/public/images
-
-curl -X POST https://api.remove.bg/v1.0/removebg \
-  -H "X-Api-Key: ${REMOVEBG_API_KEY}" \
-  -F "image_file=@logo-with-bg.png" \
-  -F "size=auto" \
-  -o logo-transparent.png
+bun ~/.claude/PAI/TOOLS/RemoveBg.ts \
+  ~/LocalProjects/Website/cms/public/images/logo-with-bg.png \
+  ~/LocalProjects/Website/cms/public/images/logo-transparent.png
 ```
 
 ### Example 3: Process multiple images
 
 ```bash
 cd ~/Downloads
-
-for img in diagram-*.png; do
-  curl -X POST https://api.remove.bg/v1.0/removebg \
-    -H "X-Api-Key: ${REMOVEBG_API_KEY}" \
-    -F "image_file=@$img" \
-    -F "size=auto" \
-    -o "transparent-$img"
-done
+bun ~/.claude/PAI/TOOLS/RemoveBg.ts diagram-*.png
 ```
-
----
-
-## API Rate Limits
-
-Free tier: 50 API calls per month
-
-Check usage at: https://www.remove.bg/dashboard
 
 ---
 
 ## Troubleshooting
 
-**Problem:** "No onnxruntime backend found"
-**Solution:** Don't use local rembg. Use the remove.bg API via curl.
+**Problem:** `rembg not found at ~/.local/bin/rembg`
+**Solution:** `pipx install rembg` (or set `REMBG_BIN` env var to your installed path).
 
-**Problem:** "API key invalid"
-**Solution:** Verify `REMOVEBG_API_KEY` is set correctly in `~/.config/PAI/.env`
+**Problem:** First run is slow (downloads ONNX model)
+**Solution:** Expected. The default `u2net` model (~176MB) is fetched once into `~/.u2net/`, then cached forever. Subsequent runs are fast.
 
-**Problem:** "Output file is same size as input"
-**Solution:** Background removal may have failed. Check API response for errors.
+**Problem:** Output file looks identical to input
+**Solution:** rembg failed to detect a clear subject. Try a model better suited to the content:
+```bash
+~/.local/bin/rembg i -m u2netp input.png output.png       # smaller/faster
+~/.local/bin/rembg i -m isnet-general-use input.png output.png   # general-purpose, often better edges
+~/.local/bin/rembg i -m birefnet-general input.png output.png    # higher quality, slower
+```
+
+**Problem:** Edges are jagged or hair/fine detail is lost
+**Solution:** Use `birefnet-general` (or `birefnet-portrait` for people) — both produce noticeably better edges than the default `u2net`.
 
 ---
 
 ## Related Workflows
 
-- `Workflows/CreatePAIPackIcon.md` - Uses `--remove-bg` flag in Generate.ts
-- `Workflows/Essay.md` - May need background removal for thumbnails
-- `Workflows/YouTubeThumbnail.md` - May need transparent overlays
+- `Workflows/CreatePAIPackIcon.md` — uses `--remove-bg` flag in Generate.ts (now backed by local rembg)
+- `Workflows/Essay.md` — `--thumbnail` flag in Generate.ts implicitly removes background via local rembg
 
 ---
 
-**Last Updated:** 2026-01-24
+**Last Updated:** 2026-04-27 — switched from poof.bg to local rembg

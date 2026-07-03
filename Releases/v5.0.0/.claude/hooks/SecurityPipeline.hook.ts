@@ -32,7 +32,10 @@ async function main(): Promise<void> {
 
   try {
     const { readFileSync } = await import('fs');
-    const raw = readFileSync('/dev/stdin', 'utf-8');
+    // Read fd 0 (stdin) directly. '/dev/stdin' throws ENOENT on Windows, which
+    // hit the catch below and silently FAILED OPEN — every deny pattern (incl.
+    // rm -rf /) passed unchecked. fd 0 is cross-platform. See SmartApprover.hook.ts.
+    const raw = readFileSync(0, 'utf-8');
     if (!raw.trim()) return;
     input = JSON.parse(raw);
   } catch {

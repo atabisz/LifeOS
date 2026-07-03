@@ -32,49 +32,17 @@ import {
   writeFileSync,
 } from "fs"
 import MiniSearch from "minisearch"
+import { homedir } from "os"
 
 // Path Construction
 
-const HOME = process.env.HOME ?? "~"
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const PAI_DIR = join(HOME, ".claude", "PAI")
 const DOCUMENTATION_DIR = join(PAI_DIR, "DOCUMENTATION")
 const KNOWLEDGE_DIR = join(PAI_DIR, "MEMORY", "KNOWLEDGE")
 const BOOKMARKS_DIR = join(PAI_DIR, "MEMORY", "BOOKMARKS")
 const BOOKMARKS_CSV = join(BOOKMARKS_DIR, "bookmarks.csv")
-// Resolve the Algorithm directory case-insensitively. The v6.3.0 doctrine uses
-// `ALGORITHM/` (all-caps) while older defaults used `Algorithm/` — on Linux
-// (case-sensitive FS), a string-equality mismatch silently empties the Wiki's
-// Algorithm view. Scan PAI_DIR once at module init.
-function resolveAlgorithmDir(paiDir: string): string | null {
-  if (!existsSync(paiDir)) return null
-  const entries = readdirSync(paiDir, { withFileTypes: true })
-  const exact = entries.find(
-    (e) => e.name === "Algorithm" && (e.isDirectory() || e.isSymbolicLink()),
-  )
-  if (exact) return join(paiDir, exact.name)
-  const variants = entries.filter(
-    (e) =>
-      e.name.toLowerCase() === "algorithm" &&
-      (e.isDirectory() || e.isSymbolicLink()),
-  )
-  if (variants.length > 0) {
-    // Deterministic tie-break: prefer `ALGORITHM` (v6.3.0 doctrine spelling),
-    // else raw byte-order (locale-independent, stable across Node versions).
-    // readdirSync order is FS-implementation-defined; never trust it.
-    variants.sort((a, b) => {
-      if (a.name === "ALGORITHM") return -1
-      if (b.name === "ALGORITHM") return 1
-      return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
-    })
-    return join(paiDir, variants[0].name)
-  }
-  console.warn(
-    `[wiki] PAI Algorithm directory not found in ${paiDir} — Algorithm view will be empty`,
-  )
-  return null
-}
-
-const ALGORITHM_DIR: string | null = resolveAlgorithmDir(PAI_DIR)
+const ALGORITHM_DIR = join(PAI_DIR, "Algorithm")
 const SKILLS_DIR = join(HOME, ".claude", "skills")
 const HOOKS_DIR = join(HOME, ".claude", "hooks")
 const SETTINGS_PATH = join(HOME, ".claude", "settings.json")
@@ -210,7 +178,7 @@ function systemDocMetadata(filePath: string): { slug: string; group: string } | 
     return { slug: `${group}__${bareSlug}`, group }
   }
 
-  if (ALGORITHM_DIR != null && filePath.startsWith(ALGORITHM_DIR)) {
+  if (filePath.startsWith(ALGORITHM_DIR)) {
     const filename = basename(filePath)
     return {
       slug: `Algorithm__${stripMarkdownExtension(filename)}`,
@@ -561,7 +529,7 @@ function indexSystemDocs(): void {
     indexSystemDoc(filePath)
   }
 
-  if (ALGORITHM_DIR == null || !existsSync(ALGORITHM_DIR)) return
+  if (!existsSync(ALGORITHM_DIR)) return
 
   try {
     const algorithmFiles = readdirSync(ALGORITHM_DIR, { withFileTypes: true })

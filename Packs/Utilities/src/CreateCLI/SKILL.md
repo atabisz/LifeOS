@@ -1,6 +1,7 @@
 ---
 name: CreateCLI
-description: Generate production-ready TypeScript CLIs with 3-tier template system (simple argv, yargs, oclif), type safety, error handling, and documentation. USE WHEN create CLI, build CLI, command-line tool, wrap API, add command, upgrade tier, TypeScript CLI.
+description: "Generate production-ready TypeScript CLIs using a 3-tier template system: Tier 1 llcli-style manual arg parsing (zero deps, Bun + TypeScript, ~300-400 lines — 80% of cases), Tier 2 Commander.js (subcommands, nested options, auto-help — 15%), Tier 3 oclif reference only (enterprise scale — 5%). Every generated CLI includes full implementation, README + QUICKSTART docs, package.json with Bun, tsconfig strict mode, type-safe throughout, JSON output, exit code compliance. Workflows: CreateCli (from scratch), AddCommand (extend existing), UpgradeTier (migrate Tier 1 → 2). Outputs go to ~/.claude/Bin/ or ~/Projects/. Tier 1 (llcli pattern — 327 lines, zero deps) suits API clients, data transformers, simple automation — 2-10 commands, JSON output. Tier 2 (Commander.js) for 10+ commands, nested options, or plugin architecture. Tier 3 (oclif) is documentation-only reference for Heroku/Salesforce scale. Output tree: {name}.ts + package.json + tsconfig.json (strict) + .env.example + README.md + QUICKSTART.md. Quality gates: zero TypeScript errors, exit codes 0/1, --help comprehensive, JSON output pipes to jq/grep. USE WHEN create CLI, build CLI, command-line tool, wrap API, add command, upgrade tier, TypeScript CLI, generate CLI, CLI for API, command-line wrapper. NOT FOR PAI skill scaffolding (use CreateSkill). NOT FOR Python or npm-based tooling."
+effort: medium
 ---
 
 ## Customization
@@ -17,7 +18,7 @@ If this directory exists, load and apply any PREFERENCES.md, configurations, or 
 
 1. **Send voice notification**:
    ```bash
-   curl -s -X POST http://localhost:8888/notify \
+   curl -s -X POST http://localhost:31337/notify \
      -H "Content-Type: application/json" \
      -d '{"message": "Running the WORKFLOWNAME workflow in the CreateCLI skill to ACTION"}' \
      > /dev/null 2>&1 &
@@ -349,3 +350,19 @@ The `llcli` CLI (Limitless.ai API) proves this pattern works:
 ---
 
 **This skill turns "I need a CLI for X" into production-ready tools in minutes, following proven patterns from llcli and CLI-First Architecture.**
+
+## Gotchas
+
+- **Always use bun, never npm/npx.** Zero exceptions per system prompt.
+- **TypeScript only.** Never generate Python CLIs unless the user explicitly approves.
+- **3-tier system:** Start with the simplest tier that fits. Don't over-engineer a Tier 3 CLI when Tier 1 suffices.
+
+## Execution Log
+
+After completing any workflow, append a single JSONL entry:
+
+```bash
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"CreateCLI","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+```
+
+Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

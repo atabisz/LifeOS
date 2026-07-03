@@ -1,11 +1,11 @@
 # Conceptual Maps & Landscapes Workflow
 
-**Hand-drawn conceptual maps showing idea territories and domain landscapes using brand aesthetic.**
+**Hand-drawn conceptual maps showing idea territories and domain landscapes using UL aesthetic.**
 
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the Maps workflow in the Art skill to create conceptual maps"}' \
   > /dev/null 2>&1 &
@@ -43,7 +43,7 @@ Conceptual maps visualize abstract territories, domains, and relationships as il
 3. **Hand-drawn** — Imperfect coastlines, wobbly borders, human quality
 4. **Metaphorical geography** — Physical features represent conceptual relationships
 5. **Labeled territories** — Clear naming of domains/concepts
-6. **Editorial style** — Flat colors, black linework, brand aesthetic
+6. **Editorial style** — Flat colors, black linework, UL aesthetic
 7. **Navigable** — Helps understand the "lay of the land" in a field
 
 ---
@@ -355,7 +355,7 @@ open /path/to/conceptual-map.png
 - [ ] **Hand-drawn** — Wobbly coastlines, imperfect borders, human quality
 - [ ] **Strategic color** — Purple/teal on key territories (subtle fills)
 - [ ] **Navigable** — Helps understand relationships between concepts
-- [ ] **Editorial aesthetic** — Maintains brand flat color, black linework
+- [ ] **Editorial aesthetic** — Maintains UL flat color, black linework
 
 #### Must NOT Have
 - [ ] Perfect digital map (too clean)

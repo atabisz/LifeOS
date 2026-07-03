@@ -1,0 +1,68 @@
+name: Unix hook launch-parity smoke test
+
+# The mac/linux parity leg of the Windows launch-parity smoke test
+# (.github/workflows/windows-smoke.yml). The per-OS hook normalization in the
+# installer is proven at the function level (normalizeHookCommand unit tests) and
+# end-to-end on Windows (windows-smoke.yml). This job upgrades the Unix arm from
+# "unit-proven" to "CI-proven": it confirms the SAME committed release settings.json
+# launches every hook through a POSIX shell on real macOS and Linux runners.
+#
+# On Unix the installed hook commands keep their bare `$HOME/.claude/hooks/X.hook.ts`
+# form (shebang + exec bit — no `bun.exe` prefix). So staging differs from Windows:
+# no bun.exe shim is needed, but the staged hook scripts must carry the exec bit and
+# `bun` must be first on PATH so the shebang resolves. smoke-hook-launch.ts spawns
+# each command via `sh -c` exactly as Claude Code does on every OS.
+
+on:
+  push:
+    paths:
+      - "Releases/**/.claude/**"
+      - "scripts/build-release.ts"
+      - "Tools/smoke-hook-launch.ts"
+      - ".github/workflows/unix-smoke.yml"
+  pull_request:
+    paths:
+      - "Releases/**/.claude/**"
+      - "scripts/build-release.ts"
+      - "Tools/smoke-hook-launch.ts"
+      - ".github/workflows/unix-smoke.yml"
+  workflow_dispatch: {}
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Prove the tool can go RED before trusting a green result — a smoke test that
+      # cannot fail is theatre.
+      - name: Self-test (tool must be able to fail)
+        run: bun Tools/smoke-hook-launch.ts --self-test
+
+      # Stage the checked-out release .claude under a scratch HOME. On Unix the hook
+      # commands are bare `$HOME/.claude/hooks/X.hook.ts` (shebang-launched), so make
+      # the staged scripts executable and put the real bun first on PATH so the
+      # `#!/usr/bin/env bun` shebang resolves. Then run the smoke test against the
+      # committed release settings.json. Fails the job on any LAUNCH-FAIL.
+      - name: Hook launch-parity smoke (checked-out release tree)
+        run: |
+          set -euo pipefail
+          SCRATCH="$(mktemp -d)"
+          cp -r "$GITHUB_WORKSPACE/Releases/v5.0.0/.claude" "$SCRATCH/.claude"
+          # Shebang-launched hooks need the exec bit on Unix.
+          find "$SCRATCH/.claude/hooks" -name '*.hook.ts' -exec chmod +x {} + 2>/dev/null || true
+          find "$SCRATCH/.claude/hooks" -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
+          echo "scratch HOME: $SCRATCH (release .claude staged, bun on PATH: $(command -v bun))"
+          HOME="$SCRATCH" bun Tools/smoke-hook-launch.ts --settings "$SCRATCH/.claude/settings.json"

@@ -35,11 +35,10 @@ const outFile =
 console.log(`Transcribing: ${inputFile}`);
 console.log(`Output: ${outFile}`);
 
-// Check which whisper variant is available
-const hasFastWhisper =
-  (await $`which insanely-fast-whisper 2>/dev/null`.quiet().nothrow()).exitCode === 0;
-const hasWhisper =
-  (await $`which whisper 2>/dev/null`.quiet().nothrow()).exitCode === 0;
+// Check which whisper variant is available.
+// Bun.which resolves against PATH + PATHEXT on every OS (portable; `which` is Unix-only).
+const hasFastWhisper = Bun.which("insanely-fast-whisper") !== null;
+const hasWhisper = Bun.which("whisper") !== null;
 
 if (hasFastWhisper) {
   console.log("Using insanely-fast-whisper (MPS accelerated)...");

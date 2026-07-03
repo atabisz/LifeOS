@@ -73,3 +73,6 @@ credentials/
 .claude/pai_updates/
 .claude/pai_backups/
 .claude/.pai-sync-history
+
+# Added by ggshield
+.cache_ggshield

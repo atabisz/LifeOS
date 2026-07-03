@@ -92,7 +92,14 @@ async function main() {
   }
 
   try {
-    await handleVoice(parsed, input.session_id);
+    const result = await handleVoice(parsed, input.session_id);
+    // Pulse-independent fallback: when ElevenLabs/Pulse round-trip fails,
+    // emit OSC 9 desktop notification via terminalSequence (claude-code v2.1.141+)
+    if (!result.ok && result.message) {
+      const safeMsg = result.message.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 200);
+      const hookOutput = { terminalSequence: `\x1b]9;${safeMsg}\x07` };
+      process.stdout.write(JSON.stringify(hookOutput));
+    }
   } catch (err) {
     console.error('[VoiceCompletion] Handler failed:', err);
   }

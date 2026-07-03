@@ -77,7 +77,7 @@ Use for parallel workstreams and non-blocking execution.
 
 | Capability | When | Invoke |
 |------------|------|--------|
-| Agent Teams | **DEFAULT for parallel work.** 2+ agents on related work, task dependencies, coordination needed. Teammates persist, self-claim tasks, message peers. | `TeamCreate` + `Agent` with `team_name` |
+| Agent Teams | **DEFAULT for parallel work.** 2+ agents on related work, task dependencies, coordination needed. Teammates persist, self-claim tasks, message peers. | `Agent` (parallel spawns) + `TaskCreate`/`TaskUpdate` (shared list) + `SendMessage` (peer/resume by id or name). Teams are implicit under `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (not currently set in PAI); `TeamCreate`/`TeamDelete` removed in CC v2.1.178, `team_name` ignored. |
 | Custom Agents | **ONLY when {{PRINCIPAL_NAME}} says "custom agents".** Unique personalities, voices, trait composition. One-shot parallel work. | `Skill("Agents")` → ComposeAgent → `Agent` |
 | Managed Agents | **Unattended/overnight work.** Hours-long tasks, survive disconnects, sandboxed cloud execution, CI triggers. $0.08/session-hour + tokens. | `Skill("claude-api")` to build workflows |
 | Delegation | 3+ independent workstreams (routes to above) | `Skill("Delegation")` |
@@ -88,6 +88,9 @@ Use for parallel workstreams and non-blocking execution.
 | Mass Parallelism | Large migrations, bulk refactors across many files | `/batch` — interviews, then fans out to N worktree agents |
 | Session Branching | Exploratory tangents, try alternative approaches | `/branch` — forks conversation, preserves original |
 | /codex:rescue | Delegate bug investigation or fix to Codex (runs as background task) | `Skill("codex:rescue")` |
+| CLI Subprocess Fan-Out | Reproducible benchmarks or CI runs needing pinned model/effort/MCP/settings independent of parent. (claude-code v2.1.142+) | `claude agents --model X --effort Y --mcp-config ... --settings ...` (see Delegation skill Pattern 7) |
+| Harness Param-Gating | Govern subagent/tool calls by input parameter, not just tool name (claude-code v2.1.178+). `Tool(param:value)` permission rules with `*` wildcard — e.g. `Agent(model:opus)` denies Opus subagents; enforce model/cost/policy at the harness instead of trusting the dispatch prompt. **Note:** subprocess agents (Forge=codex, Anvil=Moonshot, Cato=codex) set their model internally and do NOT pass a `model:` param — this gates Claude-family `model:` overrides only. | `permissions.deny: ["Agent(model:VALUE)"]` in `settings.json` |
+| SymbolCensus (deletion-risk census) | **Before deleting/pruning/moving/renaming a code symbol or module on the premise "nothing uses this," or loosening a shared model (Preflight Gate H, v6.4.3; OBSERVE-timing + batch + shared-model v6.4.4).** Read-only TS/JS tool: classifies every occurrence of a symbol by KIND (declaration / import-export / type-position / value-position / test-file / comment-string) and returns a fail-safe verdict. `--symbols a,b,c` runs a batch census emitting a keep/cut table for a whole-module prune. Run at OBSERVE recon, not the mutating step. Defeats the grep-count-is-not-usage trap — a symbol is live through union-type membership, internal references, or test-only usage a count misses. NOT a thinking capability; selected like ReferenceCheck. | `bun ~/.claude/PAI/TOOLS/SymbolCensus.ts <symbol> [root] [--json]` · batch: `--symbols a,b,c [root]` |
 
 ## Research & Intelligence Capabilities
 
@@ -103,7 +106,7 @@ Use when external information is needed.
 
 | Priority | User says | System | Invoke |
 |----------|-----------|--------|--------|
-| **1. DEFAULT** | "parallel work", "agents", "team", "swarm", or Algorithm selects delegation | **Agent Teams** — persistent teammates, shared task list, peer messaging | `TeamCreate` + `Agent` with `team_name` |
+| **1. DEFAULT** | "parallel work", "agents", "team", "swarm", or Algorithm selects delegation | **Agent Teams** — persistent teammates, shared task list, peer messaging | `Agent` + `TaskCreate`/`TaskUpdate` + `SendMessage`. Teams implicit under `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (not currently set); `TeamCreate`/`TeamDelete` removed in CC v2.1.178. |
 | **2. EXPLICIT** | "custom agents", "spin up custom agents" | **Custom Agents** — unique personalities, voices, trait composition | `Skill("Agents")` → ComposeAgent |
 | **3. UNATTENDED** | "run overnight", "long-running", "CI", or task exceeds session lifetime | **Managed Agents** — durable cloud sessions, sandboxed, vault credentials | `Skill("claude-api")` to build |
 | **4. INTERNAL** | (Algorithm internal routing, user names a type) | **Built-in types** (Designer, Architect, Engineer, Explore, etc.) | `Agent(subagent_type="...")` |

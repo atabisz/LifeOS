@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 /**
- * Abstract Illustration Prompt Generator
+ * UL Abstract Illustration Prompt Generator
  *
  * ⚠️ DEPRECATED - THIS TOOL USES OLD CHARACTER-BASED SYSTEM
  * ⚠️ NEEDS COMPLETE REWRITE FOR ABSTRACT SHAPES/IMPRESSIONS ONLY
@@ -19,6 +19,7 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { homedir } from "node:os";
 
 // ============================================================================
 // Types
@@ -68,7 +69,7 @@ interface PromptOutput {
 // ============================================================================
 
 const ART_AESTHETIC_PATH = resolve(
-  process.env.HOME!,
+  process.env.HOME ?? process.env.USERPROFILE ?? homedir(),
   ".claude/PAI/Aesthetic.md"
 );
 
@@ -83,8 +84,8 @@ const COLOR_HEX_MAP: Record<TokyoNightColor, string> = {
 
 const CHARACTER_DESCRIPTIONS = {
   maya: `Maya is a young, highly curious girl with a round head, simple short hair, and big round glasses (her signature feature). She has a stick-figure body with thin limbs and a slightly oversized head, with minimal facial features (dots for eyes, simple line for mouth when needed).`,
-  kai: `{DAIDENTITY.NAME} is a young boy with a slightly oval head, a soft messy hair tuft on top (his signature feature), and NO glasses. He wears a simple t-shirt and shorts or pants. He has a stick-figure body with thin limbs and a slightly oversized head, with minimal facial features.`,
-  both: `Two recurring child characters: Maya and Kai. Maya is a young, highly curious girl with a round head, simple short hair, and big round glasses. Kai is a young boy with a slightly oval head, a soft messy hair tuft, and a simple t-shirt and shorts or pants. Both have stick-figure bodies with thin limbs and slightly oversized heads, with minimal facial features.`,
+  kai: `Theo is a young boy with a slightly oval head, a soft messy hair tuft on top (his signature feature), and NO glasses. He wears a simple t-shirt and shorts or pants. He has a stick-figure body with thin limbs and a slightly oversized head, with minimal facial features.`,
+  both: `Two recurring child characters: Maya and Theo. Maya is a young, highly curious girl with a round head, simple short hair, and big round glasses. Theo is a young boy with a slightly oval head, a soft messy hair tuft, and a simple t-shirt and shorts or pants. Both have stick-figure bodies with thin limbs and slightly oversized heads, with minimal facial features.`,
 };
 
 // ============================================================================
@@ -256,19 +257,19 @@ function buildVisualMetaphor(
 
   switch (compositionType) {
     case "observation":
-      metaphor = `${characterFocus === "maya" ? "Maya" : "Kai"} positioned in the left quarter of the frame, small and observing with ${analysis.tone}, looking at a large visual element on the right that represents the core concept of ${analysis.theme}`;
+      metaphor = `${characterFocus === "maya" ? "Maya" : "Theo"} positioned in the left quarter of the frame, small and observing with ${analysis.tone}, looking at a large visual element on the right that represents the core concept of ${analysis.theme}`;
       break;
     case "horizon":
-      metaphor = `${characterFocus === "both" ? "Maya and Kai" : characterFocus === "maya" ? "Maya" : "Kai"} in the foreground, facing a wide distant horizon filled with tiny elements representing future possibilities related to ${analysis.theme}`;
+      metaphor = `${characterFocus === "both" ? "Maya and Theo" : characterFocus === "maya" ? "Maya" : "Theo"} in the foreground, facing a wide distant horizon filled with tiny elements representing future possibilities related to ${analysis.theme}`;
       break;
     case "dialogue":
-      metaphor = `Maya and {DAIDENTITY.NAME} positioned with space between them, interacting with a shared element or concept in the center, representing different perspectives on ${analysis.theme}`;
+      metaphor = `Maya and Theo positioned with space between them, interacting with a shared element or concept in the center, representing different perspectives on ${analysis.theme}`;
       break;
     case "workshop":
-      metaphor = `${characterFocus === "kai" ? "Kai" : "Both Maya and Kai"} actively building or creating, with elements spreading horizontally showing the process of making something related to ${analysis.theme}`;
+      metaphor = `${characterFocus === "theo" ? "the DA" : "Both Maya and Theo"} actively building or creating, with elements spreading horizontally showing the process of making something related to ${analysis.theme}`;
       break;
     case "aura":
-      metaphor = `${characterFocus === "maya" ? "Maya" : characterFocus === "kai" ? "Kai" : "The character"} surrounded by a soft, translucent aura bubble containing tiny symbolic icons representing aspects of ${analysis.theme}`;
+      metaphor = `${characterFocus === "maya" ? "Maya" : characterFocus === "theo" ? "the DA" : "The character"} surrounded by a soft, translucent aura bubble containing tiny symbolic icons representing aspects of ${analysis.theme}`;
       break;
   }
 
@@ -344,13 +345,13 @@ function generatePrompt(config: PromptConfig): string {
       : "Dark gradient background transitioning from #1a1b26 to #24283b.";
 
   // Base prompt
-  let prompt = `Minimal Tokyo Night–inspired illustration for ${imageType === "blog-header" ? "an {YOUR_BUSINESS_NAME} blog post" : "an essay"} about ${essayTheme}.
+  let prompt = `Minimal Tokyo Night–inspired illustration for ${imageType === "blog-header" ? "a blog post" : "an essay"} about ${essayTheme}.
 
 ${backgroundDesc} Thin, slightly imperfect deep navy linework and flat color fills only, no shading. Tokyo Night–inspired accent color${accentColors.length > 1 ? "s" : ""} ${colorDescriptions} used sparingly.
 
 ${characterDesc}
 
-Show ${characterFocus === "both" ? "Maya and Kai" : characterFocus} in a ${compositionType} scene${imageType === "blog-header" ? " optimized for horizontal 16:9 composition" : ""}. ${emotionalToneDescription.charAt(0).toUpperCase() + emotionalToneDescription.slice(1)}, interacting with ${coreObjectDescription}.
+Show ${characterFocus === "both" ? "Maya and Theo" : characterFocus} in a ${compositionType} scene${imageType === "blog-header" ? " optimized for horizontal 16:9 composition" : ""}. ${emotionalToneDescription.charAt(0).toUpperCase() + emotionalToneDescription.slice(1)}, interacting with ${coreObjectDescription}.
 
 ${motifsDesc}
 

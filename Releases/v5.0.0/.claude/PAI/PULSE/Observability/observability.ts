@@ -24,7 +24,7 @@
  *   GET  /, /work, /telos, /health, etc. — Static Next.js pages (fallback handler)
  */
 
-import { join, extname } from "path"
+import { join, extname, isAbsolute } from "path"
 import { readFileSync, readdirSync, existsSync, realpathSync } from "fs"
 import YAML from "yaml"
 
@@ -50,7 +50,8 @@ export interface ObservabilityConfig {
 
 // ── Path Construction ──
 
-const HOME = process.env.HOME ?? ""
+import { homedir } from "os"
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const PAI_DIR = join(HOME, ".claude", "PAI")
 const MEMORY_DIR = join(PAI_DIR, "MEMORY")
 
@@ -66,7 +67,7 @@ const SECURITY_LOG_DIR = join(MEMORY_DIR, "SECURITY")
 const SETTINGS_PATH = join(HOME, ".claude", "settings.json")
 const LADDER_DIR = join(HOME, "Projects", "Ladder")
 
-const DEFAULT_DASHBOARD_DIR = join(PAI_DIR, "PULSE", "Observability", "out")
+const DEFAULT_DASHBOARD_DIR = join(PAI_DIR, "Pulse", "Observability", "out")
 
 // ── In-Memory Store (hook-pushed state/events) ──
 
@@ -148,8 +149,8 @@ function existsSafe(path: string): boolean {
 function getDashboardDir(): string {
   const dir = config.dashboard_dir ?? DEFAULT_DASHBOARD_DIR
   // Resolve relative paths against Pulse directory
-  if (!dir.startsWith("/")) {
-    return join(HOME, ".claude", "PAI", "PULSE", dir)
+  if (!isAbsolute(dir)) {
+    return join(HOME, ".claude", "PAI", "Pulse", dir)
   }
   return dir
 }
@@ -1647,7 +1648,7 @@ function readDirMdFiles(dir: string): { name: string, content: string, sections:
 function handleUserIndexApi(filter: string | null): Response {
   try {
     const PAI_DIR = process.env.PAI_DIR || join(process.env.HOME || "", ".claude", "PAI")
-    const indexPath = join(PAI_DIR, "PULSE", "state", "user-index.json")
+    const indexPath = join(PAI_DIR, "Pulse", "state", "user-index.json")
     const raw = Bun.file(indexPath)
     if (!raw.size) {
       return Response.json(

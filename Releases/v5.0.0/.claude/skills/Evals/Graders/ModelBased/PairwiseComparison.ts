@@ -32,6 +32,8 @@ export class PairwiseComparisonGrader extends BaseGrader {
     const levelMap: Record<string, InferenceLevel> = {
       'claude-haiku-4-5-20251001': 'fast',
       'claude-sonnet-4-6': 'standard',
+      'claude-opus-4-8': 'smart',
+      'claude-opus-4-7': 'smart',
       'claude-opus-4-6': 'smart',
       'claude-sonnet-4-20250514': 'standard',
       'claude-opus-4-20250514': 'smart',

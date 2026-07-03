@@ -3,7 +3,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the ReviewStories workflow in the Browser skill to validate user stories"}' \
   > /dev/null 2>&1 &
@@ -37,10 +37,10 @@ Either:
 
 ```
 # Specific file
-Read the specified .yaml file from skills/Utilities/Browser/Stories/
+Read the specified .yaml file from skills/Browser/Stories/
 
 # All stories
-Glob: skills/Utilities/Browser/Stories/*.yaml
+Glob: skills/Browser/Stories/*.yaml
 ```
 
 ### 2. Parse YAML

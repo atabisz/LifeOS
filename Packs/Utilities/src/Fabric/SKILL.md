@@ -1,6 +1,7 @@
 ---
 name: Fabric
-description: 240+ specialized prompt patterns for content analysis, extraction, and transformation — run patterns, sync from repo, create threat models, summarize. USE WHEN fabric, fabric pattern, run fabric, update patterns, sync fabric, summarize with fabric, create threat model, analyze with fabric.
+description: "Execute any of 240+ specialized prompt patterns natively (no CLI required for most) across categories: Extraction (30+), Summarization (20+), Analysis (35+), Creation (50+), Improvement (10+), Security (15), Rating (8). Common patterns: extract_wisdom, summarize, create_5_sentence_summary, create_threat_model, create_stride_threat_model, analyze_claims, improve_writing, review_code, extract_main_idea, analyze_malware, create_sigma_rules, create_mermaid_visualization, youtube_summary, judge_output, rate_ai_response. Native execution reads Patterns/{name}/system.md and applies directly. Fabric CLI used only for YouTube transcript extraction (-y URL) and fallback URL fetching (-u URL). Patterns auto-synced from upstream Fabric repo via UpdatePatterns workflow. Workflows: ExecutePattern, UpdatePatterns. USE WHEN fabric, fabric pattern, run fabric, sync fabric, update patterns, use extract_wisdom, threat model, summarize, analyze claims, improve writing, review code, create prd, rate content, create diagram, mermaid diagram, STRIDE, sigma rules, analyze malware. NOT FOR comprehensive multi-agent investigation (use Research), content-adaptive dynamic extraction (use ExtractWisdom), or security threat intelligence aggregation (use AnnualReports)."
+effort: medium
 ---
 
 ## Customization
@@ -16,7 +17,7 @@ If this directory exists, load and apply any PREFERENCES.md, configurations, or 
 
 1. **Send voice notification**:
    ```bash
-   curl -s -X POST http://localhost:8888/notify \
+   curl -s -X POST http://localhost:31337/notify \
      -H "Content-Type: application/json" \
      -d '{"message": "Running the WORKFLOWNAME workflow in the Fabric skill to ACTION"}' \
      > /dev/null 2>&1 &
@@ -27,7 +28,7 @@ If this directory exists, load and apply any PREFERENCES.md, configurations, or 
    Running the **WorkflowName** workflow in the **Fabric** skill to ACTION...
    ```
 
-**Full documentation:** `~/.claude/PAI/THENOTIFICATIONSYSTEM.md`
+**Full documentation:** `~/.claude/PAI/DOCUMENTATION/Notifications/NotificationSystem.md`
 
 # Fabric
 
@@ -179,8 +180,24 @@ Each pattern's `system.md` contains the full prompt that defines:
 ## Changelog
 
 ### 2026-01-18
-- Initial skill creation (extracted from PAI/Tools/fabric)
+- Initial skill creation (extracted from PAI/TOOLS/fabric)
 - Native pattern execution (no CLI dependency for most patterns)
 - Two workflows: ExecutePattern, UpdatePatterns
 - 240+ patterns organized by category
 - PAI Pack ready structure
+
+## Gotchas
+
+- **`fabric -y URL` for YouTube extraction — don't scrape YouTube pages.** fabric handles transcript extraction natively.
+- **Pattern names are exact.** `extract_wisdom` not `extractwisdom`. Check `fabric --list` if unsure.
+- **Long content may exceed pattern context limits.** For very long inputs, chunk the content or use a summarize pattern first.
+
+## Execution Log
+
+After completing any workflow, append a single JSONL entry:
+
+```bash
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Fabric","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+```
+
+Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

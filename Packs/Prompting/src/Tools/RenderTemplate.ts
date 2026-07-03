@@ -15,7 +15,7 @@
 
 import Handlebars from 'handlebars';
 import { parse as parseYaml } from 'yaml';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
 import { resolve, dirname, basename } from 'path';
 import { parseArgs } from 'util';
 
@@ -177,7 +177,7 @@ function registerPartials(templatesDir: string): void {
 
   if (!existsSync(partialsDir)) return;
 
-  const files = Bun.spawnSync(['ls', partialsDir]).stdout.toString().trim().split('\n');
+  const files = readdirSync(partialsDir);
 
   for (const file of files) {
     if (file.endsWith('.hbs')) {

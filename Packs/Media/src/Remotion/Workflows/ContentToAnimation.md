@@ -40,7 +40,7 @@ This workflow handles ANY input via the Parser skill:
 **For YouTube:**
 ```bash
 # Get transcript via Parser skill
-# Load: ~/.claude/skills/Utilities/Parser/Workflows/ExtractYoutube.md
+# Load: ~/.claude/skills/Parser/Workflows/ExtractYoutube.md
 ```
 
 **For articles/blogs:**
@@ -362,7 +362,7 @@ Cannot proceed - fix logical issues before rendering
 
 **MANDATORY: Apply PAI Theme**
 ```typescript
-import { PAI_THEME } from '~/.claude/skills/Media/Remotion/theme'
+import { PAI_THEME } from '~/.claude/skills/Remotion/theme'
 
 // All components MUST use:
 // - PAI_THEME.colors for all colors
@@ -529,7 +529,7 @@ const DataScene: React.FC<{ data: { label: string; value: string }[] }> = ({ dat
 
 **Blog post:**
 ```
-User: animate my blog post at ${PROJECTS_DIR}/YourWebsite/cms/blog/skills-vs-agents.md
+User: animate my blog post at ~/LocalProjects/Website/cms/blog/skills-vs-agents.md
 ```
 
 **YouTube video:**
@@ -547,4 +547,4 @@ User: animate this content: "The three pillars of AI safety are..."
 This workflow inherits visual theming from Art preferences:
 - Load: `~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Art/PREFERENCES.md`
 - Apply: Charcoal aesthetic, purple accents, organic animations
-- Reference: `~/.claude/skills/Media/Remotion/theme.ts`
+- Reference: `~/.claude/`

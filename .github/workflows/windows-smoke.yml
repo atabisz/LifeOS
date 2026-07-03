@@ -1,0 +1,69 @@
+name: Windows hook launch-parity smoke test
+
+# Guards the Windows-support BLOCKER: on a fresh native Windows install, Claude Code
+# launches every hook through a POSIX shell (Git Bash `sh`). If the installed command
+# string can't launch, EVERY hook is silently dead — security pipeline, memory, context
+# loading, all of it. This job re-runs Tools/smoke-hook-launch.ts against the committed
+# release settings.json so that regression can never return unnoticed.
+#
+# It tests the CHECKED-OUT release tree (no install step): it stages the release
+# `.claude` under a scratch HOME so the hook commands' `$HOME/.claude/...` paths resolve
+# to committed files, and drops a `bun.exe` shim under `$HOME/.bun/bin` so the exact
+# installed interpreter string (`"$HOME/.bun/bin/bun.exe" ...`) launches. Proven locally
+# 2026-07-02: 41 FIRED, 2 RAN, 0 LAUNCH-FAIL, exit 0.
+
+on:
+  push:
+    paths:
+      # The whole staged release .claude tree — a symlink (or any staging-breaking artifact)
+      # can be reintroduced anywhere in it by a regen, so the guard must trigger on the whole tree.
+      - "Releases/**/.claude/**"
+      # The ingestion point: a build-release.ts change is exactly what could re-emit a symlink.
+      - "scripts/build-release.ts"
+      - "Tools/smoke-hook-launch.ts"
+      - ".github/workflows/windows-smoke.yml"
+  pull_request:
+    paths:
+      - "Releases/**/.claude/**"
+      - "scripts/build-release.ts"
+      - "Tools/smoke-hook-launch.ts"
+      - ".github/workflows/windows-smoke.yml"
+  workflow_dispatch: {}
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Prove the tool can go RED before trusting a green result — a smoke test that
+      # cannot fail is theatre. Runs in Git Bash (present by default on windows-latest).
+      - name: Self-test (tool must be able to fail)
+        shell: bash
+        run: bun Tools/smoke-hook-launch.ts --self-test
+
+      # Stage the checked-out release .claude under a scratch HOME and shim bun.exe so the
+      # exact installed command strings launch. Then run the smoke test against the
+      # committed release settings.json. Fails the job on any LAUNCH-FAIL (tool exits 1).
+      - name: Hook launch-parity smoke (checked-out release tree)
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCRATCH="$(mktemp -d)"
+          mkdir -p "$SCRATCH/.bun/bin"
+          # $HOME/.claude/... in the installed hook commands must resolve to committed files.
+          cp -r "$GITHUB_WORKSPACE/Releases/v5.0.0/.claude" "$SCRATCH/.claude"
+          # The hook commands hardcode "$HOME/.bun/bin/bun.exe"; provide a shim to the real bun.
+          BUN_BIN="$(command -v bun)"
+          printf '#!/bin/sh\nexec "%s" "$@"\n' "$BUN_BIN" > "$SCRATCH/.bun/bin/bun.exe"
+          chmod +x "$SCRATCH/.bun/bin/bun.exe"
+          echo "scratch HOME: $SCRATCH (release .claude staged, bun.exe shim -> $BUN_BIN)"
+          HOME="$SCRATCH" bun Tools/smoke-hook-launch.ts --settings "$SCRATCH/.claude/settings.json"

@@ -3,7 +3,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the MineReflections workflow to extract upgrade candidates from algorithm reflections"}' \
   > /dev/null 2>&1 &
@@ -19,7 +19,7 @@ Running the **MineReflections** workflow in the **PAIUpgrade** skill to mine int
 
 ## Overview
 
-The Algorithm writes a structured reflection after every Standard+ run to `MEMORY/LEARNING/REFLECTIONS/algorithm-reflections.jsonl`. Each entry contains three questions focused on algorithm performance:
+The Algorithm writes a structured reflection after every Standard+ run to `~/.claude/PAI/MEMORY/LEARNING/REFLECTIONS/algorithm-reflections.jsonl`. Each entry contains three questions focused on algorithm performance:
 
 - **Q1 (Self):** What would I have done differently?
 - **Q2 (Algorithm):** What would a smarter algorithm have done?
@@ -41,7 +41,7 @@ Each JSONL entry contains:
   "criteria_count": 12,
   "criteria_passed": 12,
   "criteria_failed": 0,
-  "prd_id": "PRD-YYYYMMDD-slug",
+  "prd_id": "ISA-YYYYMMDD-slug",
   "implied_sentiment": 8,
   "reflection_q1": "Self-reflection on algorithm execution",
   "reflection_q2": "What a smarter algorithm would do differently",
@@ -58,7 +58,7 @@ Each JSONL entry contains:
 ### Step 1: Read All Reflections
 
 ```
-Read MEMORY/LEARNING/REFLECTIONS/algorithm-reflections.jsonl
+Read ~/.claude/PAI/MEMORY/LEARNING/REFLECTIONS/algorithm-reflections.jsonl
 
 Parse each line as JSON. Collect all entries into an array.
 Report: "Found N reflections spanning [date range]"
@@ -128,7 +128,7 @@ Sort upgrade candidates by:
 ```
 # Internal Reflection Mining Report
 
-**Source:** MEMORY/LEARNING/REFLECTIONS/algorithm-reflections.jsonl
+**Source:** ~/.claude/PAI/MEMORY/LEARNING/REFLECTIONS/algorithm-reflections.jsonl
 **Entries analyzed:** N
 **Date range:** [earliest] to [latest]
 **High-signal entries:** N (sentiment <= 5 or over-budget or failed criteria)

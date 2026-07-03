@@ -10,7 +10,7 @@ Each recipe is a Markdown file with YAML frontmatter:
 ---
 name: Recipe Name
 description: What this recipe does
-tool: playwright-cli | BrowserAgent | UIReviewer
+tool: agent-browser | BrowserAgent | UIReviewer
 defaults:
   param1: default_value
   param2: default_value
@@ -38,14 +38,14 @@ Parameters are resolved by simple string replacement. Unresolved parameters (no 
 |-------|----------|-------------|
 | `name` | Yes | Human-readable recipe name |
 | `description` | Yes | What the recipe does (one sentence) |
-| `tool` | Yes | Which tool executes: `playwright-cli`, `BrowserAgent`, or `UIReviewer` |
+| `tool` | Yes | Which tool executes: `agent-browser`, `BrowserAgent`, or `UIReviewer` |
 | `defaults` | No | Default values for template parameters |
 
 ## Tool Selection
 
 | Tool | When to Use |
 |------|------------|
-| `playwright-cli` | Deterministic steps, no AI reasoning needed |
+| `agent-browser` | Deterministic steps, no AI reasoning needed |
 | `BrowserAgent` | Needs AI to decide what to do based on page content |
 | `UIReviewer` | Structured validation with assertions |
 

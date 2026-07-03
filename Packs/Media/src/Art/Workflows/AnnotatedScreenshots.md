@@ -1,11 +1,11 @@
 # Annotated Screenshots Workflow
 
-**Real screenshots with hand-drawn editorial annotations, arrows, and highlights using brand aesthetic.**
+**Real screenshots with hand-drawn editorial annotations, arrows, and highlights using UL aesthetic.**
 
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the AnnotatedScreenshots workflow in the Art skill to annotate images"}' \
   > /dev/null 2>&1 &
@@ -42,7 +42,7 @@ Annotated screenshots combine real artifacts (UI, code, data) with hand-drawn ed
 3. **Typography mix** — Real UI text + hand-lettered annotations
 4. **Color accents** — Purple/teal for annotations against real screenshot
 5. **Editorial voice** — Annotations sound like smart commentary
-6. **Editorial style** — Maintains hand-drawn, gestural linework for overlays
+6. **Editorial style** — Maintains UL imperfect, gestural linework for overlays
 7. **Functional clarity** — Annotations enhance understanding, not just decoration
 
 ---

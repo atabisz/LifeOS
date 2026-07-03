@@ -7,7 +7,7 @@ A/B test two prompt versions to determine which performs better.
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the ComparePrompts workflow in the Evals skill to A/B test prompts"}' \
   > /dev/null 2>&1 &
@@ -67,7 +67,7 @@ Ask the user:
 
 ```bash
 # Check prompts exist
-ls ~/.claude/skills/Utilities/Evals/UseCases/<name>/prompts/
+ls ~/.claude/skills/Evals/UseCases/<name>/prompts/
 
 # Should see both versions:
 # v1.0.0.md
@@ -76,7 +76,7 @@ ls ~/.claude/skills/Utilities/Evals/UseCases/<name>/prompts/
 
 ### Step 3: Create Comparison Config
 
-Create `~/.claude/skills/Utilities/Evals/UseCases/<name>/comparisons/<comparison-name>.yaml`:
+Create `~/.claude/skills/Evals/UseCases/<name>/comparisons/<comparison-name>.yaml`:
 
 ```yaml
 comparison:
@@ -119,7 +119,7 @@ comparison:
 **Option A: Via CLI**
 
 ```bash
-bun run ~/.claude/skills/Utilities/Evals/EvalServer/cli-run.ts \
+bun run ~/.claude/skills/Evals/EvalServer/cli-run.ts \
   --use-case <name> \
   --compare prompts/v1.0.0.md prompts/v1.1.0.md \
   --position-swap
@@ -304,8 +304,8 @@ For detailed comparison setup, use the Comparison template:
 ```bash
 bun run ~/.claude/Templates/Tools/RenderTemplate.ts \
   -t Evals/Comparison.hbs \
-  -d ~/.claude/skills/Utilities/Evals/UseCases/<name>/comparisons/<name>.yaml \
-  -o ~/.claude/skills/Utilities/Evals/UseCases/<name>/comparisons/<name>-setup.md \
+  -d ~/.claude/skills/Evals/UseCases/<name>/comparisons/<name>.yaml \
+  -o ~/.claude/skills/Evals/UseCases/<name>/comparisons/<name>-setup.md \
   --preview
 ```
 

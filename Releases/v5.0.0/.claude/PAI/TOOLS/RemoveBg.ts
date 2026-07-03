@@ -21,7 +21,15 @@ function resolveRembgBin(): string {
   if (process.env.REMBG_BIN) return process.env.REMBG_BIN;
   const home = process.env.HOME;
   if (!home) throw new Error("HOME not set; cannot resolve rembg binary");
-  return resolve(home, ".local/bin/rembg");
+  const base = resolve(home, ".local/bin/rembg");
+  if (process.platform === "win32") {
+    const candidates: string[] = [`${base}.exe`, `${base}.cmd`, `${base}.bat`, base];
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) return candidate;
+    }
+    return `${base}.exe`;
+  }
+  return base;
 }
 
 function showHelp(): void {
@@ -55,7 +63,12 @@ NOTES:
 
 function runRembg(bin: string, input: string, output: string): Promise<void> {
   return new Promise((resolveFn, rejectFn) => {
-    const proc = spawn(bin, ["i", input, output], { stdio: ["ignore", "ignore", "pipe"] });
+    const useShell = /\.(cmd|bat)$/i.test(bin);
+    const spawnTarget = useShell ? `"${bin}"` : bin;
+    const proc = spawn(spawnTarget, ["i", input, output], {
+      stdio: ["ignore", "ignore", "pipe"],
+      shell: useShell,
+    });
     let stderr = "";
     proc.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
     proc.on("error", (err) => rejectFn(new Error(`Failed to launch rembg: ${err.message}`)));

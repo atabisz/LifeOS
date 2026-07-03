@@ -1,6 +1,6 @@
 ---
 name: Agents
-description: "Compose CUSTOM agents from Base Traits + Voice + Specialization, and manage predefined functional TEAMS. Traits combine expertise (security, technical, research), personality (skeptical, analytical, enthusiastic), and approach (thorough, rapid, systematic). ComposeAgent.ts merges base + user config, outputs unique prompt + ElevenLabs voice + prosody. Predefined teams: engineering, architecture, marketing, design, security, research, content, strategy — each YAML-configured with roles, tensions, and specialist members. Observer team variant: read-only oversight agents that vote continue/halt/escalate against the tool-activity audit log (high-blast-radius or unattended runs only). USE WHEN create custom agents, spin up agents, specialized agents, agent personalities, available traits, list traits, agent voices, compose agent, spawn parallel agents, launch agents, engineering team, architecture team, marketing team, design team, security team, research team, content team, strategy team, get the team on this, observer team, audit agents. NOT FOR ad-hoc swarms or TeamCreate coordination (use Delegation). NOT FOR single-threaded delegation without unique identities (use Delegation Task)."
+description: "Compose CUSTOM agents from Base Traits + Voice + Specialization, and manage predefined functional TEAMS. Traits combine expertise (security, technical, research), personality (skeptical, analytical, enthusiastic), and approach (thorough, rapid, systematic). ComposeAgent.ts merges base + user config, outputs unique prompt + ElevenLabs voice + prosody. Predefined teams: engineering, architecture, marketing, design, security, research, content, strategy — each YAML-configured with roles, tensions, and specialist members. Observer team variant: read-only oversight agents that vote continue/halt/escalate against the tool-activity audit log (high-blast-radius or unattended runs only). USE WHEN create custom agents, spin up agents, specialized agents, agent personalities, available traits, list traits, agent voices, compose agent, spawn parallel agents, launch agents, engineering team, architecture team, marketing team, design team, security team, research team, content team, strategy team, get the team on this, observer team, audit agents. NOT FOR ad-hoc swarms or implicit-team coordination (use Delegation). NOT FOR single-threaded delegation without unique identities (use Delegation Task)."
 effort: medium
 ---
 
@@ -11,15 +11,15 @@ effort: medium
 | "**custom agents**", "**specialized agents**", "spin up agents" | **THIS SKILL** → CreateCustomAgent workflow | ComposeAgent → `Task(general-purpose)` |
 | "**engineering team**", "**security team**", "**[name] team: do X**" | **THIS SKILL** → SpawnTeam workflow | Load YAML config → ComposeAgent per member → parallel Task calls |
 | "just the **QA lead and senior engineer** on this" | **THIS SKILL** → SpawnTeam (subset) | Filter team members → compose subset |
-| "**swarm**", "**create an agent team**" (ad-hoc coordination) | **Built-in `TeamCreate`** (Delegation skill) | Persistent shared task list, messaging |
+| "**swarm**", "**create an agent team**" (ad-hoc coordination) | **Built-in implicit teams** (Delegation skill) | Persistent shared task list, messaging |
 
 **Predefined teams** (engineering, architecture, marketing, design, security, research, content, strategy) = **THIS SKILL → SpawnTeam workflow**. These are predefined specialist groups with YAML configs, not ad-hoc teams.
 
-**Ad-hoc agent teams/swarms** (no predefined config, custom coordination) = **Built-in `TeamCreate`** via Delegation skill.
+**Ad-hoc agent teams/swarms** (no predefined config, custom coordination) = **Built-in implicit teams** via Delegation skill (set `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`; the standalone `TeamCreate`/`TeamDelete` tools were removed in Claude Code v2.1.178).
 
 - **Custom agents** = one-shot parallel workers with unique ComposeAgent identities
 - **Predefined teams** = YAML-configured specialist groups with roles, tensions, and expertise
-- **Ad-hoc teams** (TeamCreate) = persistent coordinated teams with shared task lists, messaging
+- **Ad-hoc teams** = persistent coordinated teams with shared task lists, messaging (one implicit team per session under `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`)
 
 ---
 
@@ -45,7 +45,7 @@ effort: medium
 # Agents - Custom Agent Composition System
 
 **Auto-routes when user mentions custom agents, agent creation, or specialized personalities.**
-**Does NOT handle agent teams/swarms — "agent team" or "swarm" = built-in Claude Code `TeamCreate` tool.**
+**Does NOT handle agent teams/swarms — "agent team" or "swarm" = built-in Claude Code implicit teams (Delegation skill, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`).**
 
 ## Configuration: Base + User Merge
 
@@ -354,7 +354,7 @@ Alex is a strategic thinker who sees patterns others miss...
 
 ## Gotchas
 
-- **Agents skill (custom agents) ≠ Agent tool (Claude Code subagents) ≠ TeamCreate (agent teams).** Three different systems. "Custom agents" → this skill. "Agent team"/"swarm" → TeamCreate. One-off subagents → Agent tool.
+- **Agents skill (custom agents) ≠ Agent tool (Claude Code subagents) ≠ implicit teams (agent teams).** Three different systems. "Custom agents" → this skill. "Agent team"/"swarm" → implicit teams via Delegation (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`; standalone `TeamCreate`/`TeamDelete` removed in v2.1.178). One-off subagents → Agent tool.
 - **Don't spawn agents when direct work is faster.** If the task is depth-focused (one file, deep understanding), do it yourself. Agents are for breadth (multiple independent threads).
 - **Don't spawn redundant agents for work already in context.** Multiple past failures from re-researching what was already known.
 - **Provide raw source material to agents, not summaries.** Agents work better with primary sources.

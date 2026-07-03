@@ -17,6 +17,7 @@ import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import { writeFile, readFile } from "node:fs/promises";
 import { extname, resolve } from "node:path";
+import { homedir } from "node:os";
 
 // ============================================================================
 // Environment Loading
@@ -27,7 +28,7 @@ import { extname, resolve } from "node:path";
  * This ensures API keys are available regardless of how the CLI is invoked
  */
 async function loadEnv(): Promise<void> {
-  const paiDir = process.env.PAI_DIR || resolve(process.env.HOME!, '.claude');
+const paiDir = process.env.PAI_DIR || resolve(process.env.HOME ?? process.env.USERPROFILE ?? homedir(), '.claude');
   const envPath = resolve(paiDir, '.env');
   try {
     const envContent = await readFile(envPath, 'utf-8');
@@ -100,7 +101,7 @@ interface CLIArgs {
 const DEFAULTS = {
   model: "flux" as Model,
   size: "16:9" as Size,
-  output: `${process.env.HOME}/Downloads/ul-image.png`,
+  output: `${process.env.HOME ?? process.env.USERPROFILE ?? homedir()}/Downloads/ul-image.png`,
 };
 
 const REPLICATE_SIZES: ReplicateSize[] = ["1:1", "16:9", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "21:9"];
@@ -206,7 +207,7 @@ async function detectMimeType(filePath: string): Promise<string> {
 // ============================================================================
 
 // PAI directory for documentation paths
-const PAI_DIR = process.env.PAI_DIR || `${process.env.HOME}/.claude`;
+const PAI_DIR = process.env.PAI_DIR || `${process.env.HOME ?? process.env.USERPROFILE ?? homedir()}/.claude`;
 
 function showHelp(): void {
   console.log(`
@@ -559,11 +560,21 @@ async function addBackgroundColor(inputPath: string, outputPath: string, hexColo
 }
 
 async function removeBackground(imagePath: string): Promise<string> {
-  const home = process.env.HOME;
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? homedir();
   if (!home) throw new CLIError("HOME not set; cannot resolve rembg binary");
-  const rembgBin = process.env.REMBG_BIN || resolve(home, ".local/bin/rembg");
-
   const { existsSync } = await import("node:fs");
+  const rembgBin: string = (() => {
+    if (process.env.REMBG_BIN) return process.env.REMBG_BIN;
+    const base = resolve(home, ".local/bin/rembg");
+    if (process.platform === "win32") {
+      const candidates: string[] = [`${base}.exe`, `${base}.cmd`, `${base}.bat`, base];
+      for (const candidate of candidates) {
+        if (existsSync(candidate)) return candidate;
+      }
+      return `${base}.exe`;
+    }
+    return base;
+  })();
   if (!existsSync(rembgBin)) {
     throw new CLIError(
       `rembg not found at ${rembgBin}. Install: pipx install rembg (or set REMBG_BIN env var to override path).`
@@ -583,7 +594,12 @@ async function removeBackground(imagePath: string): Promise<string> {
 
   const { spawn } = await import("node:child_process");
   await new Promise<void>((resolveFn, rejectFn) => {
-    const proc = spawn(rembgBin, ["i", imagePath, tempPath], { stdio: ["ignore", "ignore", "pipe"] });
+    const useShell = /\.(cmd|bat)$/i.test(rembgBin);
+    const spawnTarget = useShell ? `"${rembgBin}"` : rembgBin;
+    const proc = spawn(spawnTarget, ["i", imagePath, tempPath], {
+      stdio: ["ignore", "ignore", "pipe"],
+      shell: useShell,
+    });
     let stderr = "";
     proc.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
     proc.on("error", (err) => rejectFn(new CLIError(`Failed to launch rembg: ${err.message}`)));

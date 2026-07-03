@@ -39,7 +39,7 @@ Ranked by interestingness, NOT implementation priority. A LOW-priority item can 
 
 ## 🔥 Recommendations
 
-Every row MUST carry a Prior Status tag with file:line evidence from Thread 0.
+Every row MUST carry a Prior Status tag with file:line evidence. Thread 0 is the *first* source for that evidence, but it is a summary and summaries over-claim — so every 🆕 NEW and 🔶 PARTIAL row MUST be confirmed by an **emit-time live probe**: a FRESH `grep`/`Read` of the actual target file, and the Evidence column cites that probe result (`file:line` found, or "no match → confirmed absent"). A 🔶 PARTIAL is a conjecture that the delta is real; Gate E applies to the audit's own output. An unprobed 🔶/🆕 row is INVALID — re-tag it ✅ DONE (→ Skipped) or fix it. (2026-06-25: three "🔶 PARTIAL" rows were all already ✅ DONE because synthesis trusted the Thread-0 summary instead of grepping live doctrine.)
 
 **Prior Status legend:**
 - 🆕 **NEW** — no prior trace in Algorithm, PATTERNS.yaml, hooks, ISAs, KNOWLEDGE, or MEMORY

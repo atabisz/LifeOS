@@ -23,16 +23,37 @@ export class BinaryTestsGrader extends BaseGrader {
 
     const workingDir = context.working_dir ?? process.cwd();
     const timeout = params.timeout_ms ?? 60000;
+    const timeoutSecs = Math.ceil(timeout / 1000);
     const results: { file: string; passed: boolean; output: string; error?: string }[] = [];
+
+    // GNU coreutils `timeout` provides the wall-clock kill of a runaway test. On native
+    // Windows, a bare `timeout` can resolve to System32's interactive pause tool (which
+    // errors on piped stdin and false-FAILs the grade) — and even where an MSYS/Git-Bash
+    // coreutils `timeout` is on PATH, we can't guarantee which one the shell picks. So we
+    // gate on the platform first (never wrap on win32) AND on availability elsewhere; when
+    // not wrapping, run unbounded with a visible warning. The tests still run and score —
+    // only the runaway wall-clock cap is dropped, so a genuinely hung test will not be
+    // force-killed on Windows.
+    const hasGnuTimeout = process.platform !== 'win32' && Bun.which('timeout') !== null;
+    if (!hasGnuTimeout) {
+      console.warn(
+        `⚠️  GNU 'timeout' unavailable — running test commands with NO ${timeoutSecs}s time limit. ` +
+        `Tests still run and score, but a hung/runaway test will not be force-killed.`,
+      );
+    }
 
     for (const testFile of params.test_files) {
       try {
         // Detect test command based on file extension
         const command = params.test_command ?? this.detectTestCommand(testFile);
 
-        const result = await $`cd ${workingDir} && timeout ${Math.ceil(timeout/1000)} ${command} ${testFile}`
-          .quiet()
-          .nothrow();
+        const result = hasGnuTimeout
+          ? await $`cd ${workingDir} && timeout ${timeoutSecs} ${command} ${testFile}`
+              .quiet()
+              .nothrow()
+          : await $`cd ${workingDir} && ${command} ${testFile}`
+              .quiet()
+              .nothrow();
 
         const passed = result.exitCode === 0;
         results.push({

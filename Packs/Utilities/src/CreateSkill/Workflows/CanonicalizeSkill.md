@@ -5,7 +5,7 @@
 ## Voice Notification
 
 ```bash
-curl -s -X POST http://localhost:8888/notify \
+curl -s -X POST http://localhost:31337/notify \
   -H "Content-Type: application/json" \
   -d '{"message": "Running the CanonicalizeSkill workflow in the CreateSkill skill to restructure skill"}' \
   > /dev/null 2>&1 &
@@ -117,7 +117,7 @@ find ~/.claude/skills/[SkillName]/ -type d -mindepth 2 -maxdepth 3
 **Nested Templates:**
 ```
 ✗ WRONG: Templates/Primitives/Extract.md
-✓ FIX: Move to skills/Utilities/Prompting/Extract.md (templates belong in Prompting)
+✓ FIX: Move to skills/Prompting/Extract.md (templates belong in Prompting)
 ```
 
 **Nested Tools:**
@@ -136,10 +136,10 @@ find ~/.claude/skills/[SkillName]/ -type d -mindepth 2 -maxdepth 3
 **Example:**
 ```bash
 # Before (3 levels - WRONG)
-skills/Investigation/OSINT/Workflows/Company/DueDiligence.md
+skills/OSINT/Workflows/Company/DueDiligence.md
 
 # After (2 levels - CORRECT)
-skills/Investigation/OSINT/Workflows/CompanyDueDiligence.md
+skills/OSINT/Workflows/CompanyDueDiligence.md
 ```
 
 **Rule:** If you need to organize many files, use clear filenames NOT subdirectories.
@@ -234,7 +234,55 @@ For EACH file:
 
 ---
 
-## Step 9: Add Examples Section
+## Step 9: Add Gotchas Section
+
+**REQUIRED:** Every skill needs a `## Gotchas` section after the workflow routing table.
+
+```markdown
+## Gotchas
+
+- [Known failure mode or API quirk]
+- [Common mistake Claude makes with this skill]
+- [Ordering/sequencing requirement that isn't obvious]
+```
+
+If the skill is new or you don't know specific gotchas yet, add the section with a placeholder:
+```markdown
+## Gotchas
+
+_No gotchas documented yet. Add failures here as they're discovered._
+```
+
+Per Anthropic: "The highest information density in any Skill comes from gotchas sections."
+
+---
+
+## Step 9a: Add Negative Triggers (if applicable)
+
+If the skill shares vocabulary with other skills, add `NOT FOR` to the description:
+```yaml
+description: ... USE WHEN [triggers]. NOT FOR [confusable alternative (use SkillName instead)].
+```
+
+---
+
+## Step 9b: Check BPE Compliance
+
+Review each instruction: does it provide knowledge Claude can't derive on its own? Remove instructions that just tell Claude what it already knows. Focus on information that breaks Claude's default patterns.
+
+---
+
+## Step 9c: Check SKILL.md Size
+
+If SKILL.md exceeds 500 lines, extract detailed reference content into:
+- Root-level context files (existing PAI pattern)
+- `References/` subdirectory for extensive reference material
+
+Keep SKILL.md as a concise routing guide.
+
+---
+
+## Step 10: Add Examples Section
 
 **REQUIRED:** Every skill needs an `## Examples` section with 2-3 concrete usage patterns.
 
