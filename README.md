@@ -1,5 +1,7 @@
 <p align="center">
+  <br />
   <img src="./lifeos-logo-full.png" alt="LifeOS" width="460">
+  <br />
 </p>
 
 <div align="center">
