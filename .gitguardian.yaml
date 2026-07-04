@@ -1,0 +1,27 @@
+# ggshield configuration.
+#
+# The three ignored matches below are FALSE POSITIVES in the vendored upstream
+# release payload (LifeOS/install/**) and its normalized diff-only mirror under
+# scripts/upstream-sync/baseline/**. Each was reviewed by SHA:
+#
+#  - Traits.yaml       — 20-char ElevenLabs PUBLIC voice IDs (published catalog
+#                        identifiers, not secret credentials).
+#  - SecurityFilter.ts — a string inside test-fixture input/expected pairs
+#                        (example data), not a live credential.
+#  - system.md         — a JWT used as an EXAMPLE in a nuclei-template-writing
+#                        Fabric pattern (illustrative, not a real token).
+#
+# The one GENUINE secret in the payload (Eight Sleep APP_CLIENT_SECRET, a 64-char
+# hex client secret) is NOT ignored here — it is redacted by scripts/lifeos-
+# normalize.ts's maskSecrets() pass before the baseline is written, so it never
+# enters the pin. Ignoring is reserved for reviewed false positives; real secrets
+# are masked, never ignored.
+version: 2
+secret:
+  ignored_matches:
+    - name: "Traits.yaml — ElevenLabs public voice IDs (false positive)"
+      match: 4df061e20413e9d91404762b59d34a591195b26c152117320074a7443f73b13a
+    - name: "SecurityFilter.ts — test-fixture example string (false positive)"
+      match: 91d28acd8400994a472a2a086608d2ea5fd8a57956a8af64407e903ebe65a6a5
+    - name: "Fabric nuclei-template — example JWT (false positive)"
+      match: 09b2a37071814da3112adcf3154e0da74e35a372839f1f8f290d9a0cb16182e2

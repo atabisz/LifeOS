@@ -41,8 +41,39 @@ export type Flag = {
 export type NormalizeResult = {
   text: string; // transformed content
   rewrites: number; // count of applied token rewrites
+  masked: number; // count of high-entropy secret values redacted
   flags: Flag[]; // ambiguous occurrences left for human review
 };
+
+/**
+ * Secret-masking pass. The public release payload ships high-entropy values that
+ * ggshield's "Generic High Entropy Secret" detector flags (verified: an Eight Sleep
+ * APP_CLIENT_SECRET, ElevenLabs *_voice_id values, a Daemon filter token, nuclei-
+ * template example strings). The vendored baseline is DIFF-ONLY — never executed —
+ * so redacting these is safe and lets the pin commit clean without SKIP=ggshield.
+ *
+ * CRITICAL: masking lives inside normalize() so it applies to BOTH the committed
+ * pin AND the on-the-fly release comparison — masked-vs-unmasked would otherwise
+ * manufacture false diffs. It is DETERMINISTIC (same value → same placeholder), so
+ * a masked value never shows as a spurious change across a v6→v7 diff.
+ *
+ * Heuristic mirrors ggshield's generic detector: a QUOTED literal of ≥32 chars
+ * drawn purely from the secret alphabet [A-Za-z0-9+/=_-] (no spaces, no natural
+ * language). This catches all four flagged shapes and rarely over-masks — few
+ * legitimate 32+ char unbroken alphanumeric literals exist outside secrets/hashes/ids.
+ * Over-masking in a diff-only pin costs nothing; a leaked secret costs a lot.
+ */
+const SECRET_LITERAL_RE = /(['"])([A-Za-z0-9+/=_-]{32,})\1/g;
+const SECRET_MASK = "<REDACTED:high-entropy>";
+
+export function maskSecrets(text: string): { text: string; masked: number } {
+  let masked = 0;
+  const out = text.replace(SECRET_LITERAL_RE, (_m, q: string) => {
+    masked += 1;
+    return `${q}${SECRET_MASK}${q}`;
+  });
+  return { text: out, masked };
+}
 
 /**
  * Ordered rewrite rules. Order matters: longest / most-specific first so a
@@ -90,6 +121,11 @@ export function normalize(text: string): NormalizeResult {
       return rule.replace.replace(/\$(\d)/g, (_s, d) => groups[Number(d) - 1] ?? "");
     });
   }
+  // Secret-masking pass — runs after token rewrites (they don't overlap: path/env
+  // tokens are <32 chars or contain '/'). Applies to pin AND release comparison.
+  const secretPass = maskSecrets(out);
+  out = secretPass.text;
+  const masked = secretPass.masked;
   // Flag residuals for human review, line/col located, preserve-list suppressed.
   const flags: Flag[] = [];
   const lines = out.split("\n");
@@ -108,13 +144,39 @@ export function normalize(text: string): NormalizeResult {
       flags.push({ line: i + 1, col: match.index + 1, token, reason, context: lineText.trim().slice(0, 120) });
     }
   });
-  return { text: out, rewrites, flags };
+  return { text: out, rewrites, masked, flags };
 }
 
 // ── Self-test ────────────────────────────────────────────────────────────────
 function runSelfTest(): number {
-  type Case = { name: string; in: string; wantText: string; wantRewrites: number; wantFlags: number };
+  type Case = { name: string; in: string; wantText: string; wantRewrites: number; wantFlags: number; wantMasked?: number };
   const cases: Case[] = [
+    {
+      // Synthetic 64-char hex fixture (NOT a real credential) — proves a client-
+      // secret-shaped literal is masked. Never embed a real payload secret here.
+      name: "high-entropy client secret masked",
+      in: 'const APP_CLIENT_SECRET = "' + "0".repeat(48) + 'deadbeefcafef00d";',
+      wantText: 'const APP_CLIENT_SECRET = "<REDACTED:high-entropy>";',
+      wantRewrites: 0,
+      wantFlags: 0,
+      wantMasked: 1,
+    },
+    {
+      name: "short quoted string NOT masked (below 32-char floor)",
+      in: 'const ua = "okhttp/4.9.3";',
+      wantText: 'const ua = "okhttp/4.9.3";',
+      wantRewrites: 0,
+      wantFlags: 0,
+      wantMasked: 0,
+    },
+    {
+      name: "prose sentence with spaces NOT masked",
+      in: '"This is a long human sentence that exceeds thirty-two characters easily."',
+      wantText: '"This is a long human sentence that exceeds thirty-two characters easily."',
+      wantRewrites: 0,
+      wantFlags: 0,
+      wantMasked: 0,
+    },
     {
       name: "env var LIFEOS_DIR",
       in: "const d = process.env.LIFEOS_DIR",
@@ -175,14 +237,15 @@ function runSelfTest(): number {
   let pass = 0;
   for (const c of cases) {
     const r = normalize(c.in);
-    const ok = r.text === c.wantText && r.rewrites === c.wantRewrites && r.flags.length === c.wantFlags;
+    const maskedOk = c.wantMasked === undefined || r.masked === c.wantMasked;
+    const ok = r.text === c.wantText && r.rewrites === c.wantRewrites && r.flags.length === c.wantFlags && maskedOk;
     if (ok) {
       pass += 1;
     } else {
       console.error(`FAIL ${c.name}`);
       console.error(`  in:    ${JSON.stringify(c.in)}`);
-      console.error(`  want:  text=${JSON.stringify(c.wantText)} rewrites=${c.wantRewrites} flags=${c.wantFlags}`);
-      console.error(`  got:   text=${JSON.stringify(r.text)} rewrites=${r.rewrites} flags=${r.flags.length}`);
+      console.error(`  want:  text=${JSON.stringify(c.wantText)} rewrites=${c.wantRewrites} flags=${c.wantFlags} masked=${c.wantMasked ?? "-"}`);
+      console.error(`  got:   text=${JSON.stringify(r.text)} rewrites=${r.rewrites} flags=${r.flags.length} masked=${r.masked}`);
     }
   }
   console.log(`${pass}/${cases.length} passed`);
@@ -205,5 +268,5 @@ if (import.meta.main) {
   const r = normalize(src);
   process.stdout.write(r.text);
   for (const f of r.flags) console.error(`FLAG ${file}:${f.line}:${f.col} "${f.token}" — ${f.reason}`);
-  console.error(`[${file}] rewrites=${r.rewrites} flags=${r.flags.length}`);
+  console.error(`[${file}] rewrites=${r.rewrites} masked=${r.masked} flags=${r.flags.length}`);
 }

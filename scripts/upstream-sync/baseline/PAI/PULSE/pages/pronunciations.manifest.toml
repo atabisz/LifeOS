@@ -1,0 +1,10 @@
+id = "pronunciations"
+title = "Pronunciations"
+dataType = "ReferencePageSchema"
+sourceGlobs = ["PAI/USER/PRINCIPAL/PRONUNCIATIONS.json", "PAI/USER/Pronunciations.md"]
+adapterPromptFile = "PAI/PULSE/adapters/prompts/reference.md"
+model = "haiku"
+rebuildButton = true
+order = 80
+adapterVersion = "pronunciations-v1"
+staleAfterHours = 720

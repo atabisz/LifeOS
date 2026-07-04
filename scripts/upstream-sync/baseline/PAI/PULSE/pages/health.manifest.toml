@@ -1,0 +1,10 @@
+id = "health"
+title = "Health"
+dataType = "IndexPageSchema"
+sourceGlobs = ["PAI/USER/Health/README.md", "PAI/USER/Health/*.md"]
+adapterPromptFile = "PAI/PULSE/adapters/prompts/index.md"
+model = "haiku"
+rebuildButton = true
+order = 60
+adapterVersion = "health-index-v1"
+staleAfterHours = 168
