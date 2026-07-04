@@ -12,7 +12,8 @@
 import { join } from "path"
 import { existsSync, readFileSync } from "fs"
 
-const HOME = process.env.HOME ?? ""
+import { homedir } from "os"
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const TELOS_DIR = join(HOME, ".claude", "PAI", "USER", "TELOS")
 
 function readFile(name: string): string {

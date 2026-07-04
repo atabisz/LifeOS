@@ -22,7 +22,8 @@
 import { readFileSync, writeFileSync, statSync, readdirSync, mkdirSync, existsSync, watch } from "fs"
 import { join, relative, basename, dirname } from "path"
 
-const HOME = process.env.HOME ?? ""
+import { homedir } from "os"
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude", "PAI")
 const USER_DIR = join(PAI_DIR, "USER")
 const STATE_DIR = join(PAI_DIR, "Pulse", "state")

@@ -13,7 +13,8 @@
 import { join, basename, dirname } from "path"
 import { existsSync, readFileSync, writeFileSync, appendFileSync, readdirSync, statSync, mkdirSync } from "fs"
 
-const HOME = process.env.HOME ?? ""
+import { homedir } from "os"
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const PAI_DIR = join(HOME, ".claude", "PAI")
 const PROJECTS_DIR = join(HOME, ".claude", "projects")
 const OUTPUT_FILE = join(PAI_DIR, "MEMORY", "OBSERVABILITY", "session-costs.jsonl")

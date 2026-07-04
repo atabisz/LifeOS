@@ -58,7 +58,8 @@ export interface IMessageHealth {
 
 // ── Module State ──
 
-const HOME = process.env.HOME ?? ""
+import { homedir } from "os"
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const CWD = join(HOME, ".claude")
 const STATE_DIR = join(HOME, ".claude", "PAI", "Pulse", "state", "imessage")
 const LOGS_DIR = join(HOME, ".claude", "PAI", "Pulse", "logs", "imessage")

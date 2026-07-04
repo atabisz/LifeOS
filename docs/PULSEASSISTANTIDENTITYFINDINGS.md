@@ -1,27 +1,39 @@
 # Pulse `/assistant` — empty DA identity & missing module: findings
 
-> **Status:** investigation only — **no changes were made** to the install or to Pulse, per request.
-> **Date:** 2026-06-30 · **Install:** Windows 11, `C:\Users\AlexTabisz\.claude`, Pulse live on :31337 (pid 34964).
+> **Status:** original investigation was read-only; the DA subsystem it diagnosed as unbuilt **has since been built (2026-07-03→07-04)** — see the ✅ Resolved banner below. This doc now records both the original diagnosis and its resolution.
+> **Date:** 2026-06-30 (investigation) · updated 2026-07-04 (resolved) · **Install:** Windows 11, `C:\Users\AlexTabisz\.claude`, Pulse live on :31337.
 > **Method:** live HTTP probes + source/git archaeology, fanned out across two parallel `Explore` agents, every agent claim re-verified directly before being recorded here.
 
-> ### 🔄 Update — 2026-07-03 (re-verified live, pid 7320)
+> ### ✅ Resolved — 2026-07-04: all three causes closed; `/assistant` is live
+>
+> **This entire investigation is now historical.** The DA subsystem was built 2026-07-03→07-04 across three sessions. All three stacked causes are resolved, re-confirmed by live probe (2026-07-04):
+>
+> 1. **Cause A (module never built) — RESOLVED.** `Pulse/Assistant/module.ts` now exists (with `heartbeat.ts`, `store.ts`, `delegation.ts`) and is imported by `pulse.ts`. The subsystem also gained a fire-executor, diary/growth writers, an approve/consent path, and primary→worker delegation — all Forge cross-family audited.
+> 2. **Cause B (config gated off) — RESOLVED.** `PULSE.toml` now has a `[da]` section with `enabled = true`.
+> 3. **Cause C (no DA identity) — RESOLVED (already, 2026-07-03).** `garry` identity exists and now LOADS (`/assistant/health` → `identity_loaded: true`).
+>
+> **Live probe 2026-07-04:** `/assistant/{health, identity, personality, tasks, diary, opinions}` **all return HTTP 200** (previously all 404). The page renders the real identity card, not the `EmptyStateGuide`. The only surfaces still empty are the **Diary** and **Opinions** tabs — their writer jobs (`da-diary`, `da-growth`) ship **phase-gated `enabled = false`** pending an owner opt-in, so those two have no data *by design*, not because the backend is missing.
+>
+> **The rest of this document describes the pre-build state (2026-06-30 investigation + 2026-07-03 partial update) and is preserved as the historical record of how the gap was diagnosed.** The Windows path-bug section (below) is a separate, still-open concern and is NOT resolved by this update.
+
+> ### 🔄 Update — 2026-07-03 (re-verified live, pid 7320) — SUPERSEDED by the 2026-07-04 banner above
 >
 > Two things changed since 2026-06-30, both re-confirmed by fresh probes; the original record below is preserved for provenance.
 >
-> 1. **The page no longer "renders blank" — it returns HTTP 200 and shows an empty-state guide.** The `/assistant` *shell* URL returns **200** (Next.js static fallback); only its data APIs (`/assistant/identity|health|personality|tasks|diary|opinions`) return **404**. The blank card is now an explicit `EmptyStateGuide` ("DA Identity is empty — let's fill it in"), gated by `isFreshInstall = !health.identity_loaded`. The 200-vs-404 split has one shared root — `assistantModule` is `null` — plus a trailing-slash routing quirk. See [§1a. The 200-page / 404-API paradox](#1a-the-200-page--404-api-paradox-added-2026-07-03).
-> 2. **Cause C is RESOLVED — a DA identity now exists.** `DAInterview.ts` was run 2026-07-03 17:58; `PAI/USER/DA/garry/` and `_registry.yaml` (`primary: garry`, enabled) now exist. "No populated DA identity exists anywhere" is no longer true. See [§4. Cause C — now RESOLVED](#4-cause-c--now-resolved-2026-07-03).
+> 1. **The page no longer "renders blank" — it returns HTTP 200 and shows an empty-state guide.** The `/assistant` *shell* URL returns **200** (Next.js static fallback); only its data APIs (`/assistant/identity|health|personality|tasks|diary|opinions`) return **404**. *(As of 2026-07-04 those data APIs return 200 — see the banner above.)* The 200-vs-404 split had one shared root — `assistantModule` was `null` — plus a trailing-slash routing quirk. See [§1a. The 200-page / 404-API paradox](#1a-the-200-page--404-api-paradox-added-2026-07-03).
+> 2. **Cause C is RESOLVED — a DA identity now exists.** `DAInterview.ts` was run 2026-07-03 17:58; `PAI/USER/DA/garry/` and `_registry.yaml` (`primary: garry`, enabled) now exist. See [§4. Cause C — now RESOLVED](#4-cause-c--now-resolved-2026-07-03).
 >
-> **Net:** of the original three stacked causes, two remain open (module unbuilt + config-gated), one is resolved (identity generated). Enabling config alone still would not fix the 404s — the module must also be built.
+> **Net (as of 2026-07-03):** two causes remained open (module unbuilt + config-gated); both were closed 2026-07-04.
 
 ## TL;DR
 
-The empty `/assistant` identity had **three stacked causes, none of which is the Windows path bug** you also noticed. **As of the 2026-07-03 re-verification, two remain and one (Cause C) is resolved:**
+The empty `/assistant` identity had **three stacked causes, none of which is the Windows path bug** you also noticed. **As of 2026-07-04, all three are RESOLVED** (this TL;DR describes the diagnosis at investigation time; see the top banner for the resolved state):
 
-1. **The Pulse DA module does not exist.** `pulse.ts` imports `./Assistant/module`, but that file was never written — the DA subsystem is documented as *"Architecture complete, pending implementation."* So `assistantModule` stays `null`, the `/assistant/*` **data** endpoints return **404**, and the page shows an empty-state guide. *(Still open.)*
-2. **The DA subsystem is gated off anyway.** `config.da.enabled` defaults to `false` and there is no `[da]` section in `PULSE.toml` to turn it on. Even if the module existed, it would not load. *(Still open.)*
-3. **~~No populated DA identity exists on this machine.~~ RESOLVED 2026-07-03.** A DA named **garry** was generated via `DAInterview.ts` at 17:58 (`PAI/USER/DA/garry/DA_IDENTITY.{yaml,md}` + `_registry.yaml`, `primary: garry`, enabled). At the time of the 2026-06-30 investigation this had not been run; it has since. Note the bootstrap file `PAI/USER/DA_IDENTITY.md` (Name: PAI, Rachel voice) is still what `CLAUDE.md` `@`-imports — a separate, unrelated staleness. *(See §4.)*
+1. **~~The Pulse DA module does not exist.~~ RESOLVED 2026-07-04.** `Pulse/Assistant/module.ts` was written (+ `heartbeat.ts`/`store.ts`/`delegation.ts`); `pulse.ts` imports and loads it; `/assistant/*` data endpoints now return **200**. *(At investigation time the file was absent — historical record below.)*
+2. **~~The DA subsystem is gated off anyway.~~ RESOLVED 2026-07-04.** `PULSE.toml` now has a `[da]` section with `enabled = true`, so the module loads. *(At investigation time there was no `[da]` section.)*
+3. **~~No populated DA identity exists on this machine.~~ RESOLVED 2026-07-03.** A DA named **garry** was generated via `DAInterview.ts` (`PAI/USER/DA/garry/DA_IDENTITY.{yaml,md}` + `_registry.yaml`, `primary: garry`, enabled), and it now LOADS in Pulse (`identity_loaded: true`). Note the bootstrap file `PAI/USER/DA_IDENTITY.md` (Name: PAI, Rachel voice) is still what `CLAUDE.md` `@`-imports — a separate, unrelated staleness. *(See §4.)*
 
-**Important:** because Causes 1 and 2 are still open, `/assistant` renders empty **even though a DA identity now exists** — Pulse has no code path that reads `garry` yet. Enabling the config alone would not fix it; the module must also be built.
+**Now:** all three causes closed → `/assistant` renders `garry`'s live identity card, not the empty-state. The only empty surfaces are the Diary/Opinions tabs, whose writer jobs are phase-gated off by design.
 
 The Windows path bug is **real and separate** (see [the path section](#the-windows-path-bug-real-but-separate)). It does not affect the identity because the identity path (`join(PAI_DIR, …)`) is already platform-safe — and besides, the module that would read it doesn't run.
 
@@ -31,14 +43,15 @@ The Windows path bug is **real and separate** (see [the path section](#the-windo
 
 ## 1. Reproduction (what the live system actually does)
 
-| Probe | Result (2026-06-30) | Result (2026-07-03) |
-|-------|--------|--------|
-| `curl :31337/assistant` (page shell, **no trailing slash**) | *(not probed)* | **HTTP 200** — Next.js static page + `EmptyStateGuide` |
-| `curl :31337/assistant/` (**trailing slash**) | *(not probed)* | **HTTP 404** |
-| `curl :31337/assistant/identity` | **HTTP 404** | **HTTP 404** |
-| `curl :31337/assistant/health` | **HTTP 404** | **HTTP 404** |
-| `curl :31337/assistant/personality` `/tasks` `/diary` `/opinions` | **HTTP 404** (all) | **HTTP 404** (all) |
-| `curl :31337/api/wiki` (control) | HTTP 200 — server itself is healthy | HTTP 200 |
+| Probe | Result (2026-06-30) | Result (2026-07-03) | Result (2026-07-04) |
+|-------|--------|--------|--------|
+| `curl :31337/assistant` (page shell, **no trailing slash**) | *(not probed)* | **HTTP 200** — static page + `EmptyStateGuide` | **HTTP 200** — real identity card |
+| `curl :31337/assistant/identity` | **HTTP 404** | **HTTP 404** | **HTTP 200** |
+| `curl :31337/assistant/health` | **HTTP 404** | **HTTP 404** | **HTTP 200** (`identity_loaded: true`) |
+| `curl :31337/assistant/personality` `/tasks` `/diary` `/opinions` | **HTTP 404** (all) | **HTTP 404** (all) | **HTTP 200** (all) |
+| `curl :31337/api/wiki` (control) | HTTP 200 — server itself is healthy | HTTP 200 | HTTP 200 |
+
+*(2026-07-04: the module was built + `[da]` enabled, so every `/assistant/*` data API now returns 200. The paragraph and §1a below describe the pre-build 404 state as historical record.)*
 
 The `/assistant` React page ([assistant/page.tsx:203-208](../PAI/Pulse/Observability/src/app/assistant/page.tsx#L203-L208)) fetches those six endpoints via `localApiCall`. On a 404, `apiCall` throws ([local-api.ts:14-16](../PAI/Pulse/Observability/src/lib/local-api.ts#L14-L16)), the queries hold no data, and — because `health.identity_loaded` is never set — `isFreshInstall` is `true` and the page renders the `EmptyStateGuide` ([assistant/page.tsx:246,252](../PAI/Pulse/Observability/src/app/assistant/page.tsx#L246)). **The page is fine; it has nothing to show.**
 
@@ -56,7 +69,9 @@ if (assistantModule && pathname.startsWith("/assistant/")) { … }
 
 So the empty-state renders **precisely because its own data APIs 404**. Two masking factors make this hard to spot: the module-load `try/catch` ([pulse.ts:120-122](../PAI/Pulse/pulse.ts#L120)) degrades a missing module to a silent `warn`, and the routing quirk serves a misleading 200 empty-state instead of a visible "backend unavailable" error.
 
-## 2. Cause A — the Pulse Assistant module was never built
+## 2. Cause A — the Pulse Assistant module was never built — RESOLVED 2026-07-04
+
+> **RESOLVED 2026-07-04:** `Pulse/Assistant/module.ts` now exists (at exactly the path `pulse.ts:119` imports, `./Assistant/module`), alongside `heartbeat.ts`, `store.ts`, `delegation.ts`, and the `checks/da-*.ts` cron scripts. It exports `startAssistant`/`handleAssistantRequest`/`assistantHealth`/`stopAssistant` and reads `PAI/USER/DA/garry/`. The naming drift noted below was settled in favor of `Assistant/module.ts` (the daemon call-site is authoritative; `DaSubsystem.md` was updated to match). The 2026-06-30 archaeology below is the historical record of when the file was absent.
 
 `pulse.ts` wires the routes conditionally:
 
@@ -82,7 +97,9 @@ if (assistantModule && pathname.startsWith("/assistant/")) { … }
 
 So even the spec hasn't settled on a path. Whoever implements it will be writing it fresh.
 
-## 3. Cause B — the DA subsystem is disabled in config
+## 3. Cause B — the DA subsystem is disabled in config — RESOLVED 2026-07-04
+
+> **RESOLVED 2026-07-04:** `PULSE.toml` now has a `[da]` section (`enabled = true`, plus `heartbeat_schedule`/`diary_schedule`/`growth_schedule` and four `[[job]]` entries). `config.da.enabled` is `true`, so the module import at `pulse.ts:119` runs. (Registry-as-truth: which DA is primary still comes from `_registry.yaml`, not the toml.) The historical record below describes when no `[da]` section existed.
 
 ```ts
 // pulse.ts:206 — default when PULSE.toml has no [da] section:
@@ -139,7 +156,9 @@ There was **no `_registry.yaml`**, and **no `DA/{name}/` directory** for a real 
 
 **The architectural gap that ties it together.** The system moved from a flat `DA_IDENTITY.md` to a `DA/{name}/` model, but the startup import didn't follow: [CLAUDE.md:7](../CLAUDE.md#L7) still does `@PAI/USER/DA_IDENTITY.md` — the old flat path. So even after you run `DAInterview.ts`, the new `DA/{name}/DA_IDENTITY.md` would not be imported until that line is repointed (or the flat file regenerated from the YAML). Pulse, similarly, has no code reading either location yet (Cause A).
 
-## The Windows path bug (real, but separate)
+## The Windows path bug (real, but separate) — HARDENED 2026-07-04
+
+> **✅ HARDENED 2026-07-04.** The unsafe HOME fallbacks were swept across the Pulse subsystem and replaced with the canonical `process.env.HOME ?? process.env.USERPROFILE ?? homedir()` pattern (+ a `homedir` import where missing). A whole-class re-grep now returns **ZERO** `?? ""` / `|| ""` HOME fallbacks in `PULSE/`, and the daemon was restarted + re-probed (health/assistant/wiki all 200). **Gate-E correction to the original table below:** by the time of the sweep, the `?? "~"` files (setup.ts, modules/wiki.ts, VoiceServer/voice.ts, run-job.ts, pulse-unified.ts) were **already** on the safe pattern, and the stray `${HOME}` fossil directory was **already gone** — so the real remaining work was the `?? ""` set (14 hits / 12 files: calendar, airgradient-poll, messages-db, imessage, syslog, example-module, user-index, telegram, cost-aggregator, Performance/module ×2, github-work, github, life-morning-brief) plus 3 `|| ""` sites (observability.ts:1650, notification-governor, poller-meta-monitor). All fixed. The `observability.ts:554 .replace("${HOME}", HOME)` is a legitimate literal-expansion helper and was intentionally left. The original analysis below is preserved as the historical record.
 
 You were right that Pulse points at paths that don't resolve on Windows — but this is independent of the identity issue, and it bites at **autostart**, not in your interactive shell.
 
@@ -174,18 +193,20 @@ PAI/Pulse/Observability/${HOME}/.claude/PAI/MEMORY/LEARNING/SIGNALS/ratings.json
 
 ## What would actually fix the empty `/assistant` page
 
-Listed for completeness — **not done**, per request. **As of 2026-07-03, track 1 is complete; two tracks remain** to make `/assistant` populate:
+**As of 2026-07-04, all three tracks are complete — `/assistant` populates.** Listed for the record:
 
-1. **~~Generate a DA identity.~~ ✅ DONE 2026-07-03.** `DAInterview.ts` was run; `PAI/USER/DA/garry/DA_IDENTITY.{yaml,md}` + `_registry.yaml` now exist. *(Optional follow-up, unrelated to Pulse: repoint [CLAUDE.md:7](../CLAUDE.md#L7) `@PAI/USER/DA_IDENTITY.md` to `DA/garry/DA_IDENTITY.md`, or regenerate the flat file from the YAML, so Claude sessions load garry instead of the bootstrap default.)*
-2. **Build the Pulse module.** Implement the Assistant module (per [DaSubsystem.md](../PAI/DOCUMENTATION/Pulse/DaSubsystem.md), still pending) exposing `handleAssistantRequest` / `assistantHealth` / `startAssistant` / `stopAssistant`, reading `PAI/USER/DA/garry/`, at the path `pulse.ts:119` imports (`./Assistant/module`). *(Cause A — still open.)*
-3. **Enable + reconcile the config.** Add `[da]\nenabled = true` to `PULSE.toml` — or better, have Pulse derive `da.enabled` from `_registry.yaml` (single source of truth) so the config can't drift from the generated DA. Only with the module built *and* enabled do the `/assistant/*` endpoints stop 404ing. *(Cause B — still open.)*
+1. **~~Generate a DA identity.~~ ✅ DONE 2026-07-03.** `DAInterview.ts` was run; `PAI/USER/DA/garry/` + `_registry.yaml` exist. *(Optional follow-up still open, unrelated to Pulse: repoint [CLAUDE.md:7](../CLAUDE.md#L7) `@PAI/USER/DA_IDENTITY.md` to `DA/garry/DA_IDENTITY.md` so Claude sessions load garry instead of the bootstrap default.)*
+2. **~~Build the Pulse module.~~ ✅ DONE 2026-07-04.** The Assistant module was implemented at `./Assistant/module` exposing `handleAssistantRequest`/`assistantHealth`/`startAssistant`/`stopAssistant`, reading `PAI/USER/DA/garry/` — plus the fire-executor, diary/growth writers, approve path, and delegation. Forge cross-family audited.
+3. **~~Enable + reconcile the config.~~ ✅ DONE 2026-07-04.** `[da] enabled = true` added to `PULSE.toml`; primary still derives from `_registry.yaml` (registry-as-truth). With the module built AND enabled, the `/assistant/*` endpoints return 200.
 
-Separately, the **Windows path hardening** (replace the `?? ""` / `?? "~"` fallbacks with the `pulse.ts:24` canonical pattern across the ~22 files, and remove the stray `${HOME}` directory after confirming nothing unique lives in it) is its own task with its own blast radius on the live service.
+*(Remaining, by design: the `da-diary`/`da-growth` writer jobs ship phase-gated `enabled = false` pending an owner opt-in, so the Diary/Opinions tabs stay empty until enabled — not a bug.)*
+
+Separately, the **Windows path hardening** — **✅ DONE 2026-07-04.** All `?? ""` / `|| ""` HOME fallbacks in `PULSE/` were replaced with the `pulse.ts:24` canonical pattern (whole-class re-grep = 0 remaining); the `?? "~"` files were already safe and the stray `${HOME}` fossil dir was already gone by sweep time. Daemon restarted + re-probed (health/assistant/wiki 200). See the HARDENED banner in the Windows-path section above.
 
 ## One-line core insight
 
-The `/assistant` page is empty not because of a broken path but because the DA subsystem behind it was never built and is disabled in config — so even now that an identity exists (garry, generated 2026-07-03), Pulse has no code path that reads it. The page faithfully reflects a `null` `assistantModule`: a 200 shell wrapping 404 data APIs. The Windows path bug is a real, parallel issue that bites Pulse's *other* subsystems at autostart, not the identity.
+The `/assistant` page WAS empty not because of a broken path but because the DA subsystem behind it had not yet been built and was disabled in config. **As of 2026-07-04 all three gaps are closed** — the module is built, `[da]` is enabled, and `garry` loads — so `/assistant` now renders the live identity card (a 200 shell wrapping 200 data APIs). The Windows path bug remains a real, parallel issue that bites Pulse's *other* subsystems at autostart, not the identity, and is NOT addressed by this update.
 
-*(2026-07-03 update: of the original three gaps, "never given an identity" is now resolved; "never built" and "never enabled" remain.)*
+*(2026-07-04 update: all three original gaps — "never given an identity", "never built", "never enabled" — are now resolved. The only empties left are the phase-gated diary/opinions writer jobs, by design.)*
 
 *Investigation only. No files under `~/.claude/PAI/` or `c:/src/LifeOS/` (other than this report) were modified.*

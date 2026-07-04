@@ -1647,7 +1647,7 @@ function readDirMdFiles(dir: string): { name: string, content: string, sections:
 
 function handleUserIndexApi(filter: string | null): Response {
   try {
-    const PAI_DIR = process.env.PAI_DIR || join(process.env.HOME || "", ".claude", "PAI")
+    const PAI_DIR = process.env.PAI_DIR || join(process.env.HOME || process.env.USERPROFILE || homedir(), ".claude", "PAI")
     const indexPath = join(PAI_DIR, "Pulse", "state", "user-index.json")
     const raw = Bun.file(indexPath)
     if (!raw.size) {

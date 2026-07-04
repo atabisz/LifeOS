@@ -10,7 +10,8 @@
 
 import { join } from "path"
 
-const HOME = process.env.HOME ?? ""
+import { homedir } from "os"
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const STATE_FILE = join(HOME, ".claude", "PAI", "PULSE", "state", "github-seen.json")
 // Repos to monitor for new issues / activity. Override via PAI_PULSE_REPOS
 // env var (comma-separated "owner/name" pairs). Empty default keeps fresh

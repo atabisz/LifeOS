@@ -32,7 +32,8 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync } fr
 import { join, dirname } from "path";
 import { createHash } from "crypto";
 
-const HOME = process.env.HOME || "";
+import { homedir } from "os"
+const HOME = process.env.HOME || process.env.USERPROFILE || homedir();
 const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude", "PAI");
 const STATE_FILE = join(PAI_DIR, "Pulse", "state", "notification-governor.json");
 const LOG_FILE = join(PAI_DIR, "MEMORY", "OBSERVABILITY", "notification-governor.jsonl");

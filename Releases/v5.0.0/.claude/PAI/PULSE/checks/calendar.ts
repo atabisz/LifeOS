@@ -11,7 +11,8 @@
 import { readFileSync } from "fs"
 import { join } from "path"
 
-const HOME = process.env.HOME ?? ""
+import { homedir } from "os"
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
 const LOOKAHEAD_MS = 30 * 60 * 1000
 
 function loadEnv(): Record<string, string> {
