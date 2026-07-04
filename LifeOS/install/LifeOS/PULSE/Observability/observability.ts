@@ -2624,6 +2624,31 @@ function computeStranded(
   return { work_no_goal, goals_no_strategy, strategies_idle }
 }
 
+// Build the owner card from the principal identity file(s). `name` from the
+// `**Name:**` field (BASICINFO.md, then ABOUTME.md); `day` is the server date;
+// `streak` has no store → 0. Returns null when only the bootstrap placeholder
+// ("User" / "Your Name") is present, so the client shows no owner rather than a
+// placeholder one.
+function buildOwner(): { name: string; day: string; streak: number } | null {
+  const candidates = ["BASICINFO.md", "ABOUTME.md"]
+  let name = ""
+  for (const file of candidates) {
+    const content = readMd(join(USER_DIR, file))
+    if (!content) continue
+    // Capture the rest of the Name LINE only (stop at newline/pipe), strip
+    // trailing markdown/list punctuation — avoids running into the next bullet.
+    const m = content.match(/\*\*Name:\*\*\s*([^\n|]+)/)
+    if (m && m[1]) {
+      const cand = m[1].replace(/[*_`]/g, "").replace(/\s*[-–—]\s*$/, "").trim()
+      if (cand && !/^(user|your\s+name|name|tbd|\(interview\))$/i.test(cand)) { name = cand; break }
+    }
+  }
+  if (!name) return null
+  const now = new Date()
+  const day = now.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })
+  return { name, day, streak: 0 }
+}
+
 // Parse `## Ideal State` prose into { horizon, note }. Horizon = a `by <date>`
 // / `**Horizon:**` hint if present; note = the first non-empty line.
 function buildIdealStateMeta(raw: string): { horizon: string; note: string } | null {
@@ -3434,6 +3459,7 @@ async function handleTelosOverview(): Promise<Response> {
     const projects = parseProjects(projectsRaw)
     const stranded = computeStranded(goals, strategies, projects)
     const idealStateMeta = buildIdealStateMeta(idealStateRaw)
+    const owner = buildOwner()
 
     const dimensions = buildDimensionsFromIdealState()
     const snapshot = buildSnapshotFromCurrentState()
@@ -3474,7 +3500,7 @@ async function handleTelosOverview(): Promise<Response> {
 
     return Response.json({
       meta: { isPersonalized },
-      owner: null, // owner.name has no clean identity source in this handler; day/streak need a store — deferred (Phase 4 note)
+      owner, // name from BASICINFO/ABOUTME **Name:**, day=server date, streak=0 (no store yet)
       idealState: idealStateMeta,
       dimensions: dimensions.length > 0 ? dimensions : null,
       snapshot,
