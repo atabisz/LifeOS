@@ -69,16 +69,26 @@ interface InterviewData {
   presetKey: string;
   traits: Traits;
   formality: number;
+  voiceProvider?: "piper" | "elevenlabs";
+  voiceId?: string;
+  piperVoiceModel?: string;
   // Standard mode
   personalityDescription?: string;
   mustAsk?: string[];
   writingStyle?: string;
+  whatILove?: string[];
+  whatIDislike?: string[];
+  writingAvoid?: string[];
+  writingPrefer?: string[];
   // Deep mode
   companionName?: string;
   companionSpecies?: string;
   companionPersonality?: string;
   relationshipDynamic?: string;
   initialBeliefs?: Array<{ topic: string; position: string }>;
+  workingStyle?: string[];
+  intellectualInterests?: string[];
+  anchors?: Array<{ name: string; description: string }>;
 }
 
 type Depth = "quick" | "standard" | "deep";
@@ -208,6 +218,76 @@ function askChoice(question: string, options: string[], descriptions?: string[])
   }
 }
 
+// ── Voice catalogue ──────────────────────────────────────────────────────────
+// Two TTS providers: piper (local neural TTS — offline / behind corporate
+// networks where ElevenLabs is blocked; keyed by piper_voice_model) and
+// elevenlabs (cloud — keyed by voice_id). Piper is the default. "none" leaves
+// the voice unset (an honest empty).
+const ELEVENLABS_CATALOGUE: Array<{ label: string; id: string }> = [
+  { label: "Rachel — calm, narration (public)", id: "21m00Tcm4TlvDq8ikWAM" },
+  { label: "Adam — deep, authoritative (public)", id: "pNInz6obpgDQGcFmaJgB" },
+  { label: "Antoni — warm, well-rounded (public)", id: "ErXwobaYiN019PkySvjV" },
+];
+const PIPER_CATALOGUE: Array<{ label: string; model: string }> = [
+  { label: "en_US · Amy (medium)", model: "en_US-amy-medium.onnx" },
+  { label: "en_US · Ryan (high)", model: "en_US-ryan-high.onnx" },
+  { label: "en_GB · Alan (medium)", model: "en_GB-alan-medium.onnx" },
+];
+
+interface VoiceChoice { provider: "piper" | "elevenlabs"; voiceId: string; piperVoiceModel: string; }
+
+/** Provider-first voice picker. Piper (offline) is offered first. Deferring
+ *  leaves everything empty. `current` carries the existing choice on --update. */
+function askVoice(current?: Partial<VoiceChoice>): VoiceChoice {
+  const hasCurrent = !!(current?.voiceId || current?.piperVoiceModel);
+  const opts = hasCurrent ? ["keep", "piper", "elevenlabs", "none"] : ["piper", "elevenlabs", "none"];
+  const descs = hasCurrent
+    ? [`Keep current (${current?.provider}: ${current?.piperVoiceModel || current?.voiceId})`,
+       "Switch to Piper — local, offline / corporate-network friendly",
+       "Switch to ElevenLabs — cloud, needs network + API key",
+       "Clear the voice — leave unset"]
+    : ["Local neural TTS — offline / behind corporate networks (recommended)",
+       "Cloud TTS — needs network access and an API key",
+       "Decide later — leave voice unset"];
+  const provider = askChoice("  Which voice provider?", opts, descs);
+
+  if (provider === "keep") {
+    return { provider: current?.provider ?? "piper", voiceId: current?.voiceId ?? "", piperVoiceModel: current?.piperVoiceModel ?? "" };
+  }
+  if (provider === "none") {
+    return { provider: current?.provider ?? "piper", voiceId: "", piperVoiceModel: "" };
+  }
+  if (provider === "piper") {
+    println("  Pick a Piper voice model:");
+    for (let i = 0; i < PIPER_CATALOGUE.length; i++) println(`  ${i + 1}. ${PIPER_CATALOGUE[i].label}`);
+    const customIdx = PIPER_CATALOGUE.length + 1;
+    println(`  ${customIdx}. Custom — enter a .onnx model filename`);
+    while (true) {
+      const num = parseInt(prompt(`Choose (1-${customIdx}):`) ?? "", 10);
+      if (!isNaN(num) && num >= 1 && num <= PIPER_CATALOGUE.length) return { provider: "piper", voiceId: "", piperVoiceModel: PIPER_CATALOGUE[num - 1].model };
+      if (num === customIdx) return { provider: "piper", voiceId: "", piperVoiceModel: ask("  Piper voice model filename (e.g. en_US-amy-medium.onnx)") };
+      println(`  Pick a number between 1 and ${customIdx}.`);
+    }
+  }
+  // elevenlabs
+  println("  Pick an ElevenLabs voice:");
+  for (let i = 0; i < ELEVENLABS_CATALOGUE.length; i++) println(`  ${i + 1}. ${ELEVENLABS_CATALOGUE[i].label}`);
+  const customIdx = ELEVENLABS_CATALOGUE.length + 1;
+  while (true) {
+    const num = parseInt(prompt(`Choose (1-${customIdx}):`) ?? "", 10);
+    if (!isNaN(num) && num >= 1 && num <= ELEVENLABS_CATALOGUE.length) return { provider: "elevenlabs", voiceId: ELEVENLABS_CATALOGUE[num - 1].id, piperVoiceModel: "" };
+    if (num === customIdx) return { provider: "elevenlabs", voiceId: ask("  Paste the ElevenLabs voice id"), piperVoiceModel: "" };
+    println(`  Pick a number between 1 and ${customIdx}.`);
+  }
+}
+
+/** Comma-list capture; empty answer preserves the existing value (--update). */
+function askListKeep(question: string, existing?: string[]): string[] {
+  const raw = prompt(`${question}:`);
+  if (raw === null || raw.trim() === "") return existing ?? [];
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
 // ── Banner ───────────────────────────────────────────────────────────────────
 
 function printBanner(): void {
@@ -252,6 +332,10 @@ function runPhase1(presets: Record<string, Preset>): InterviewData {
   traits.formality = formalityRaw * 20;
   println();
 
+  // Q5: Voice (provider-first — Piper default for offline/corporate networks)
+  const voice = askVoice();
+  println();
+
   // Derive full name and display name
   const daFullName = daName;
   const displayName = daName.toUpperCase();
@@ -264,6 +348,9 @@ function runPhase1(presets: Record<string, Preset>): InterviewData {
     presetKey,
     traits,
     formality: formalityRaw,
+    voiceProvider: voice.provider,
+    voiceId: voice.voiceId,
+    piperVoiceModel: voice.piperVoiceModel,
   };
 }
 
@@ -306,6 +393,22 @@ function runPhase2(data: InterviewData): InterviewData {
   data.writingStyle = style;
   println();
 
+  // Q8: What the DA loves / dislikes (personality preferences).
+  println("  What does your DA love? (comma-separated, Enter to keep/skip)");
+  data.whatILove = askListKeep("  ", data.whatILove);
+  println();
+  println("  What does your DA dislike? (comma-separated, Enter to keep/skip)");
+  data.whatIDislike = askListKeep("  ", data.whatIDislike);
+  println();
+
+  // Q9: Writing phrases to avoid / prefer.
+  println("  Phrases the DA should AVOID in writing? (comma-separated, Enter to keep/skip)");
+  data.writingAvoid = askListKeep("  ", data.writingAvoid);
+  println();
+  println("  Phrases the DA should PREFER? (comma-separated, Enter to keep/skip)");
+  data.writingPrefer = askListKeep("  ", data.writingPrefer);
+  println();
+
   return data;
 }
 
@@ -345,14 +448,37 @@ function runPhase3(data: InterviewData): InterviewData {
   data.relationshipDynamic = dynamic;
   println();
 
-  // Q10: Topics / beliefs
-  println("  Topics you care about most? (comma-separated)");
-  const topicsRaw = ask("  ", "technology, creativity, productivity");
-  const topics = topicsRaw.split(",").map((s) => s.trim()).filter(Boolean);
-  data.initialBeliefs = topics.map((t) => ({
-    topic: t,
-    position: "Interested and learning",
-  }));
+  // Q10: Topics / beliefs (also seeds intellectual_interests). Raw prompt so an
+  // empty answer on --update preserves carried values instead of overwriting
+  // with the boilerplate triplet.
+  println("  Topics you care about most? (comma-separated, Enter to keep/skip)");
+  const topicsRaw = prompt("  :");
+  const hasExisting = (data.intellectualInterests?.length ?? 0) > 0 || (data.initialBeliefs?.length ?? 0) > 0;
+  if (topicsRaw !== null && topicsRaw.trim() !== "") {
+    const topics = topicsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    data.initialBeliefs = topics.map((t) => ({ topic: t, position: "Interested and learning" }));
+    data.intellectualInterests = topics;
+  } else if (!hasExisting) {
+    const topics = ["technology", "creativity", "productivity"];
+    data.initialBeliefs = topics.map((t) => ({ topic: t, position: "Interested and learning" }));
+    data.intellectualInterests = topics;
+  }
+  println();
+
+  // Q11: Working style
+  println("  How does your DA like to work? (comma-separated, Enter to keep/skip)");
+  data.workingStyle = askListKeep("  ", data.workingStyle);
+  println();
+
+  // Q12: Anchors — defining moments (name: description). Empty preserves.
+  println("  Any defining moments that shaped your DA? (name: description; comma-separated, Enter to keep/skip)");
+  const anchorsRaw = prompt("  :");
+  if (anchorsRaw !== null && anchorsRaw.trim() !== "") {
+    data.anchors = anchorsRaw.split(",").map((s) => s.trim()).filter(Boolean).map((entry) => {
+      const idx = entry.indexOf(":");
+      return idx === -1 ? { name: entry, description: "" } : { name: entry.slice(0, idx).trim(), description: entry.slice(idx + 1).trim() };
+    });
+  }
   println();
 
   return data;
@@ -417,6 +543,23 @@ companion:
   relationship: "Ambient micro-commentary. We don't overlap."`;
   }
 
+  // YAML list helper: nested `- "..."` array at an indent, or `[]`.
+  const yamlList = (items: string[] | undefined, indent: string): string => {
+    const list = items ?? [];
+    if (list.length === 0) return "[]";
+    return "\n" + list.map((v) => `${indent}- "${escYaml(v)}"`).join("\n");
+  };
+
+  // Preferences + anchors blocks (under personality:).
+  const preferencesBlock = `  preferences:
+    what_i_love: ${yamlList(data.whatILove, "      ")}
+    what_i_dislike: ${yamlList(data.whatIDislike, "      ")}
+    working_style: ${yamlList(data.workingStyle, "      ")}
+    intellectual_interests: ${yamlList(data.intellectualInterests, "      ")}`;
+  const anchorsBlock = (data.anchors && data.anchors.length > 0)
+    ? "  anchors:\n" + data.anchors.map((a) => `    - name: "${escYaml(a.name)}"\n      description: "${escYaml(a.description)}"`).join("\n")
+    : "  anchors: []";
+
   // Growth anchors
   let growthBlock: string;
   if (data.initialBeliefs && data.initialBeliefs.length > 0) {
@@ -450,10 +593,13 @@ core:
     ${data.presetKey} personality style.
 
 # -- Voice ---------------------------------------------------------------
+# provider: piper (local, offline / corporate-network friendly) | elevenlabs
+# (cloud). Piper is keyed by piper_voice_model, ElevenLabs by main.voice_id.
 voice:
-  provider: elevenlabs
+  provider: ${data.voiceProvider ?? "piper"}
+  piper_voice_model: "${escYaml(data.piperVoiceModel ?? "")}"
   main:
-    voice_id: ""
+    voice_id: "${escYaml(data.voiceId ?? "")}"
     stability: 0.85
     similarity_boost: 0.7
     style: 0.3
@@ -478,13 +624,15 @@ personality:
     precision: ${data.traits.precision}
     curiosity: ${data.traits.curiosity}
     playfulness: ${data.traits.playfulness}
+${preferencesBlock}
+${anchorsBlock}
 
 # -- Writing Voice -------------------------------------------------------
 writing:
   style: >
     ${writingDesc}
-  avoid: []
-  prefer: []
+  avoid: ${yamlList(data.writingAvoid, "    ")}
+  prefer: ${yamlList(data.writingPrefer, "    ")}
   modes:
     conversational: true
     operational: false
@@ -520,7 +668,11 @@ ${growthBlock}
 }
 
 function escYaml(s: string): string {
-  return s.replace(/"/g, '\\"').replace(/\n/g, " ");
+  // Escape backslash FIRST (it is the YAML escape char in a double-quoted
+  // scalar), then quotes, then collapse newlines. A raw `\` in free-text — e.g.
+  // a Windows path — otherwise becomes an invalid escape sequence that fails
+  // frontmatter parse (Forge audit F1, ported from the live tree fix).
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, " ");
 }
 
 // ── Markdown Body Generation (lives below the YAML frontmatter) ─────────────
