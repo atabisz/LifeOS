@@ -76,3 +76,4 @@ credentials/
 
 # Added by ggshield
 .cache_ggshield
+scripts/upstream-sync/baseline/
