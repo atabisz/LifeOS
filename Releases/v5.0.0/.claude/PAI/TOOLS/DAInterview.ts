@@ -65,19 +65,59 @@ interface InterviewData {
   presetKey: string;
   traits: Traits;
   formality: number;
+  voiceProvider?: "piper" | "elevenlabs";
+  voiceId?: string;
+  piperVoiceModel?: string;
   // Standard mode
   personalityDescription?: string;
   mustAsk?: string[];
   writingStyle?: string;
+  whatILove?: string[];
+  whatIDislike?: string[];
+  writingAvoid?: string[];
+  writingPrefer?: string[];
   // Deep mode
   companionName?: string;
   companionSpecies?: string;
   companionPersonality?: string;
   relationshipDynamic?: string;
   initialBeliefs?: Array<{ topic: string; position: string }>;
+  workingStyle?: string[];
+  intellectualInterests?: string[];
+  anchors?: Array<{ name: string; description: string }>;
 }
 
 type Depth = "quick" | "standard" | "deep";
+
+// ── Voice catalogue ──────────────────────────────────────────────────────────
+// The voice server (PULSE/VoiceServer/voice.ts) supports two TTS providers:
+//   - piper     : local neural TTS, no network/API key — works offline and on
+//                 locked-down corporate networks where ElevenLabs is blocked.
+//                 Keyed by a piper_voice_model path, NOT a voice_id.
+//   - elevenlabs: cloud TTS keyed by a voice_id + API key.
+// Piper is the DEFAULT here because it works everywhere; ElevenLabs is offered
+// for installs that have network access and a key. Picking "none" leaves the
+// voice unset (the backend surfaces {provider} only — an honest-empty voice).
+
+// Curated ElevenLabs public voice IDs (only relevant when the ElevenLabs
+// provider is chosen and the network allows it).
+const ELEVENLABS_CATALOGUE: Array<{ label: string; id: string }> = [
+  { label: "Rachel — calm, narration (public)", id: "21m00Tcm4TlvDq8ikWAM" },
+  { label: "Adam — deep, authoritative (public)", id: "pNInz6obpgDQGcFmaJgB" },
+  { label: "Antoni — warm, well-rounded (public)", id: "ErXwobaYiN019PkySvjV" },
+  { label: "Bella — soft, expressive (public)", id: "EXAVITQu4vr4xnSDxMaL" },
+  { label: "Josh — young, energetic (public)", id: "TxGEqnHWrfWFTfGW9XjX" },
+];
+
+// Common Piper voice models (the value is the .onnx model name; the install's
+// piper_binary + model PATH are configured in settings.json, not here — the
+// interview records which model the DA prefers so voice config is portable).
+const PIPER_CATALOGUE: Array<{ label: string; model: string }> = [
+  { label: "en_US · Amy (medium)", model: "en_US-amy-medium.onnx" },
+  { label: "en_US · Ryan (high)", model: "en_US-ryan-high.onnx" },
+  { label: "en_GB · Alan (medium)", model: "en_GB-alan-medium.onnx" },
+  { label: "en_US · Lessac (medium)", model: "en_US-lessac-medium.onnx" },
+];
 
 // ── YAML Parsing (minimal, no deps) ─────────────────────────────────────────
 
@@ -204,6 +244,106 @@ function askChoice(question: string, options: string[], descriptions?: string[])
   }
 }
 
+interface VoiceChoice {
+  provider: "piper" | "elevenlabs";
+  voiceId: string;        // ElevenLabs id ("" when Piper or deferred)
+  piperVoiceModel: string; // Piper .onnx model ("" when ElevenLabs or deferred)
+}
+
+/**
+ * Ask the principal to pick a TTS provider and a voice within it. Piper (local,
+ * offline-capable) is offered first because it works on locked-down networks
+ * where ElevenLabs is blocked. Deferring leaves everything empty — the backend
+ * surfaces {provider} only, never a fabricated voice. `current` carries the
+ * existing choice on --update.
+ */
+function askVoice(current?: Partial<VoiceChoice>): VoiceChoice {
+  // On --update, offer "keep current" as the first option so the existing voice
+  // is preserved by default (Forge audit F3: the old `none` branch wiped it).
+  const hasCurrent = !!(current?.voiceId || current?.piperVoiceModel);
+  const options = hasCurrent
+    ? ["keep", "piper", "elevenlabs", "none"]
+    : ["piper", "elevenlabs", "none"];
+  const descriptions = hasCurrent
+    ? [
+        `Keep current (${current?.provider}: ${current?.piperVoiceModel || current?.voiceId})`,
+        "Switch to local neural TTS — works offline / behind corporate networks",
+        "Switch to cloud TTS — needs network access and an API key",
+        "Clear the voice — leave it unset",
+      ]
+    : [
+        "Local neural TTS — works offline / behind corporate networks (recommended)",
+        "Cloud TTS — needs network access and an API key",
+        "Decide later — leave voice unset",
+      ];
+  const provider = askChoice("  Which voice provider?", options, descriptions);
+
+  if (provider === "keep") {
+    return {
+      provider: current?.provider ?? "piper",
+      voiceId: current?.voiceId ?? "",
+      piperVoiceModel: current?.piperVoiceModel ?? "",
+    };
+  }
+
+  if (provider === "none") {
+    // Explicit clear. (Distinct from "keep" — the user chose to unset.)
+    return { provider: current?.provider ?? "piper", voiceId: "", piperVoiceModel: "" };
+  }
+
+  if (provider === "piper") {
+    println("  Pick a Piper voice model:");
+    for (let i = 0; i < PIPER_CATALOGUE.length; i++) {
+      println(`  ${i + 1}. ${PIPER_CATALOGUE[i].label}`);
+    }
+    const customIdx = PIPER_CATALOGUE.length + 1;
+    println(`  ${customIdx}. Custom — enter a .onnx model filename`);
+    while (true) {
+      const raw = prompt(`Choose (1-${customIdx}):`);
+      const num = parseInt(raw ?? "", 10);
+      if (!isNaN(num) && num >= 1 && num <= PIPER_CATALOGUE.length) {
+        return { provider: "piper", voiceId: "", piperVoiceModel: PIPER_CATALOGUE[num - 1].model };
+      }
+      if (num === customIdx) {
+        const model = ask("  Piper voice model filename (e.g. en_US-amy-medium.onnx)");
+        return { provider: "piper", voiceId: "", piperVoiceModel: model };
+      }
+      println(`  Pick a number between 1 and ${customIdx}.`);
+    }
+  }
+
+  // elevenlabs
+  println("  Pick an ElevenLabs voice:");
+  for (let i = 0; i < ELEVENLABS_CATALOGUE.length; i++) {
+    println(`  ${i + 1}. ${ELEVENLABS_CATALOGUE[i].label}`);
+  }
+  const customIdx = ELEVENLABS_CATALOGUE.length + 1;
+  while (true) {
+    const raw = prompt(`Choose (1-${customIdx}):`);
+    const num = parseInt(raw ?? "", 10);
+    if (!isNaN(num) && num >= 1 && num <= ELEVENLABS_CATALOGUE.length) {
+      return { provider: "elevenlabs", voiceId: ELEVENLABS_CATALOGUE[num - 1].id, piperVoiceModel: "" };
+    }
+    if (num === customIdx) {
+      const id = ask("  Paste the ElevenLabs voice id");
+      return { provider: "elevenlabs", voiceId: id, piperVoiceModel: "" };
+    }
+    println(`  Pick a number between 1 and ${customIdx}.`);
+  }
+}
+
+/**
+ * Parse a comma-separated answer into a trimmed list. An EMPTY answer preserves
+ * the existing value (for --update):
+ * pressing Enter keeps `existing` rather than clearing it to []. A non-empty
+ * answer replaces it.
+ */
+function askListKeep(question: string, existing?: string[]): string[] {
+  const raw = prompt(`${question}:`);
+  if (raw === null || raw.trim() === "") return existing ?? [];
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
 // ── Banner ───────────────────────────────────────────────────────────────────
 
 function printBanner(): void {
@@ -248,6 +388,10 @@ function runPhase1(presets: Record<string, Preset>): InterviewData {
   traits.formality = formalityRaw * 20;
   println();
 
+  // Q5: Voice (provider-first — Piper default for offline/corporate networks)
+  const voice = askVoice();
+  println();
+
   // Derive full name and display name
   const daFullName = daName;
   const displayName = daName.toUpperCase();
@@ -260,6 +404,9 @@ function runPhase1(presets: Record<string, Preset>): InterviewData {
     presetKey,
     traits,
     formality: formalityRaw,
+    voiceProvider: voice.provider,
+    voiceId: voice.voiceId,
+    piperVoiceModel: voice.piperVoiceModel,
   };
 }
 
@@ -302,6 +449,23 @@ function runPhase2(data: InterviewData): InterviewData {
   data.writingStyle = style;
   println();
 
+  // Q8: What the DA loves / dislikes (personality preferences — shown on the tab).
+  // Preserve existing values on an empty answer so --update never wipes them.
+  println("  What does your DA love? (comma-separated, Enter to keep/skip)");
+  data.whatILove = askListKeep("  ", data.whatILove);
+  println();
+  println("  What does your DA dislike? (comma-separated, Enter to keep/skip)");
+  data.whatIDislike = askListKeep("  ", data.whatIDislike);
+  println();
+
+  // Q9: Writing phrases to avoid / prefer
+  println("  Phrases or habits the DA should AVOID in writing? (comma-separated, Enter to keep/skip)");
+  data.writingAvoid = askListKeep("  ", data.writingAvoid);
+  println();
+  println("  Phrases or openers the DA should PREFER? (comma-separated, Enter to keep/skip)");
+  data.writingPrefer = askListKeep("  ", data.writingPrefer);
+  println();
+
   return data;
 }
 
@@ -341,14 +505,49 @@ function runPhase3(data: InterviewData): InterviewData {
   data.relationshipDynamic = dynamic;
   println();
 
-  // Q10: Topics / beliefs
-  println("  Topics you care about most? (comma-separated)");
-  const topicsRaw = ask("  ", "technology, creativity, productivity");
-  const topics = topicsRaw.split(",").map((s) => s.trim()).filter(Boolean);
-  data.initialBeliefs = topics.map((t) => ({
-    topic: t,
-    position: "Interested and learning",
-  }));
+  // Q10: Topics / beliefs (also seed intellectual_interests from the same answer).
+  // Use a raw prompt (NOT ask-with-default) so an empty answer on --update
+  // PRESERVES carried interests/beliefs instead of overwriting them with the
+  // boilerplate triplet (Forge audit F4). A fresh run with no answer falls back
+  // to the default set.
+  println("  Topics you care about most? (comma-separated, Enter to keep/skip)");
+  const topicsRaw = prompt("  :");
+  const hasExisting = (data.intellectualInterests?.length ?? 0) > 0 || (data.initialBeliefs?.length ?? 0) > 0;
+  if (topicsRaw !== null && topicsRaw.trim() !== "") {
+    const topics = topicsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    data.initialBeliefs = topics.map((t) => ({ topic: t, position: "Interested and learning" }));
+    data.intellectualInterests = topics;
+  } else if (!hasExisting) {
+    // Fresh run, no answer → sensible default seed.
+    const topics = ["technology", "creativity", "productivity"];
+    data.initialBeliefs = topics.map((t) => ({ topic: t, position: "Interested and learning" }));
+    data.intellectualInterests = topics;
+  }
+  // else: --update with empty answer → keep carried interests/beliefs.
+  println();
+
+  // Q11: Working style (how the DA likes to work — shown as a preference on the tab)
+  println("  How does your DA like to work? (comma-separated traits, Enter to keep/skip)");
+  data.workingStyle = askListKeep("  ", data.workingStyle);
+  println();
+
+  // Q12: Anchors — defining moments that shaped the personality.
+  // Empty answer preserves existing anchors (--update safe).
+  println("  Any defining moments that shaped your DA? (name: description; comma-separated, Enter to keep/skip)");
+  println("  e.g. \"First session: the moment we started building together\"");
+  const anchorsRaw = prompt("  :");
+  if (anchorsRaw !== null && anchorsRaw.trim() !== "") {
+    data.anchors = anchorsRaw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((entry) => {
+        const idx = entry.indexOf(":");
+        if (idx === -1) return { name: entry, description: "" };
+        return { name: entry.slice(0, idx).trim(), description: entry.slice(idx + 1).trim() };
+      });
+  }
+  // else: keep whatever was carried in (existing anchors) — do not clear.
   println();
 
   return data;
@@ -409,6 +608,32 @@ companion:
   relationship: "Ambient micro-commentary. We don't overlap."`;
   }
 
+  // YAML list helper: emit a nested string array at a given indent, or `[]`.
+  const yamlList = (items: string[] | undefined, indent: string): string => {
+    const list = items ?? [];
+    if (list.length === 0) return "[]";
+    return "\n" + list.map((v) => `${indent}- "${escYaml(v)}"`).join("\n");
+  };
+
+  // Preferences block (under personality:) — the four arrays the tab renders.
+  const preferencesBlock = `  preferences:
+    what_i_love: ${yamlList(data.whatILove, "      ")}
+    what_i_dislike: ${yamlList(data.whatIDislike, "      ")}
+    working_style: ${yamlList(data.workingStyle, "      ")}
+    intellectual_interests: ${yamlList(data.intellectualInterests, "      ")}`;
+
+  // Anchors block (under personality:) — defining moments.
+  let anchorsBlock: string;
+  if (data.anchors && data.anchors.length > 0) {
+    anchorsBlock =
+      "  anchors:\n" +
+      data.anchors
+        .map((a) => `    - name: "${escYaml(a.name)}"\n      description: "${escYaml(a.description)}"`)
+        .join("\n");
+  } else {
+    anchorsBlock = "  anchors: []";
+  }
+
   // Growth anchors
   let growthBlock: string;
   if (data.initialBeliefs && data.initialBeliefs.length > 0) {
@@ -442,10 +667,13 @@ core:
     ${data.presetKey} personality style.
 
 # -- Voice ---------------------------------------------------------------
+# provider: piper (local, offline) | elevenlabs (cloud). Piper is keyed by
+# piper_voice_model; ElevenLabs by main.voice_id. The unused key stays empty.
 voice:
-  provider: elevenlabs
+  provider: ${data.voiceProvider ?? "piper"}
+  piper_voice_model: "${escYaml(data.piperVoiceModel ?? "")}"
   main:
-    voice_id: ""
+    voice_id: "${escYaml(data.voiceId ?? "")}"
     stability: 0.85
     similarity_boost: 0.7
     style: 0.3
@@ -470,13 +698,15 @@ personality:
     precision: ${data.traits.precision}
     curiosity: ${data.traits.curiosity}
     playfulness: ${data.traits.playfulness}
+${preferencesBlock}
+${anchorsBlock}
 
 # -- Writing Voice -------------------------------------------------------
 writing:
   style: >
     ${writingDesc}
-  avoid: []
-  prefer: []
+  avoid: ${yamlList(data.writingAvoid, "    ")}
+  prefer: ${yamlList(data.writingPrefer, "    ")}
   modes:
     conversational: true
     operational: false
@@ -512,7 +742,17 @@ ${growthBlock}
 }
 
 function escYaml(s: string): string {
-  return s.replace(/"/g, '\\"').replace(/\n/g, " ");
+  // Order matters: escape backslash FIRST (it is the YAML escape char in a
+  // double-quoted scalar), then quotes, then collapse newlines. Skipping the
+  // backslash escape makes any `\` in free-text — e.g. a Windows Piper model
+  // path C:\piper\voice.onnx — an invalid escape sequence that fails YAML.parse
+  // and 503s the whole Personality tab (Forge audit F1, reproduced live).
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, " ");
+}
+
+/** Reverse escYaml when reading a stored double-quoted value back (--update). */
+function unescYaml(s: string): string {
+  return s.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
 }
 
 // ── Markdown Generation ──────────────────────────────────────────────────────
@@ -710,6 +950,63 @@ function loadExistingIdentity(daDir: string): Partial<InterviewData> | null {
     data.formality = Math.round(traits.formality! / 20);
   }
 
+  // Voice (provider + piper model + elevenlabs id) — preserve on --update.
+  const providerMatch = content.match(/^\s*provider:\s*(\w+)/m);
+  if (providerMatch && (providerMatch[1] === "piper" || providerMatch[1] === "elevenlabs")) {
+    data.voiceProvider = providerMatch[1];
+  }
+  const piperMatch = content.match(/^\s*piper_voice_model:\s*"([^"]*)"/m);
+  if (piperMatch) data.piperVoiceModel = unescYaml(piperMatch[1]);
+  const voiceIdMatch = content.match(/^\s*voice_id:\s*"([^"]*)"/m);
+  if (voiceIdMatch) data.voiceId = unescYaml(voiceIdMatch[1]);
+
+  // New personality/writing arrays — parse a nested `- "..."` list under a
+  // named key so --update can carry them forward when a prompt is skipped.
+  // Values are unescYaml'd to reverse escYaml — otherwise a stored `\"`/`\\`
+  // grows on each --update (Forge audit F2). `$(?![\s\S])` is a true
+  // end-of-input anchor (JS regex has no \Z — F6).
+  const parseYamlStringList = (key: string): string[] | undefined => {
+    const re = new RegExp(`^\\s*${key}:\\s*(?:\\[\\])?\\s*$([\\s\\S]*?)(?=^\\s{0,4}\\w|^\\s*#|$(?![\\s\\S]))`, "m");
+    const block = content.match(re);
+    if (!block) return undefined;
+    // Escaped-quote-aware capture (`(?:\\.|[^"\\])*`): a naive [^"]* truncates at
+    // the first stored \" and DROPS the value on --update (Cato audit). This
+    // matches the full escaped scalar; unescYaml reverses escYaml.
+    const items = [...block[1].matchAll(/^\s*-\s*"((?:\\.|[^"\\])*)"/gm)].map((m) => unescYaml(m[1]));
+    return items.length > 0 ? items : undefined;
+  };
+  data.whatILove = parseYamlStringList("what_i_love") ?? data.whatILove;
+  data.whatIDislike = parseYamlStringList("what_i_dislike") ?? data.whatIDislike;
+  data.workingStyle = parseYamlStringList("working_style") ?? data.workingStyle;
+  data.intellectualInterests = parseYamlStringList("intellectual_interests") ?? data.intellectualInterests;
+  data.writingAvoid = parseYamlStringList("avoid") ?? data.writingAvoid;
+  data.writingPrefer = parseYamlStringList("prefer") ?? data.writingPrefer;
+
+  // Anchors — list of {name, description} under personality.anchors.
+  const anchorsBlock = content.match(/^\s*anchors:\s*$([\s\S]*?)(?=^\s{0,2}\w|^\s*#|$(?![\s\S]))/m);
+  if (anchorsBlock) {
+    const anchors: Array<{ name: string; description: string }> = [];
+    const anchorRe = /-\s*name:\s*"([^"]*)"\s*\n\s*description:\s*"([^"]*)"/g;
+    for (const m of anchorsBlock[1].matchAll(anchorRe)) {
+      anchors.push({ name: unescYaml(m[1]), description: unescYaml(m[2]) });
+    }
+    if (anchors.length > 0) data.anchors = anchors;
+  }
+
+  // Growth initial_beliefs — {topic, position} pairs under growth. Parsed back so
+  // a deep --update that skips the topics prompt preserves them (else they
+  // regenerate to []). intellectual_interests alone is not enough — the beliefs
+  // seed opinions.yaml on fresh creation.
+  const beliefsBlock = content.match(/^\s*initial_beliefs:\s*$([\s\S]*?)(?=^\s{0,2}\w|^\s*#|$(?![\s\S]))/m);
+  if (beliefsBlock) {
+    const beliefs: Array<{ topic: string; position: string }> = [];
+    const beliefRe = /-\s*topic:\s*"([^"]*)"\s*\n\s*position:\s*"([^"]*)"/g;
+    for (const m of beliefsBlock[1].matchAll(beliefRe)) {
+      beliefs.push({ topic: unescYaml(m[1]), position: unescYaml(m[2]) });
+    }
+    if (beliefs.length > 0) data.initialBeliefs = beliefs;
+  }
+
   return data;
 }
 
@@ -842,13 +1139,38 @@ function main(): void {
     }
   }
 
-  // Create opinions.yaml if it doesn't exist
+  // Create opinions.yaml if it doesn't exist — seed from the interview's
+  // beliefs so the Personality tab's "Formed Opinions" card is non-empty on day
+  // one, before the (phase-gated) growth engine ever runs. Fields match the
+  // growth-engine contract (topic/position/confidence/source/evidence_count/
+  // first_observed/last_confirmed) so a later da-growth pass reads them cleanly.
+  // GUARD: never clobber an existing opinions.yaml (may hold grown opinions).
   const opinionsPath = join(daDir, "opinions.yaml");
   if (!existsSync(opinionsPath)) {
-    writeFileSync(
-      opinionsPath,
-      `# ${data.daName}'s Opinions\n# Confidence-weighted beliefs, updated by growth engine\n\nopinions: []\n`
-    );
+    const today = new Date().toISOString().split("T")[0];
+    const beliefs = data.initialBeliefs ?? [];
+    const header = `# ${data.daName}'s Opinions\n# Confidence-weighted beliefs, updated by growth engine\n# Fields: topic / position / confidence (frontend contract)\n\n`;
+    let body: string;
+    if (beliefs.length > 0) {
+      body =
+        "opinions:\n" +
+        beliefs
+          .map(
+            (b) =>
+              `  - topic: "${escYaml(b.topic)}"\n` +
+              `    position: "${escYaml(b.position)}"\n` +
+              `    confidence: 0.5\n` +
+              `    source: stated\n` +
+              `    evidence_count: 1\n` +
+              `    first_observed: "${today}"\n` +
+              `    last_confirmed: "${today}"`,
+          )
+          .join("\n") +
+        "\n";
+    } else {
+      body = "opinions: []\n";
+    }
+    writeFileSync(opinionsPath, header + body);
   }
 
   // Update registry
@@ -943,6 +1265,15 @@ function runPhase1WithDefaults(
   traits.formality = formalityRaw * 20;
   println();
 
+  println();
+
+  // Voice — offer to keep the existing choice or re-pick (provider-aware).
+  const voice = askVoice({
+    provider: existing.voiceProvider,
+    voiceId: existing.voiceId,
+    piperVoiceModel: existing.piperVoiceModel,
+  });
+
   const daFullName = daName;
   const displayName = daName.toUpperCase();
 
@@ -954,8 +1285,26 @@ function runPhase1WithDefaults(
     presetKey,
     traits,
     formality: formalityRaw,
-    // Carry over deep fields from existing
+    voiceProvider: voice.provider,
+    voiceId: voice.voiceId,
+    piperVoiceModel: voice.piperVoiceModel,
+    // Carry over deep/standard fields from existing so a shallow --update
+    // (quick depth, or skipped prompts) does NOT wipe previously-authored data.
     relationshipDynamic: existing.relationshipDynamic,
+    personalityDescription: existing.personalityDescription,
+    mustAsk: existing.mustAsk,
+    writingStyle: existing.writingStyle,
+    whatILove: existing.whatILove,
+    whatIDislike: existing.whatIDislike,
+    writingAvoid: existing.writingAvoid,
+    writingPrefer: existing.writingPrefer,
+    workingStyle: existing.workingStyle,
+    intellectualInterests: existing.intellectualInterests,
+    anchors: existing.anchors,
+    initialBeliefs: existing.initialBeliefs,
+    companionName: existing.companionName,
+    companionSpecies: existing.companionSpecies,
+    companionPersonality: existing.companionPersonality,
   };
 }
 
