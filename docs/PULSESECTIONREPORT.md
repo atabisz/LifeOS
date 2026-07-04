@@ -37,7 +37,7 @@ Every completion % below is a derived figure (treated as a conjecture until grou
 | # | Section | Nav | Goal (one-liner) | Completion | Maturity |
 |---|---------|-----|------------------|-----------:|---------:|
 | 1 | `/` Home | primary | Alias — re-exports the TELOS v7 app (same as `/telos`) | *(alias)* | *(alias)* |
-| 2 | `/telos` TELOS | Life | Strategic framework: 11 primitives in column/tree/graph views | 65% | 90% |
+| 2 | `/telos` TELOS | Life | Strategic framework: 11 primitives in column/tree/graph views | 85% ~~65%~~ | 98% ~~90%~~ |
 | 3 | `/life` LIFE | Life | Aggregate life overview across all domains + narrative synthesis | 55% | 90% |
 | 4 | `/work` WORK | Life | Current focus, active Algorithm sessions, project portfolio | 50% | 85% |
 | 5 | `/health` HEALTH | Life | Health hub: labs, fitness, nutrition, metrics, conditions | 40% | 85% |
@@ -78,9 +78,23 @@ These six pages share a pattern: **complete, polished UI with Recharts visualiza
 - **Evidence:** `app/page.tsx` is 5 lines: `import App from "./telos/_v7/app"` and renders it. Identical to `/telos`. Counting it separately would double-count the TELOS v7 app.
 
 ### 2. `/telos` — TELOS
+
+> ### ✅ Update — 2026-07-04: the TELOS backend was BUILT (re-scored)
+>
+> The original 65%/90% reflected the *starved backend* — `handleTelosOverview()` hard-returned `null` for metrics/projects/work/etc. That gap is now largely closed. Implemented + shipped **in both trees** (canonical fork + live `~/.claude`), Cato cross-vendor audited, live-verified over real HTTP:
+> - **Phase 1** — shallow reads: problem `severity`, mission `horizon`/`active`, strategy `active`, goal `pct` (value-normalizer across time/money/unit/percent/count; dates→0).
+> - **Phase 2** — first-class **Metrics** (`K#`) with bidirectional goal↔metric links; `metrics` no longer null.
+> - **Phase 3** — **Projects** (`PR#`) + nested **Work** (`W#`); `projects` no longer null; the `what.tsx` table + graph project layer light up.
+> - Parser stack added (`parseIdEntries`, `pickLabeledValue`, boundary-aware `refsByPrefix`, `parseMetrics`, `parseProjects`, …); `isPersonalized` counts metrics+projects (fork).
+>
+> Commits (signed): fork `0210215` + `788ea29`; live `8026006` + `b7529f6`. Plan/as-built: `docs/TELOS-IMPLEMENTATION-PLAN.md` (Build status).
+>
+> **Re-scored to ~85% completion / ~98% maturity.** Maturity ~98: the canonical primitive backend (Problems→Mission→Goals←Metrics, Challenges←Strategies→Projects→Work) is built + audited on both trees; short of 100 because Phase 4 (dimensions/velocity, owner, idealState, stranded) and Team/Budget (deliberately skipped — not Miessler-canonical) remain. Completion ~85, not higher, because the user's *real* TELOS source files are still prose without `K#`/`PR#`/KPI sub-fields, so Metrics/Projects render sample/empty until authored — the same "empty data ≠ broken code" pattern this report applies elsewhere. Superseded figures struck below.
+
 - **Goal:** Display the TELOS v7 strategic framework (11 primitives: ideal state, problems, missions, goals, metrics, challenges, strategies, projects, work, team, budget) in column / tree / graph views.
-- **Completion:** **65%** — UI-complete, partially data-wired.
-- **Evidence:** `telos/page.tsx` re-exports `telos/_v7/app.tsx` (full impl, ~244 LOC + 17 supporting files in `_v7/`). Multiple view modes (columns/tree/graph), goal modal, trace modal. Data via `/api/telos/overview` returns mostly null (owner, idealState, dimensions, missions, team, budget all null); only `goals` populated (1 item). No stub markers.
+- **Completion:** **85%** ~~65%~~ — UI-complete AND backend now wired (Phases 1–3); real user source data still sparse.
+- **Maturity:** **98%** ~~90%~~ — canonical primitive backend built + cross-vendor audited on both trees.
+- **Evidence:** `telos/page.tsx` re-exports `telos/_v7/app.tsx` (full impl + supporting files in `_v7/`). Multiple view modes (columns/tree/graph), goal modal, trace modal. Data via `/api/telos/overview` now parses problems/missions/goals/strategies/challenges + `metrics`(array) + `projects`(array w/ nested work) from `USER/TELOS/*` sources (previously returned mostly null). Still null by design/deferral: owner, idealState, dimensions (Phase 4), team, budget (skipped — non-canonical). No stub markers.
 - **Sub-views:** Columns / Tree / Graph view modes; Goal-detail and Trace modals.
 
 ### 3. `/life` — LIFE

@@ -268,16 +268,29 @@ These change scope materially and are the user's call (ISC-21):
 
 ---
 
-## Build status (2026-07-04)
+## Build status (updated 2026-07-04)
 
-**Phases 1 + 2 + HZ-1 SHIPPED** in the fork tree (`observability.ts` + sample `TELOS.md`), verified against a scratch HOME (15 checks + HZ-1 regression + edge cases all green), Cato cross-vendor audited. Decisions taken: Team/Budget skipped (Q2, not Miessler-canonical); metrics authored value+trend only, history deferred (Q3); built in fork, port to live `~/.claude` later (Q1).
+**Phases 1 + 2 + 3 SHIPPED in BOTH trees** — the canonical fork AND the live running `~/.claude` system. Each increment was verified against a scratch HOME (synthetic-`Request` probes of the real module, distinct from the live install), Cato cross-vendor audited, and — for the live tree — confirmed over real HTTP after a Pulse restart. Commits (all signed):
 
-**Shipped:** module-scope boundary-aware `refsByPrefix` (HZ-3/HZ-4), `pickLabeledValue`/`pickRefs`/`mergeRefs` (HZ-2), `normalizeGoalNumber`/`computeGoalPct`, `parseMetrics` (with phantom-entry guard); Phase-1 reads (severity/horizon/active/pct); Phase-2 metrics + bidirectional goal↔metric links; `isPersonalized` includes metrics (HZ-1).
+| Increment | Fork (`atabisz/Personal_AI_Infrastructure`) | Live (`atabisz/claude-config`) |
+|-----------|---------------------------------------------|-------------------------------|
+| Phase 1+2 (Metrics + shallow reads + HZ-1) | `0210215` | ported as part of the live rewrite `8026006` |
+| Live backend port (adapt to `~/.claude/PAI` paths, preserve Windows HOME hardening) | — | `8026006` |
+| Phase 3 (Projects + nested Work) | `788ea29` | `b7529f6` |
+
+**Shipped (both trees):** module-scope boundary-aware `refsByPrefix` (HZ-3/HZ-4), `pickLabeledValue`/`pickRefs`/`mergeRefs` (HZ-2), `normalizeGoalNumber` (now rejects date-shaped targets)/`computeGoalPct`, `parseMetrics` (phantom-entry guard), `normStatus`/`parseProjects` (PR# block-splitter with nested `W#` rows, pipe-in-title safe, dedupe-by-id); Phase-1 reads (severity/horizon/active/pct); Phase-2 metrics + bidirectional goal↔metric links; Phase-3 projects + work; `isPersonalized` counts metrics+projects (HZ-1, fork tree; the live tree's older handler has no fixture gate).
+
+> **Two-tree note:** the live `~/.claude` is a SEPARATE repo (`claude-config`) running an older, structurally different `observability.ts` (different paths `~/.claude/PAI/…` not `/LifeOS/…`; overview handler was ~46 lines via `parseSourceHeadings`). The features were **re-implemented in the live idiom, not file-copied** — a wholesale copy would have reverted the Windows HOME hardening and pointed TELOS at the wrong paths. The two trees now carry logically-identical `parseMetrics`/`parseProjects`/helpers.
+
+**Live-on-your-dashboard status:** `/api/telos/overview` on the running daemon returns real parsed problems/missions/goals/strategies/challenges + `metrics`(array) + `projects`(array with nested work). The sample `METRICS.md`/`PROJECTS.md` scaffolds provide a starting point; your real TELOS files are still prose without `K#`/`PR#`/KPI sub-fields, so those surfaces show sample/empty until authored (via `/interview` or by hand) — code ready, data pending.
 
 **Deferred / follow-up:**
-- **Phase 3 (Projects/Work)** — not built this session.
-- **Port to live `~/.claude`** — the live Pulse runs a DIFFERENT/older observability.ts (2618 lines vs the fork's ~3400; overview at :2322). These edits must be re-applied there separately (or the live tree re-synced from the fork).
-- **Gate hole (Cato Finding 2, MAJOR, PRE-EXISTING):** `isPersonalized` still returns false for an install that authored ONLY dimensions/narratives/preferences/team/budget (none of the six gated primitives) → `mergeTelos` serves the FALLBACK fixture over real data (2026-06-09 class). Not introduced by this work; widening the gate was out of the approved Phase 1+2 scope. **Recommended next:** fold `dimensions.length`, non-null narratives, and populated preferences into the gate, or invert it to "personalized unless every source is empty."
+- **Phase 4 (dimensions/velocity, owner, idealState, stranded)** — not built. Includes the HZ-5 dimension-taxonomy reconcile (4-composite vs 7-granular; velo hardcoded 0).
+- **Team / Budget** — deliberately skipped (Q2 — not Miessler-canonical: Team is corporate-TCF-only, Budget isn't in his model).
+- **Metric history / sparklines / real `delta`** — deferred (Q3); needs a time-series store (`METRICS_LOG.md`, Miessler's dated CURRENT-STATE pattern).
+- **Gate hole (Cato Finding 2, MAJOR, PRE-EXISTING, fork tree only):** `isPersonalized` still returns false for an install that authored ONLY dimensions/narratives/preferences → `mergeTelos` serves the FALLBACK fixture over real data (2026-06-09 class). Not introduced by this work. **Recommended:** fold `dimensions.length`, non-null narratives, and populated preferences into the gate, or invert it to "personalized unless every source is empty."
+- **`PR#` vs `P#` cross-ref alignment (Cato info):** projects use `PR#`; when Team/Budget/Recommendations get wired their cross-refs must target `PR#` (harmless today — those fields are null).
+- **Dead code (live tree):** `parseSourceHeadings`/`asLifeSections`/`asLifeGoals`/`LifeGoalsPayload` are now orphaned by the rewrite — safe to delete in a cleanup pass.
 
 ## 6. Phased implementation plan
 
@@ -310,8 +323,8 @@ The keystone. Add `## Metrics` section + `parseMetrics()`; wire `Goal.metrics[]`
 
 > **Note — `stranded` is an even-cheaper alternative quick win.** If a faster visible lightup than Metrics is wanted, `stranded` (orphan goals/work/idle strategies) is *purely computable* from the reference graph already parsed via `refsByPrefix` — no source authoring at all (see §4, Phase 4). It can be pulled forward ahead of Metrics as a near-zero-cost demo of the "starved pipeline" thesis. Kept in Phase 4 by default because Metrics is higher-value, but flagged as a swap option.
 
-### Phase 3 — Projects & Work (≈E3, ~2–3h)
-Add `parseProjects()` reading `## Projects` (`PR#` with Status + References binning strategy/dims). Work items via **Q3 decision** — either child-parse or live `/api/work` join. Stop returning `projects: null`.
+### Phase 3 — Projects & Work (≈E3, ~2–3h) — ✅ SHIPPED (both trees: fork `788ea29`, live `b7529f6`)
+Add `parseProjects()` reading `## Projects` (`PR#` with Status + References binning strategy/dims). Work items via **Q3 decision** — resolved to **authored under Projects** (child-parse), because `/api/work` returns 404 on the live tree (the board join wasn't viable there). Stop returning `projects: null`. As-built: a dedicated block-splitter (not `parseIdEntries`) keeps nested `W#` rows intact; Work rows are pipe-delimited `W#: title | status | eta | owner`; pipe-in-title safe; projects dedupe by id.
 
 **Verify:** `jq '.projects | length'` > 0, each with `strategy`, `dims`, `work[]`; `what.tsx` table renders; graph project/work layers appear; `summary.ts` pinch/red-project signals activate.
 **Value:** the execution layer of the DAG becomes visible; full Problems→…→Projects trace works end-to-end.
