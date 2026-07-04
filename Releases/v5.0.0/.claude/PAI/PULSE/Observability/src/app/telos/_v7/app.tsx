@@ -298,7 +298,7 @@ function isViewKind(v: string | null): v is ViewKind {
 }
 
 function App() {
-  const { telos, refetch } = useTelosData();
+  const { telos, refetch, isPersonalized } = useTelosData();
   const [mission, setMission] = useState<string>("M1");
   const [openGoal, setOpenGoal] = useState<Goal | null>(null);
   const [traceId, setTraceId] = useState<string | null>(null);
@@ -361,7 +361,7 @@ function App() {
         {view === "graph" && <GraphView {...common} />}
         {view === "columns" && (
           <>
-            <Hero telos={telos} tone={tweaks.vals.narrativeTone} showIds={showIds} onTrace={trace} />
+            <Hero telos={telos} tone={tweaks.vals.narrativeTone} showIds={showIds} onTrace={trace} isPersonalized={isPersonalized} />
             <Problems {...common} />
             <MissionGoals
               {...common}

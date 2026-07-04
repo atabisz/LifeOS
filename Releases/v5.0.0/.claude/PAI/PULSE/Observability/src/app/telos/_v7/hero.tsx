@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { Telos } from "./data";
 import type { TweakVals } from "./tweaks";
 import { DimensionRing } from "./rings";
+import { summarizeTelos } from "./summary";
 
 // Hero — narrative + 6 Current-Ideal gap rings.
 
@@ -27,6 +28,7 @@ interface HeroProps {
   tone: TweakVals["narrativeTone"];
   showIds: boolean;
   onTrace: (id: string | null) => void;
+  isPersonalized?: boolean;
 }
 
 type MoodDimension = Telos["dimensions"][number];
@@ -129,11 +131,17 @@ function Narrative({ telos, tone='operator', showIds, onTrace }: NarrativeProps)
   );
 }
 
-export function Hero({ telos, tone, showIds, onTrace }: HeroProps) {
+export function Hero({ telos, tone, showIds, onTrace, isPersonalized = false }: HeroProps) {
   const green = telos.projects.filter(p=>p.status==='green').length;
   const amber = telos.projects.filter(p=>p.status==='amber').length;
   const red   = telos.projects.filter(p=>p.status==='red').length;
   const wip   = telos.projects.reduce((a,p)=>a+p.work.length,0);
+
+  // Graph-analysis summary (pinch/drift/traction). Gated on the BACKEND's
+  // authoritative isPersonalized signal — NOT a local heuristic over telos
+  // fields, which stay sample data on a fresh install (useTelosData merges
+  // live-over-FALLBACK), so a local check would analyze the fixture as if real.
+  const summary = summarizeTelos(telos, isPersonalized);
 
   return (
     <section className="hero">
@@ -147,6 +155,24 @@ export function Hero({ telos, tone, showIds, onTrace }: HeroProps) {
       </div>
 
       <Narrative telos={telos} tone={tone} showIds={showIds} onTrace={onTrace}/>
+
+      {summary && (
+        <div className="hero-summary">
+          <p className="hero-summary-headline">{summary.headline}</p>
+          {summary.position && (
+            <p className="hero-summary-line"><span className="hero-summary-tag">Position</span>{summary.position}</p>
+          )}
+          {summary.traction && (
+            <p className="hero-summary-line"><span className="hero-summary-tag hero-summary-tag-ok">Traction</span>{summary.traction}</p>
+          )}
+          {summary.pinch && (
+            <p className="hero-summary-line"><span className="hero-summary-tag hero-summary-tag-warn">Pinch</span>{summary.pinch}</p>
+          )}
+          {summary.drift && (
+            <p className="hero-summary-line"><span className="hero-summary-tag hero-summary-tag-warn">Drift</span>{summary.drift}</p>
+          )}
+        </div>
+      )}
 
       <p className="hero-sub">
         {green} moving well. {amber} need{amber===1?'s':''} attention.

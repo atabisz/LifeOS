@@ -2278,6 +2278,426 @@ function parseSourceHeadings(sections: LifeSection[], prefix: string): ParsedHea
   return out
 }
 
+// ── TELOS ID-entry parser + primitive helpers (ported from the LifeOS fork,
+// adapted to this tree's per-file readMd sources). Backs the richer
+// handleTelosOverview: reads bullet/heading/prose entries with labeled
+// sub-fields (Severity/Horizon/Active/KPI/Target/Value/Unit/Trend) and
+// **References:** cross-links, and parses first-class Metrics. ──
+
+function parseIdEntries(content: string, prefix: string): Array<{ id: string; title: string; body: string; summary: string; detail: string; references: string[] }> {
+  if (!content) return []
+  type Raw = { id: string; title: string; body: string }
+  const raw: Raw[] = []
+  const seen = new Set<string>()
+  const idRe = new RegExp(`^${prefix}\\d+[a-z]?$`, "i")
+
+  // Pass 1: heading form (## or ###)
+  const lines = content.split("\n")
+  let cur: { id: string; title: string; body: string[] } | null = null
+  for (const line of lines) {
+    const h = line.match(new RegExp(`^#{2,4}\\s+(${prefix}\\d+[a-z]?)\\s*:\\s*(.+?)\\s*$`, "i"))
+    if (h) {
+      if (cur && !seen.has(cur.id)) {
+        seen.add(cur.id)
+        raw.push({ id: cur.id, title: cur.title, body: cur.body.join("\n").trim() })
+      }
+      cur = { id: h[1], title: cleanInlineMarkdown(h[2]).replace(/\s*\(.*\)\s*$/, "").trim(), body: [] }
+    } else if (cur) {
+      cur.body.push(line)
+    }
+  }
+  if (cur && !seen.has(cur.id)) {
+    seen.add(cur.id)
+    raw.push({ id: cur.id, title: cur.title, body: cur.body.join("\n").trim() })
+  }
+
+  // Pass 2: bullet form `- ID: text` (with possible **bold**) — only IDs not seen above
+  let bulletCur: { id: string; title: string; body: string[] } | null = null
+  const flushBullet = () => {
+    if (!bulletCur) return
+    if (!seen.has(bulletCur.id)) {
+      seen.add(bulletCur.id)
+      raw.push({ id: bulletCur.id, title: bulletCur.title, body: bulletCur.body.join(" ").replace(/\s+/g, " ").trim() })
+    }
+    bulletCur = null
+  }
+  for (const line of lines) {
+    const b = line.match(new RegExp(`^-\\s+\\*?\\*?(${prefix}\\d+[a-z]?)\\*?\\*?\\s*:\\s*(.+?)\\s*$`, "i"))
+    if (b) {
+      flushBullet()
+      bulletCur = { id: b[1], title: cleanInlineMarkdown(b[2]), body: [] }
+    } else if (bulletCur && /^\s+\S/.test(line)) {
+      // Indented continuation line
+      bulletCur.body.push(line.trim())
+    } else if (bulletCur && line.trim() === "") {
+      // blank line ends the bullet entry
+      flushBullet()
+    } else {
+      flushBullet()
+    }
+  }
+  flushBullet()
+
+  // Pass 3: ID-less prose fallback. Each blank-line-separated paragraph is one
+  // entry; IDs assigned positionally. Only runs when zero ID-form entries
+  // matched — explicit IDs always win.
+  if (raw.length === 0) {
+    const paras = content
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0 && !/^-{3,}$/.test(p) && !p.startsWith("#") && !p.startsWith(">"))
+    paras.forEach((p, i) => {
+      const pLines = p.split("\n")
+      const title = cleanInlineMarkdown(pLines[0].replace(/^-\s+/, "")).trim()
+      raw.push({ id: `${prefix.toUpperCase()}${i}`, title, body: pLines.slice(1).join("\n").trim() })
+    })
+  }
+
+  // Per-entry summary/detail/references extraction (`**Summary:**`, `**Detail:**`,
+  // `**References:** <comma-separated IDs>`). Missing → "" / [].
+  const extractSummaryDetailRefs = (body: string): { summary: string; detail: string; references: string[] } => {
+    const summaryMatch = body.match(/(?:^|\n)\s*\*\*Summary:\*\*\s*([^\n]+)/i)
+    const detailIdx = body.search(/(?:^|\n)\s*\*\*Detail:\*\*\s*/i)
+    const refsMatch = body.match(/(?:^|\n)\s*\*\*References:\*\*\s*([^\n]*)/i)
+    const summary = summaryMatch ? cleanInlineMarkdown(summaryMatch[1].trim()) : ""
+    let detail = body
+    if (detailIdx >= 0) {
+      detail = body.slice(detailIdx).replace(/^[^*]*\*\*Detail:\*\*\s*/i, "").trim()
+    } else if (summary) {
+      detail = body.replace(/(?:^|\n)\s*\*\*Summary:\*\*\s*[^\n]+/i, "").trim()
+    }
+    const references: string[] = []
+    if (refsMatch && refsMatch[1].trim().length > 0) {
+      const tokenRe = /\b([A-Z]+)(\d+)([a-z]?)\b/gi
+      let m: RegExpExecArray | null
+      while ((m = tokenRe.exec(refsMatch[1])) !== null) {
+        const id = m[1].toUpperCase() + m[2] + (m[3] || "").toLowerCase()
+        if (!references.includes(id)) references.push(id)
+      }
+    }
+    return { summary, detail, references }
+  }
+
+  return raw
+    .filter((e) => idRe.test(e.id))
+    .sort((a, b) => {
+      const an = parseInt(a.id.replace(/\D/g, ""), 10)
+      const bn = parseInt(b.id.replace(/\D/g, ""), 10)
+      return an - bn
+    })
+    .map((e) => {
+      const { summary, detail, references } = extractSummaryDetailRefs(e.body)
+      return { ...e, summary, detail, references }
+    })
+}
+
+// Reads a `**Key:** value` labeled sub-field from an entry body, tolerating
+// heading-form (newline-joined) AND bullet-form (space-joined) bodies. Captures
+// up to the NEXT bolded label / bullet / newline / end so a field never
+// swallows the following ones, and a value's own inline **bold** (no colon)
+// does not terminate the capture.
+function pickLabeledValue(body: string, key: string): string | null {
+  if (!body) return null
+  const re = new RegExp(
+    `\\*\\*${key}\\*?\\*?\\s*:\\s*\\*?\\*?\\s*(.*?)\\s*(?=(?:[-*]\\s+\\*\\*)|(?:\\*\\*[A-Za-z][\\w ]*:\\*\\*)|\\n|$)`,
+    "i",
+  )
+  const m = body.match(re)
+  return m && m[1].trim() ? cleanInlineMarkdown(m[1].trim()) : null
+}
+
+// Extract reference IDs from a body's `**References:** A0, B1` field, whether
+// newline- or space-joined and regardless of a leading bullet marker.
+function pickRefs(body: string): string[] {
+  const raw = pickLabeledValue(body, "References")
+  if (!raw) return []
+  const out: string[] = []
+  const tokenRe = /\b([A-Za-z]+)(\d+)([a-z]?)\b/g
+  let m: RegExpExecArray | null
+  while ((m = tokenRe.exec(raw)) !== null) {
+    const id = m[1].toUpperCase() + m[2] + (m[3] || "").toLowerCase()
+    if (!out.includes(id)) out.push(id)
+  }
+  return out
+}
+
+// Order-stable union of two ID lists, first-seen wins.
+function mergeRefs(a: readonly string[], b: readonly string[]): string[] {
+  const out = [...a]
+  for (const id of b) if (!out.includes(id)) out.push(id)
+  return out
+}
+
+// Boundary-aware reference binning by primitive prefix. Matches `^<PREFIX>\d`
+// so prefix "P" matches P0/P12 but NOT PR0/PB0.
+function refsByPrefix(refs: readonly string[], prefix: string): string[] {
+  const re = new RegExp(`^${prefix}\\d`, "i")
+  return refs.filter((id) => re.test(id))
+}
+
+// Parse a boolean-ish sub-field value (`true`/`yes`/`1`/`active`/`on`).
+function parseBoolField(raw: string | null): boolean {
+  return /^(true|yes|1|active|on)$/i.test((raw ?? "").trim())
+}
+
+// Normalize a KPI/target string to a number: duration `6h58`→418min,
+// magnitude `$18.2k`→18200, unit-suffixed `18.4km`→18.4, percent `54%`→54,
+// plain counts. Returns null for non-numeric / date targets so pct falls to 0.
+function normalizeGoalNumber(s: string): number | null {
+  if (!s) return null
+  let t = s.trim().replace(/[$,%\s]/g, "")
+  // Reject date-shaped tokens (2026-06-13, 2026/06, Jun-2026) BEFORE parseFloat,
+  // which would otherwise read the leading year (2026) as a bogus number and
+  // compute a nonsense pct. A date target means "no numeric progress" → null → 0.
+  if (/\d{4}[-/]\d{1,2}/.test(t) || /^\d{4}$/.test(t) && /^(19|20)\d\d$/.test(t)) return null
+  const hm = t.match(/^(\d+)h(\d+)$/i)
+  if (hm) return Number(hm[1]) * 60 + Number(hm[2])
+  const k = t.match(/^(\d+(?:\.\d+)?)k$/i)
+  if (k) return Number(k[1]) * 1000
+  t = t.replace(/[a-z]+$/i, "")
+  const n = parseFloat(t)
+  return Number.isFinite(n) ? n : null
+}
+
+// Compute a 0–100 progress percent from KPI (current) → target. 0 when either
+// side is non-numeric (e.g. a date target) or target is 0.
+function computeGoalPct(kpi: string, target: string): number {
+  const a = normalizeGoalNumber(kpi)
+  const b = normalizeGoalNumber(target)
+  if (a === null || b === null || b === 0) return 0
+  return Math.max(0, Math.min(100, Math.round((a / b) * 100)))
+}
+
+// Parse a Metrics source (K# IDs) into first-class Metric primitives. Authored
+// value+trend (history/sparkline deferred → spark []); `feeds` links each metric
+// UP to the Goal(s) it measures (K→G). Requires ≥1 real labeled sub-field so a
+// stray header/blockquote can't become a phantom metric via the Pass-3 fallback.
+function parseMetrics(raw: string): Array<{
+  id: string
+  label: string
+  value: string
+  unit: string
+  trend: number
+  spark: number[]
+  feeds: string[]
+  color: string
+}> {
+  return parseIdEntries(raw, "K")
+    .filter((k) =>
+      pickLabeledValue(k.body, "Value") !== null ||
+      pickLabeledValue(k.body, "Unit") !== null ||
+      pickLabeledValue(k.body, "Trend") !== null ||
+      pickRefs(k.body).length > 0,
+    )
+    .map((k) => {
+      const refs = mergeRefs(k.references, pickRefs(k.body))
+      const trendRaw = pickLabeledValue(k.body, "Trend")
+      const trend = trendRaw ? (parseFloat(trendRaw.replace(/[+]/g, "")) || 0) : 0
+      return {
+        id: k.id,
+        label: k.title,
+        value: pickLabeledValue(k.body, "Value") ?? "",
+        unit: pickLabeledValue(k.body, "Unit") ?? "",
+        trend,
+        spark: [],
+        feeds: refsByPrefix(refs, "G"),
+        color: "--azure",
+      }
+    })
+}
+
+// Emit the 7 granular TELOS dimensions from IDEAL_STATE/<DIM>.md presence.
+// This tree has no LIFEOS_STATE.json, so cur/velo default to 0 (authored ideal,
+// current-state tracking not yet wired here); a dim appears if its IDEAL_STATE
+// file exists. Ids/colors match the 7 dims goals/metrics reference (HZ-5).
+function buildDimensionsFromIdealState(): Array<{ id: string; label: string; cur: number; ideal: number; velo: number; color: string }> {
+  const idealDir = join(TELOS_DIR, "IDEAL_STATE")
+  if (!existsSync(idealDir)) return []
+  const statePath = join(TELOS_DIR, "LIFEOS_STATE.json")
+  const state: Record<string, { pct?: number; velo?: number }> = {}
+  if (existsSync(statePath)) {
+    try {
+      const parsed = JSON.parse(readFileSync(statePath, "utf-8")) as { dimensions?: Record<string, { pct?: number; velo?: number }> }
+      for (const [id, d] of Object.entries(parsed.dimensions ?? {})) if (d && typeof d === "object") state[id] = d
+    } catch { /* corrupt → zeroes */ }
+  }
+  const DIMS: Array<{ id: string; label: string; color: string; file: string }> = [
+    { id: "health",         label: "Health",         color: "--health",         file: "HEALTH.md" },
+    { id: "money",          label: "Money",          color: "--money",          file: "MONEY.md" },
+    { id: "freedom",        label: "Freedom",        color: "--freedom",        file: "FREEDOM.md" },
+    { id: "creative",       label: "Creative",       color: "--creative",       file: "CREATIVE.md" },
+    { id: "relationships",  label: "Relationships",  color: "--relationships",  file: "RELATIONSHIPS.md" },
+    { id: "rhythms",        label: "Rhythms",        color: "--rhythms",        file: "RHYTHMS.md" },
+    { id: "infrastructure", label: "Infrastructure", color: "--infrastructure", file: "INFRASTRUCTURE.md" },
+  ]
+  return DIMS
+    // Only surface dimensions with a REAL numeric pct. A null pct means "not
+    // tracked" — opt-out, directional north-star, or no IDEAL file — and must
+    // NOT render as a 0%/"failing" ring (a misleading zero). Dropping them is
+    // the honest render: the user isn't tracking that dimension, so it isn't
+    // shown, rather than shown as failed. (Was: coerce null→0, which painted
+    // deliberate opt-outs as 0%.)
+    .filter((d) => typeof state[d.id]?.pct === "number")
+    .map((d) => ({
+      id: d.id,
+      label: d.label,
+      color: d.color,
+      cur: Math.round(state[d.id]!.pct!),
+      ideal: 100,
+      // velo stays 0 when unwritten; the UI treats 0 as "flat/unmeasured" (real
+      // velocity is a future gap-history computation, not yet emitted).
+      velo: typeof state[d.id]?.velo === "number" ? state[d.id]!.velo! : 0,
+    }))
+}
+
+// Compute "stranded" purely from the parsed reference graph (no source
+// authoring). Shapes match the client Stranded type; null when nothing strands.
+function computeStranded(
+  goals: Array<{ id: string; title: string }>,
+  strategies: Array<{ id: string; title: string; implements: string[] }>,
+  projects: Array<{ id: string; title: string; strategy: string; work: Array<{ id: string; title: string; owner: string }> }>,
+): { work_no_goal: Array<{ id: string; title: string; owner: string; age: string }>; goals_no_strategy: Array<{ id: string; title: string; reason: string }>; strategies_idle: Array<{ id: string; title: string; reason: string }> } | null {
+  const implementedGoalIds = new Set(strategies.flatMap((s) => s.implements))
+  const goals_no_strategy = goals
+    .filter((g) => !implementedGoalIds.has(g.id))
+    .map((g) => ({ id: g.id, title: g.title, reason: "no strategy implements it" }))
+  const strategies_idle = strategies
+    .filter((s) => s.implements.length === 0)
+    .map((s) => ({ id: s.id, title: s.title, reason: "implements no goal" }))
+  const goalBearingStrategy = new Set(strategies.filter((s) => s.implements.length > 0).map((s) => s.id))
+  const work_no_goal = projects
+    .filter((p) => !goalBearingStrategy.has(p.strategy))
+    .flatMap((p) => p.work.map((w) => ({ id: w.id, title: w.title, owner: w.owner, age: "" })))
+  if (work_no_goal.length === 0 && goals_no_strategy.length === 0 && strategies_idle.length === 0) return null
+  return { work_no_goal, goals_no_strategy, strategies_idle }
+}
+
+// Build the owner card from the principal identity file. `name` from the
+// `**Name:**` field in PRINCIPAL_IDENTITY.md; `day` is the server date; `streak`
+// has no store yet → 0. Returns null when no real name is found, so the client
+// shows no owner rather than a blank/placeholder one.
+function buildOwner(): { name: string; day: string; streak: number } | null {
+  const idPath = join(USER_DIR, "PRINCIPAL_IDENTITY.md")
+  let name = ""
+  const content = readMd(idPath)
+  if (content) {
+    // Capture the rest of the Name LINE only (stop at newline / pipe), then
+    // strip trailing markdown/list punctuation — avoids running past `**Name:**
+    // Alex Tabisz\n- **Pronunciation:** …` into the next bullet.
+    const m = content.match(/\*\*Name:\*\*\s*([^\n|]+)/)
+    if (m && m[1]) {
+      const cand = m[1].replace(/[*_`]/g, "").replace(/\s*[-–—]\s*$/, "").trim()
+      if (cand && !/^(user|your\s+name|name|tbd|\(interview\))$/i.test(cand)) name = cand
+    }
+  }
+  if (!name) return null
+  const now = new Date()
+  const day = now.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })
+  return { name, day, streak: 0 }
+}
+
+// Parse `## Ideal State` prose into { horizon, note }.
+function buildIdealStateMeta(raw: string): { horizon: string; note: string } | null {
+  if (!raw || !raw.trim()) return null
+  const body = raw.split("\n").filter((l) => !/^\s*#{1,6}\s/.test(l)).join("\n")
+  const horizon = pickLabeledValue(body, "Horizon") ??
+    (body.match(/\bby\s+((?:[A-Z][a-z]+\.?\s*)?\d{4}|\d{4})/)?.[1] ?? "")
+  const note = firstParagraph(body)
+  if (!horizon && !note) return null
+  return { horizon, note }
+}
+
+// Normalize a status token to the client's green|amber|red enum. Unknown /
+// absent → "amber" ("needs a look") rather than falsely claiming "green".
+function normStatus(s: string | null | undefined): "green" | "amber" | "red" {
+  const t = (s ?? "").toLowerCase().trim()
+  return t === "green" || t === "amber" || t === "red" ? t : "amber"
+}
+
+// Parse a Projects source into Project primitives (PR# IDs) with nested Work
+// (W#). A dedicated block-splitter (NOT parseIdEntries, which space-joins
+// bodies and would flatten the W# rows) keeps each project's body lines intact.
+// Project fields: **Status:**, **Strategy:** (or S# in **References:**),
+// **Dims:** (comma list). Work rows are pipe-delimited:
+// `W0: title | status: x | eta: y | owner: z`. Prose-only → [].
+function parseProjects(raw: string): Array<{
+  id: string
+  title: string
+  strategy: string
+  dims: string[]
+  status: "green" | "amber" | "red"
+  work: Array<{ id: string; title: string; strategy: string; eta: string; status: "green" | "amber" | "red"; owner: string }>
+}> {
+  if (!raw) return []
+  const lines = raw.split("\n")
+  type Blk = { id: string; title: string; body: string[] }
+  const blocks: Blk[] = []
+  let cur: Blk | null = null
+  const startRe = /^(?:#{2,4}\s+|-\s+)\*?\*?(PR\d+[a-z]?)\*?\*?\s*:\s*(.+?)\s*$/i
+  for (const line of lines) {
+    const m = line.match(startRe)
+    if (m) {
+      if (cur) blocks.push(cur)
+      cur = { id: m[1].toUpperCase(), title: cleanInlineMarkdown(m[2]), body: [] }
+    } else if (cur) {
+      cur.body.push(line)
+    }
+  }
+  if (cur) blocks.push(cur)
+
+  // Split a Work row's payload into title + trailing `key: value` fields. Only
+  // pipe-segments that look like `<knownkey>: value` are treated as fields; any
+  // leading segments (incl. ones containing a literal "|") stay part of the
+  // title, so a pipe inside a title isn't silently truncated (Cato F2).
+  const WORK_KEYS = new Set(["status", "eta", "owner", "strategy"])
+  const splitWorkRow = (payload: string): { title: string; fields: Record<string, string> } => {
+    const segs = payload.split("|").map((s) => s.trim())
+    const fields: Record<string, string> = {}
+    const titleSegs: string[] = []
+    let inFields = false
+    for (const seg of segs) {
+      const idx = seg.indexOf(":")
+      const key = idx > 0 ? seg.slice(0, idx).trim().toLowerCase() : ""
+      if (key && WORK_KEYS.has(key)) {
+        inFields = true
+        fields[key] = seg.slice(idx + 1).trim()
+      } else if (!inFields) {
+        titleSegs.push(seg)
+      }
+      // a non-field segment AFTER fields started is ignored (malformed tail)
+    }
+    return { title: titleSegs.join(" | ").trim(), fields }
+  }
+
+  const workRe = /^\s*[-*]?\s*\*?\*?(W\d+[a-z]?)\*?\*?\s*:\s*(.+?)\s*$/i
+  const seenProj = new Set<string>()
+  return blocks
+    .filter((b) => { if (seenProj.has(b.id)) return false; seenProj.add(b.id); return true }) // dedupe by id (Cato F4)
+    .map((b) => {
+      const bodyStr = b.body.join("\n")
+      const status = normStatus(pickLabeledValue(bodyStr, "Status"))
+      const refs = mergeRefs([], pickRefs(bodyStr))
+      const strategy = refsByPrefix(refs, "S")[0] ?? pickLabeledValue(bodyStr, "Strategy") ?? ""
+      const dimsRaw = pickLabeledValue(bodyStr, "Dims") ?? ""
+      const dims = dimsRaw ? dimsRaw.split(",").map((s) => s.trim()).filter(Boolean) : []
+      const work = b.body
+        .filter((l) => workRe.test(l))
+        .map((l) => {
+          const wm = l.match(workRe)!
+          const { title, fields } = splitWorkRow(wm[2])
+          return {
+            id: wm[1].toUpperCase(),
+            title: cleanInlineMarkdown(title),
+            strategy: fields.strategy ?? strategy,
+            eta: fields.eta ?? "",
+            status: normStatus(fields.status),
+            owner: fields.owner ?? "",
+          }
+        })
+      return { id: b.id, title: b.title, strategy, dims, status, work }
+    })
+}
+
 async function handleTelosFileGet(searchParams: URLSearchParams): Promise<Response> {
   try {
     const valid = validateTelosFileName(searchParams.get("name"))
@@ -2323,58 +2743,131 @@ async function handleTelosFilePut(req: Request): Promise<Response> {
 
 async function handleTelosOverview(): Promise<Response> {
   try {
-    const lifeResponse = handleLifeGoals()
-    if (!lifeResponse.ok) {
-      return Response.json({ error: `life goals returned ${lifeResponse.status}` }, { status: 500 })
+    // Read per-file TELOS sources directly (this tree's layout) and parse them
+    // with the ID-entry parser so bullet/heading entries, labeled sub-fields,
+    // and **References:** cross-links all resolve. TELOS.md (unified) sections
+    // win when present; per-file is the fallback.
+    const unified = readMd(join(TELOS_DIR, "TELOS.md"))
+    const unifiedSection = (title: string): string => {
+      if (!unified) return ""
+      const re = new RegExp(`^##\\s+${title}\\b.*$`, "im")
+      const m = unified.match(re)
+      if (!m || m.index === undefined) return ""
+      const start = unified.indexOf("\n", m.index)
+      if (start < 0) return ""
+      const rest = unified.slice(start + 1)
+      const next = rest.search(/^##\s+/m)
+      return (next < 0 ? rest : rest.slice(0, next)).trim()
     }
-    const life = await lifeResponse.json() as LifeGoalsPayload
-    const missions = parseSourceHeadings(asLifeSections(life.mission), "M").map((m) => ({
-      id: m.id,
-      title: m.title,
-    }))
-    const goals = asLifeGoals(life.goals).map((g) => ({
-      id: g.id,
-      title: cleanInlineMarkdown(g.title ?? g.text ?? g.id),
-      kpi: typeof g.kpi === "string" ? g.kpi : "",
-      target: typeof g.target === "string" ? g.target : "",
-      pct: typeof g.pct === "number" ? g.pct : 0,
-      delta: null,
-      dims: [],
-      metrics: [],
-    }))
-    const problems = parseSourceHeadings(asLifeSections(life.problems), "P").map((p) => ({
-      id: p.id,
-      title: p.title,
-      note: firstParagraph(p.body),
-      severity: "med",
-      affects: [],
-    }))
-    const strategies = parseSourceHeadings(asLifeSections(life.strategies), "S").map((s) => ({
-      id: s.id,
-      title: s.title,
-      implements: [],
-    }))
-    const challenges = parseSourceHeadings(asLifeSections(life.challenges), "C").map((c) => ({
-      id: c.id,
-      title: c.title,
-    }))
+    const sourceFor = (title: string, file: string): string =>
+      unifiedSection(title) || readMd(join(TELOS_DIR, file))
+
+    const missionRaw = sourceFor("Mission", "MISSION.md")
+    const goalsRaw = sourceFor("Goals", "GOALS.md")
+    const problemsRaw = sourceFor("Problems", "PROBLEMS.md")
+    const strategiesRaw = sourceFor("Strategies", "STRATEGIES.md")
+    const challengesRaw = sourceFor("Challenges", "CHALLENGES.md")
+    const metricsRaw = sourceFor("Metrics", "METRICS.md")
+    const projectsRaw = sourceFor("Projects", "PROJECTS.md")
+    // Ideal-state prose comes from the unified TELOS.md `## Ideal State` section
+    // only. Do NOT fall back to IDEAL_STATE/README.md — that's a sample-template
+    // scaffold ("🎯 SAMPLE TEMPLATE …"), and reading it would leak fixture prose
+    // into a real field. Absent section → "" → buildIdealStateMeta returns null.
+    const idealStateRaw = unifiedSection("Ideal State")
+
+    const missions = parseIdEntries(missionRaw, "M").map((m) => {
+      const refs = mergeRefs(m.references, pickRefs(m.body))
+      return {
+        id: m.id,
+        title: m.title,
+        summary: m.summary,
+        horizon: pickLabeledValue(m.body, "Horizon") ?? "",
+        active: parseBoolField(pickLabeledValue(m.body, "Active")),
+        addresses: refsByPrefix(refs, "P"),
+      }
+    })
+    const goals = parseIdEntries(goalsRaw, "G").map((g) => {
+      const refs = mergeRefs(g.references, pickRefs(g.body))
+      const kpi = pickLabeledValue(g.body, "KPI") ?? ""
+      const target = pickLabeledValue(g.body, "Target") ?? ""
+      return {
+        id: g.id,
+        title: g.title,
+        summary: g.summary,
+        kpi,
+        target,
+        pct: computeGoalPct(kpi, target),
+        delta: null,
+        dims: [],
+        metrics: refsByPrefix(refs, "K"),
+        addresses: refsByPrefix(refs, "P"),
+      }
+    })
+    const problems = parseIdEntries(problemsRaw, "P").map((p) => {
+      const refs = mergeRefs(p.references, pickRefs(p.body))
+      const sevRaw = (pickLabeledValue(p.body, "Severity") ?? "").toLowerCase()
+      const severity = sevRaw === "high" || sevRaw === "low" || sevRaw === "med" ? sevRaw : "med"
+      return {
+        id: p.id,
+        title: p.title,
+        note: p.summary || firstParagraph(p.body),
+        severity,
+        affects: refsByPrefix(refs, "M"),
+      }
+    })
+    const strategies = parseIdEntries(strategiesRaw, "S").map((s) => {
+      const refs = mergeRefs(s.references, pickRefs(s.body))
+      return {
+        id: s.id,
+        title: s.title,
+        summary: s.summary,
+        overcomes: refsByPrefix(refs, "C"),
+        implements: refsByPrefix(refs, "G"),
+        active: parseBoolField(pickLabeledValue(s.body, "Active")),
+      }
+    })
+    const challenges = parseIdEntries(challengesRaw, "C").map((c) => {
+      const refs = mergeRefs(c.references, pickRefs(c.body))
+      return {
+        id: c.id,
+        title: c.title,
+        note: c.summary || firstParagraph(c.body),
+        blocks: refsByPrefix(refs, "G"),
+      }
+    })
+    const metrics = parseMetrics(metricsRaw)
+    const projects = parseProjects(projectsRaw)
+    const dimensions = buildDimensionsFromIdealState()
+    const stranded = computeStranded(goals, strategies, projects)
+    const idealState = buildIdealStateMeta(idealStateRaw)
+    const owner = buildOwner()
+
+    // Authoritative personalization signal from REAL parsed data (not the
+    // client's fallback-merged view). The client uses this to gate summary /
+    // fixture rendering so a fresh install can't have sample data analyzed as
+    // if real. Mirrors the fork's isPersonalized gate.
+    const isPersonalized =
+      missions.length > 0 || goals.length > 0 || problems.length > 0 ||
+      strategies.length > 0 || challenges.length > 0 || metrics.length > 0 ||
+      projects.length > 0
 
     return Response.json({
-      owner: null,
-      idealState: null,
-      dimensions: null,
+      meta: { isPersonalized },
+      owner, // name from PRINCIPAL_IDENTITY **Name:**, day=server date, streak=0 (no store yet)
+      idealState,
+      dimensions: dimensions.length > 0 ? dimensions : null,
       snapshot: null,
       problems,
       missions,
       goals,
-      metrics: null,
+      metrics,
       challenges,
       strategies,
-      projects: null,
+      projects: projects.length > 0 ? projects : null,
       team: null,
       budget: null,
       recommendations: null,
-      stranded: null,
+      stranded,
       subtabs: null,
       preferences: null,
       narrativeSeed: null,

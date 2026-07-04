@@ -1088,3 +1088,42 @@ html[data-density="spacious"] .narrative { font-size:24px; line-height:1.55; }
   background: linear-gradient(135deg, rgba(183,148,244,0.10), rgba(52,211,153,0.06) 50%, #141C38 100%) !important;
   border-left: 3px solid #B794F4 !important;
 }
+
+/* TELOS hero summary — pinch/drift/traction analysis block (ported w/ summary.ts) */
+.hero-summary {
+  display:flex; flex-direction:column; gap:12px;
+  padding:24px 28px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background: linear-gradient(180deg, rgba(59,130,246,0.03), rgba(59,130,246,0));
+}
+.hero-summary-headline {
+  font-size:clamp(18px, 1.6vw, 22px);
+  line-height:1.45;
+  color:var(--text);
+  font-weight:500;
+  letter-spacing:-0.01em;
+  margin:0;
+}
+.hero-summary-line {
+  margin:0;
+  font-size:14px;
+  line-height:1.55;
+  color:var(--text-1);
+  display:flex; gap:10px; align-items:flex-start;
+}
+.hero-summary-tag {
+  flex-shrink:0;
+  display:inline-block;
+  font-size:11px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  padding:3px 8px 2px;
+  border-radius:4px;
+  color: var(--text-2);
+  background: rgba(139,154,193,0.10);
+  margin-top:2px;
+}
+.hero-summary-tag-warn { color:var(--warm); background: rgba(248,123,123,0.10); }
+.hero-summary-tag-ok   { color:var(--ok);   background: rgba(45,212,191,0.10); }
