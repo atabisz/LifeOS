@@ -33,7 +33,7 @@ import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { normalize } from "./lifeos-normalize.ts";
 
-type Klass = "take" | "conflict" | "add" | "unchanged";
+type Klass = "take" | "conflict" | "add" | "local-only" | "unchanged";
 
 // The release payload framework root (renamed LifeOS/) maps onto the live PAI/ root.
 // We normalize release paths token-by-token into the PAI/-shaped baseline.
@@ -58,9 +58,29 @@ export function normalizeRelPath(rel: string): string {
     .join("/");
 }
 
-const TEXT_EXTS = new Set([".ts", ".js", ".md", ".json", ".toml", ".yaml", ".yml", ".sh", ".txt", ".css"]);
+// Every text-ish source form present in the payload MUST normalize, else its
+// LIFEOS_/LifeOS/ tokens ship un-rewritten (silent-empty-dir) AND inflate the
+// conflict count with normalization-only false diffs (Cato finding #2). .tsx is
+// the big one (138 files); extensionless LATEST/VERSION also carry tokens.
+const TEXT_EXTS = new Set([
+  ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs",
+  ".md", ".mdx", ".json", ".jsonc", ".toml", ".yaml", ".yml",
+  ".sh", ".bash", ".zsh", ".txt", ".css", ".scss", ".html", ".hbs",
+  ".plist", ".service", ".swift", ".py", ".env", ".example",
+]);
+const TEXT_BASENAMES = new Set(["LATEST", "VERSION", "Dockerfile", "Makefile"]);
 function isText(rel: string): boolean {
-  return TEXT_EXTS.has(path.extname(rel).toLowerCase());
+  const base = path.basename(rel);
+  if (TEXT_BASENAMES.has(base)) return true;
+  const ext = path.extname(rel).toLowerCase();
+  if (ext) return TEXT_EXTS.has(ext);
+  return false; // truly extensionless + unknown → treat as binary (copy verbatim)
+}
+
+/** Normalized bytes for a release file: token-rewritten for text, verbatim for binary. */
+function normalizedReleaseBytes(releaseAbs: string, rel: string): Buffer {
+  if (isText(rel)) return Buffer.from(normalize(readFileSync(releaseAbs, "utf8")).text, "utf8");
+  return readFileSync(releaseAbs);
 }
 
 function walk(root: string, base = ""): string[] {
@@ -114,15 +134,30 @@ function classify(baseAbs: string | null, otherAbs: string | null): "same" | "di
 }
 
 /**
- * 3-way classification per baseline-relative path:
- *   - release changed vs baseline?  (upstream delta)
- *   - live   changed vs baseline?   (your divergence)
- * => take (upstream changed, you didn't) | conflict (both changed) |
- *    add (new upstream file absent from live) | unchanged.
+ * TRUE 3-way classification per baseline-relative path. Three inputs:
+ *   BASELINE — the PINNED, committed common ancestor (last-synced release, normalized)
+ *   RELEASE  — the CURRENT release payload, normalized ON THE FLY (the incoming version)
+ *   LIVE     — your ~/.claude tree
+ *
+ * The baseline is a git-committed pin, NOT regenerated each run (that was the bug
+ * Cato #1 caught — a regenerated baseline always equals the release, so `take` was
+ * unreachable). Refresh advances the pin only via explicit `--adopt` after a sync.
+ *
+ *   upstream = did RELEASE change vs BASELINE?   (what the new version brings)
+ *   mine     = did LIVE    change vs BASELINE?   (your divergence)
+ *
+ * => add        : release has it, live lacks it            → candidate port
+ *    local-only : live has it, release doesn't             → your own file, ignore
+ *    take        : upstream changed, you did NOT            → safe to land
+ *    conflict    : BOTH changed (or live differs + upstream also moved) → review, never auto-take
+ *    unchanged   : neither changed
+ *
+ * When BASELINE == RELEASE (first run, only one release exists), upstream is always
+ * "same", so `take` is legitimately 0 — there is no newer version yet. At v7 the pin
+ * lags the new payload and `take` becomes populated. That 0 is now HONEST, not a bug.
  */
 function classifyThreeWay(baseRel: string): Klass {
   const baseAbs = path.join(BASELINE_ROOT, ...baseRel.split("/"));
-  // Map baseline path back to a release path (reverse the dir renames) to compare.
   const relRel = baseRel
     .split("/")
     .map((seg) => (seg === "PAI" ? "LifeOS" : seg === "PAI_SYSTEM_PROMPT.md" ? "LIFEOS_SYSTEM_PROMPT.md" : seg))
@@ -130,16 +165,22 @@ function classifyThreeWay(baseRel: string): Klass {
   const releaseAbs = path.join(RELEASE_PAYLOAD, ...relRel.split("/"));
   const liveAbs = path.join(liveRoot(), ...baseRel.split("/"));
 
-  const upstream = classify(baseAbs, releaseAbs); // baseline vs (its own source) — normalization drift only
-  const mine = classify(baseAbs, liveAbs); // baseline vs live — your divergence
+  const baseBytes = existsSync(baseAbs) && statSync(baseAbs).isFile() ? readFileSync(baseAbs) : null;
+  const relBytes = existsSync(releaseAbs) && statSync(releaseAbs).isFile()
+    ? normalizedReleaseBytes(releaseAbs, relRel) // normalize on the fly — matches how the pin was made
+    : null;
+  const liveBytes = existsSync(liveAbs) && statSync(liveAbs).isFile() ? readFileSync(liveAbs) : null;
 
-  const liveHas = existsSync(liveAbs) && statSync(liveAbs).isFile();
-  if (!liveHas) return "add"; // upstream file live doesn't have yet
-  // upstream=="same" means the normalized baseline equals the release (expected).
-  // The signal we want is: does live differ from the baseline?
-  if (mine === "diff") return "conflict"; // both baseline(=upstream) and live have content, and they differ
-  if (mine === "same") return "unchanged";
-  return "take";
+  const upstreamChanged = baseBytes && relBytes ? Buffer.compare(baseBytes, relBytes) !== 0 : baseBytes !== !!relBytes;
+  const liveHas = liveBytes !== null;
+  const releaseHas = relBytes !== null;
+
+  if (releaseHas && !liveHas) return "add";
+  if (!releaseHas && liveHas) return "local-only";
+  const mineChanged = baseBytes && liveBytes ? Buffer.compare(baseBytes, liveBytes) !== 0 : false;
+  if (mineChanged) return "conflict"; // live diverged → protect it, never auto-take
+  if (upstreamChanged) return "take"; // upstream moved, live is still at baseline → safe
+  return "unchanged";
 }
 
 function gitStat(baseAbs: string, otherAbs: string): string {
@@ -150,28 +191,41 @@ function gitStat(baseAbs: string, otherAbs: string): string {
 
 function main(argv: string[]): number {
   if (argv.includes("--self-test")) return runSelfTest();
-  const doRefresh = argv.includes("--refresh") || !existsSync(BASELINE_ROOT);
+  // The baseline is a PINNED, committed ancestor. Write it only on first bootstrap
+  // (absent) or on explicit `--adopt` (advance the pin to the current release AFTER
+  // a sync). A plain run NEVER rewrites the pin — that is what keeps `take` real.
+  const bootstrap = !existsSync(BASELINE_ROOT);
+  const adopt = argv.includes("--adopt");
 
   console.log("upstream-sync — READ-ONLY 3-way view (no --apply; never writes to live)\n");
-  if (doRefresh) {
-    console.log("Refreshing normalized baseline from release payload...");
+  if (bootstrap || adopt) {
+    console.log(bootstrap ? "Bootstrapping pinned baseline from current release..." : "Adopting current release as new pinned baseline...");
     const { written, totalFlags, flagged } = refreshBaseline();
-    console.log(`  baseline: ${written} files written to ${path.relative(REPO_ROOT, BASELINE_ROOT)}`);
+    console.log(`  baseline: ${written} files written to ${path.relative(REPO_ROOT, BASELINE_ROOT)} (commit this pin)`);
     console.log(`  normalization flags (need human review): ${totalFlags}`);
     for (const f of flagged.slice(0, 20)) console.log(`    FLAG ${f}`);
     if (flagged.length > 20) console.log(`    ... +${flagged.length - 20} more flagged files`);
     console.log("");
   }
 
-  const baseRels = walk(BASELINE_ROOT);
-  const buckets: Record<Klass, string[]> = { take: [], conflict: [], add: [], unchanged: [] };
+  // Classify the UNION of baseline + current-release paths (a v7 release may add
+  // files absent from the pinned baseline; walking the baseline alone would miss them).
+  const relToBaseRel = (rel: string) => normalizeRelPath(rel);
+  const baseRels = new Set(walk(BASELINE_ROOT));
+  for (const rel of walk(RELEASE_PAYLOAD)) baseRels.add(relToBaseRel(rel));
+  const buckets: Record<Klass, string[]> = { take: [], conflict: [], add: [], "local-only": [], unchanged: [] };
   for (const baseRel of baseRels) buckets[classifyThreeWay(baseRel)].push(baseRel);
 
-  console.log("3-WAY CLASSIFICATION (baseline = synthesized common ancestor):");
-  console.log(`  take      ${buckets.take.length}  — upstream has it, live unchanged from baseline → safe to land`);
-  console.log(`  conflict  ${buckets.conflict.length}  — live DIFFERS from baseline → review; NEVER auto-take (protects your line)`);
-  console.log(`  add       ${buckets.add.length}  — new upstream file live lacks → candidate port`);
+  console.log("3-WAY CLASSIFICATION (baseline = PINNED common ancestor):");
+  console.log(`  take      ${buckets.take.length}  — release changed vs pin, live still at pin → safe to land`);
+  console.log(`  conflict  ${buckets.conflict.length}  — live DIFFERS from pin → review; NEVER auto-take (protects your line)`);
+  console.log(`  add       ${buckets.add.length}  — release file live lacks → candidate port`);
+  console.log(`  local-only ${buckets["local-only"].length}  — your own file, not in release → ignore`);
   console.log(`  unchanged ${buckets.unchanged.length}  — identical\n`);
+  if (buckets.take.length === 0) {
+    console.log("  (take=0 is HONEST here: pin == current release, so no newer version exists yet.");
+    console.log("   At v7, refresh the payload, re-run: take populates with upstream's real changes.)\n");
+  }
 
   const showConflicts = argv.includes("--conflicts");
   const showAdds = argv.includes("--adds");
