@@ -2457,6 +2457,140 @@ function pickBulletValue(content: string, key: string): string | null {
   return m ? cleanInlineMarkdown(m[1]) : null
 }
 
+// Reads a `**Key:** value` labeled sub-field from an entry body, tolerating
+// BOTH forms parseIdEntries can produce: heading-form bodies (newline-joined)
+// and bullet-form bodies (Pass 2 joins sub-bullet continuation lines with " ",
+// so several `- **K:** v` fields end up on one line). Also tolerates an
+// optional leading `- `/`* ` bullet marker before the bold key. The value is
+// captured up to the NEXT bolded label / bullet boundary / newline / end, so a
+// single field never swallows the ones after it (the HZ-2 over-capture class
+// that a plain line-anchored `.+?$` hits on space-joined bodies).
+function pickLabeledValue(body: string, key: string): string | null {
+  if (!body) return null
+  // Boundary = the NEXT field's start: a bullet-led bold label, or a bare
+  // bold LABEL form `**Word:**` (colon required), or newline/end. Requiring the
+  // trailing `:**` in the bare-bold alternative means a value's OWN inline
+  // emphasis (`**Project A**`, no colon) does NOT prematurely end the capture
+  // (Finding 3 — bold-value under-capture).
+  const re = new RegExp(
+    `\\*\\*${key}\\*?\\*?\\s*:\\s*\\*?\\*?\\s*(.*?)\\s*(?=(?:[-*]\\s+\\*\\*)|(?:\\*\\*[A-Za-z][\\w ]*:\\*\\*)|\\n|$)`,
+    "i",
+  )
+  const m = body.match(re)
+  return m && m[1].trim() ? cleanInlineMarkdown(m[1].trim()) : null
+}
+
+// Extract reference IDs from an entry body's `**References:** A0, B1` field,
+// working whether the body is newline- or space-joined and regardless of a
+// leading bullet marker (the case extractSummaryDetailRefs' line-anchored regex
+// misses). Returns [] when no References field is present.
+function pickRefs(body: string): string[] {
+  const raw = pickLabeledValue(body, "References")
+  if (!raw) return []
+  const out: string[] = []
+  const tokenRe = /\b([A-Za-z]+)(\d+)([a-z]?)\b/g
+  let m: RegExpExecArray | null
+  while ((m = tokenRe.exec(raw)) !== null) {
+    const id = m[1].toUpperCase() + m[2] + (m[3] || "").toLowerCase()
+    if (!out.includes(id)) out.push(id)
+  }
+  return out
+}
+
+// Union of two ID lists, order-stable, first-seen wins. Lets a primitive bind
+// references from BOTH parseIdEntries' own extraction (heading-form entries)
+// AND pickRefs on the raw body (bullet-form sub-field entries) without dupes.
+function mergeRefs(a: readonly string[], b: readonly string[]): string[] {
+  const out = [...a]
+  for (const id of b) if (!out.includes(id)) out.push(id)
+  return out
+}
+
+// Boundary-aware reference binning by primitive prefix (module-scope, hoisted
+// from a former local closure inside handleTelosOverview so parseMetrics and
+// other parsers share ONE implementation). Matches `^<PREFIX>\d` so prefix "P"
+// matches P0/P12 but NOT PR0 or PB0 — a plain `startsWith("P")` would vacuum
+// Project/Problem-variant IDs into the Problems bin (the HZ-3 collision class).
+function refsByPrefix(refs: readonly string[], prefix: string): string[] {
+  const re = new RegExp(`^${prefix}\\d`, "i")
+  return refs.filter((id) => re.test(id))
+}
+
+// Parse a boolean-ish sub-field value (`true`/`yes`/`1`/`active`/`on`).
+function parseBoolField(raw: string | null): boolean {
+  return /^(true|yes|1|active|on)$/i.test((raw ?? "").trim())
+}
+
+// Normalize a KPI/target string to a number for progress math. Handles the
+// real formats used across TELOS data: duration `6h58`→418min, magnitude
+// `$18.2k`→18200, unit-suffixed `18.4km`→18.4, percent `54%`→54, plain counts.
+// Returns null for non-numeric / date targets (`Jun`, `Dec`) so pct falls to 0.
+function normalizeGoalNumber(s: string): number | null {
+  if (!s) return null
+  let t = s.trim().replace(/[$,%\s]/g, "")
+  const hm = t.match(/^(\d+)h(\d+)$/i)
+  if (hm) return Number(hm[1]) * 60 + Number(hm[2])
+  const k = t.match(/^(\d+(?:\.\d+)?)k$/i)
+  if (k) return Number(k[1]) * 1000
+  t = t.replace(/[a-z]+$/i, "") // strip trailing unit letters (km, mo, …)
+  const n = parseFloat(t)
+  return Number.isFinite(n) ? n : null
+}
+
+// Compute a 0–100 progress percent from a goal's KPI (current) and target.
+// Returns 0 when either side is non-numeric (e.g. a date target) or target is 0.
+function computeGoalPct(kpi: string, target: string): number {
+  const a = normalizeGoalNumber(kpi)
+  const b = normalizeGoalNumber(target)
+  if (a === null || b === null || b === 0) return 0
+  return Math.max(0, Math.min(100, Math.round((a / b) * 100)))
+}
+
+// Parse the `## Metrics` section into first-class Metric primitives (K# IDs).
+// Authored-only in v1: Value/Unit/Trend are read from labeled sub-fields; the
+// sparkline history (`spark`) is deferred (empty array) pending a metric-history
+// store, and `feeds` links each metric UP to the Goal(s) it measures (K→G, the
+// Miessler-canonical cross-reference). Shape matches the client `Metric` type.
+function parseMetrics(raw: string): Array<{
+  id: string
+  label: string
+  value: string
+  unit: string
+  trend: number
+  spark: number[]
+  feeds: string[]
+  color: string
+}> {
+  return parseIdEntries(raw, "K")
+    // Require at least one real labeled sub-field (Value / Unit / Trend /
+    // References). This suppresses parseIdEntries' Pass-3 ID-less prose
+    // fallback, which would otherwise turn a stray `## Metrics` header +
+    // blockquote (K-entries deleted) into a PHANTOM metric — fabricated
+    // placeholder text leaking through as a real primitive. A genuine metric
+    // always carries at least a Value or a Trend.
+    .filter((k) =>
+      pickLabeledValue(k.body, "Value") !== null ||
+      pickLabeledValue(k.body, "Unit") !== null ||
+      pickLabeledValue(k.body, "Trend") !== null ||
+      pickRefs(k.body).length > 0,
+    )
+    .map((k) => {
+      const refs = mergeRefs(k.references, pickRefs(k.body))
+      const trendRaw = pickLabeledValue(k.body, "Trend")
+      const trend = trendRaw ? (parseFloat(trendRaw.replace(/[+]/g, "")) || 0) : 0
+      return {
+        id: k.id,
+        label: k.title,
+        value: pickLabeledValue(k.body, "Value") ?? "",
+        unit: pickLabeledValue(k.body, "Unit") ?? "",
+        trend,
+        spark: [], // history deferred — no time-series store yet
+        feeds: refsByPrefix(refs, "G"),
+        color: "--azure",
+      }
+    })
+}
+
 // Four Human-3.0 surface dimensions: health, creative freedom, relationships,
 // finances. The underlying IDEAL_STATE/ may contain more files (creative,
 // freedom, rhythms etc.); the surface composes them. Both Pulse hero rings and
@@ -3065,32 +3199,38 @@ async function handleTelosOverview(): Promise<Response> {
     const currentStateRaw = sections["current state"] ?? ""
     const idealStateRaw = sections["ideal state"] ?? ""
 
-    // Helper to filter references list by ID prefix. Each entry's References
-    // field can mix prefixes (e.g., a Strategy may reference both challenges
-    // and goals); the parser bins by section semantics:
+    // Reference binning uses the module-scope boundary-aware `refsByPrefix`
+    // (hoisted; matches `^<PREFIX>\d` so "P" doesn't swallow PR*/PB* — HZ-3).
+    // Each entry's References field can mix prefixes; the parser bins by
+    // section semantics:
     //   - Mission references: P* → addresses[]
-    //   - Goal references: P* → addresses[]  (goals don't reference missions)
+    //   - Goal references: P* → addresses[]; K* → metrics[]  (goals don't reference missions)
     //   - Problem references: M* → affects[]
     //   - Strategy references: C* → overcomes[]; G* → implements[]
     //   - Challenge references: G* → blocks[]
-    const refsByPrefix = (refs: string[], prefix: string): string[] =>
-      refs.filter((id) => id.toUpperCase().startsWith(prefix.toUpperCase()))
+    //   - Metric references: G* → feeds[]
+    const metricsRaw = sectionOrFile("metrics", "METRICS.md")
 
     const goalEntries = parseIdEntries(goalsRaw, "G")
     const goals = goalEntries.length > 0
-      ? goalEntries.map((g) => ({
-          id: g.id,
-          title: cleanInlineMarkdown(g.title),
-          summary: g.summary,
-          references: g.references,
-          addresses: refsByPrefix(g.references, "P"),
-          kpi: pickBulletValue(g.body, "KPI") ?? "",
-          target: pickBulletValue(g.body, "Target") ?? "",
-          pct: 0,
-          delta: null,
-          dims: [],
-          metrics: [],
-        }))
+      ? goalEntries.map((g) => {
+          const refs = mergeRefs(g.references, pickRefs(g.body))
+          const kpi = pickLabeledValue(g.body, "KPI") ?? pickBulletValue(g.body, "KPI") ?? ""
+          const target = pickLabeledValue(g.body, "Target") ?? pickBulletValue(g.body, "Target") ?? ""
+          return {
+            id: g.id,
+            title: cleanInlineMarkdown(g.title),
+            summary: g.summary,
+            references: refs,
+            addresses: refsByPrefix(refs, "P"),
+            kpi,
+            target,
+            pct: computeGoalPct(kpi, target),
+            delta: null, // movement-since-last: needs a history store (deferred)
+            dims: [],
+            metrics: refsByPrefix(refs, "K"),
+          }
+        })
       : asLifeGoals((await (handleLifeGoals().json())).goals).map((g) => ({
           id: g.id,
           title: cleanInlineMarkdown(g.title ?? g.text ?? g.id),
@@ -3104,41 +3244,56 @@ async function handleTelosOverview(): Promise<Response> {
           dims: [],
           metrics: [],
         }))
-    const missionsFull = parseIdEntries(missionRaw, "M").map((m) => ({
-      id: m.id,
-      title: m.title,
-      summary: m.summary,
-      references: m.references,
-      horizon: "",
-      active: false,
-      addresses: refsByPrefix(m.references, "P"),
-    }))
-    const problems = parseIdEntries(problemsRaw, "P").map((p) => ({
-      id: p.id,
-      title: p.title,
-      summary: p.summary,
-      references: p.references,
-      note: p.summary || firstParagraph(p.body),
-      severity: "med",
-      affects: refsByPrefix(p.references, "M"),
-    }))
-    const strategies = parseIdEntries(strategiesRaw, "S").map((s) => ({
-      id: s.id,
-      title: s.title,
-      summary: s.summary,
-      references: s.references,
-      overcomes: refsByPrefix(s.references, "C"),
-      implements: refsByPrefix(s.references, "G"),
-      active: false,
-    }))
-    const challenges = parseIdEntries(challengesRaw, "C").map((c) => ({
-      id: c.id,
-      title: c.title,
-      summary: c.summary,
-      references: c.references,
-      note: c.summary || firstParagraph(c.body),
-      blocks: refsByPrefix(c.references, "G"),
-    }))
+    const missionsFull = parseIdEntries(missionRaw, "M").map((m) => {
+      const refs = mergeRefs(m.references, pickRefs(m.body))
+      return {
+        id: m.id,
+        title: m.title,
+        summary: m.summary,
+        references: refs,
+        horizon: pickLabeledValue(m.body, "Horizon") ?? "",
+        active: parseBoolField(pickLabeledValue(m.body, "Active")),
+        addresses: refsByPrefix(refs, "P"),
+      }
+    })
+    const problems = parseIdEntries(problemsRaw, "P").map((p) => {
+      const refs = mergeRefs(p.references, pickRefs(p.body))
+      const sevRaw = (pickLabeledValue(p.body, "Severity") ?? "").toLowerCase()
+      const severity = sevRaw === "high" || sevRaw === "low" || sevRaw === "med" ? sevRaw : "med"
+      return {
+        id: p.id,
+        title: p.title,
+        summary: p.summary,
+        references: refs,
+        note: p.summary || firstParagraph(p.body),
+        severity,
+        affects: refsByPrefix(refs, "M"),
+      }
+    })
+    const strategies = parseIdEntries(strategiesRaw, "S").map((s) => {
+      const refs = mergeRefs(s.references, pickRefs(s.body))
+      return {
+        id: s.id,
+        title: s.title,
+        summary: s.summary,
+        references: refs,
+        overcomes: refsByPrefix(refs, "C"),
+        implements: refsByPrefix(refs, "G"),
+        active: parseBoolField(pickLabeledValue(s.body, "Active")),
+      }
+    })
+    const challenges = parseIdEntries(challengesRaw, "C").map((c) => {
+      const refs = mergeRefs(c.references, pickRefs(c.body))
+      return {
+        id: c.id,
+        title: c.title,
+        summary: c.summary,
+        references: refs,
+        note: c.summary || firstParagraph(c.body),
+        blocks: refsByPrefix(refs, "G"),
+      }
+    })
+    const metrics = parseMetrics(metricsRaw)
 
     const dimensions = buildDimensionsFromIdealState()
     const snapshot = buildSnapshotFromCurrentState()
@@ -3165,12 +3320,17 @@ async function handleTelosOverview(): Promise<Response> {
     // content is the signal — no marker file. The client uses this to decide
     // whether to fall back to the showcase fixture (fresh installs only) or
     // render empty-states for unpopulated sections (personalized installs).
+    // HZ-1: metrics counts toward personalization so a metrics-only install
+    // (authored ## Metrics, none of the core five) is NOT mistaken for a fresh
+    // install and does NOT fall through to the showcase fixture. (Projects will
+    // join this list in Phase 3 when it stops being a literal null.)
     const isPersonalized =
       missionsFull.length > 0 ||
       goals.length > 0 ||
       problems.length > 0 ||
       strategies.length > 0 ||
-      challenges.length > 0
+      challenges.length > 0 ||
+      metrics.length > 0
 
     return Response.json({
       meta: { isPersonalized },
@@ -3181,7 +3341,7 @@ async function handleTelosOverview(): Promise<Response> {
       problems,
       missions: missionsFull,
       goals,
-      metrics: null,
+      metrics,
       challenges,
       strategies,
       projects: null,
