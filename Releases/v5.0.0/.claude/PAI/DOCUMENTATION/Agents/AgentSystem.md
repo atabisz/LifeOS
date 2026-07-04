@@ -56,7 +56,7 @@ Skill("Agents")  // → CreateCustomAgent workflow with unique traits per agent
 | "research X", "investigate Y" | Research skill | `Skill("Research")` → appropriate researcher agents |
 | "use Remy", "get Ava to" | Named agent | Use appropriate researcher subagent_type |
 | (Code implementation, standard) | Engineer | `Task({ subagent_type: "Engineer" })` |
-| (Production-grade code, E3+, "no shortcuts" directive, OR named "Forge") | Forge (cross-vendor, OpenAI-family GPT-5.4 via `codex exec`) | `Agent({ subagent_type: "Forge" })` |
+| (Production-grade code, E3+, "no shortcuts" directive, OR named "Forge") | Forge (cross-vendor, OpenAI-family GPT-5.5 via `codex exec`) | `Agent({ subagent_type: "Forge" })` |
 | (Whole-project long-context coding, OR named "Anvil") | Anvil (cross-vendor, Kimi K2.6 via Moonshot API) | `Agent({ subagent_type: "Anvil" })` |
 | (Cross-vendor audit, MANDATORY at E4/E5 in VERIFY) | Cato (read-only auditor, OpenAI-family GPT-5.x) | `Agent({ subagent_type: "Cato" })` |
 | (Architecture/design) | Architect | `Task({ subagent_type: "Architect" })` |
@@ -95,7 +95,7 @@ These are pre-built agents in the Claude Code Task tool. They are for **internal
 | `general-purpose` | Custom agents via ComposeAgent | Parallel work with task-specific prompts |
 | `Explore` | Codebase exploration | Finding files, understanding structure |
 | `Plan` | Implementation planning | Plan mode |
-| `Forge` | Cross-vendor coder (OpenAI-family GPT-5.4 via `codex exec`) | Production-grade code at E3+ or "no shortcuts" directive |
+| `Forge` | Cross-vendor coder (OpenAI-family GPT-5.5 via `codex exec`) | Production-grade code at E3+ or "no shortcuts" directive |
 | `Anvil` | Cross-vendor coder (Kimi K2.6 via Moonshot direct API, 256K context) | Whole-project long-context reasoning where the entire repo matters |
 | `Cato` | Cross-vendor auditor (read-only, OpenAI-family GPT-5.x via `codex exec --sandbox read-only`) | MANDATORY at E4/E5 in VERIFY — surfaces same-family blind spots |
 | ~~`BrowserAgent`~~ | **DEPRECATED** | Replaced by **Interceptor** skill (real Chrome, no CDP fingerprint) |

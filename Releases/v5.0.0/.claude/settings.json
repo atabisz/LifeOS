@@ -9,9 +9,6 @@
     "OTEL_LOG_ASSISTANT_RESPONSES": "0"
   },
   "includeGitInstructions": false,
-  "sandbox": {
-    "credentials": {}
-  },
   "permissions": {
     "allow": [
       "Read",
@@ -68,10 +65,10 @@
       "Agent(model:claude-fable-5)"
     ]
   },
-  "model": "opus",
+  "model": "us.anthropic.claude-opus-4-8",
   "fallbackModel": [
-    "claude-sonnet-4-6",
-    "claude-haiku-4-5-20251001"
+    "us.anthropic.claude-sonnet-5",
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0"
   ],
   "skillOverrides": {
     "gsd-add-tests": "user-invocable-only",
@@ -179,6 +176,12 @@
             "type": "command",
             "command": "\"$HOME/.bun/bin/bun.exe\" \"$HOME/.claude/hooks/KVSync.hook.ts\"",
             "timeout": 10,
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "\"$HOME/.bun/bin/bun.exe\" \"$HOME/.claude/PAI/TOOLS/DerivedSync.ts\"",
+            "timeout": 30,
             "async": true
           }
         ]
@@ -482,8 +485,7 @@
           {
             "type": "command",
             "command": "\"$HOME/.bun/bin/bun.exe\" \"$HOME/.claude/hooks/DocIntegrity.hook.ts\"",
-            "timeout": 60,
-            "async": true
+            "timeout": 60
           }
         ]
       },
@@ -547,6 +549,9 @@
       }
     }
   },
+  "sandbox": {
+    "credentials": {}
+  },
   "effortLevel": "xhigh",
   "autoUpdatesChannel": "latest",
   "verbose": false,
@@ -574,5 +579,6 @@
         "volume": 1
       }
     }
-  }
+  },
+  "skipWorkflowUsageWarning": true
 }

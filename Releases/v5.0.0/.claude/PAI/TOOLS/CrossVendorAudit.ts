@@ -13,9 +13,9 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { readFile, writeFile, readdir, appendFile, mkdir, stat } from "node:fs/promises";
+import { readFile, writeFile, readdir, appendFile, mkdir, stat, unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const HOME = homedir();
@@ -221,7 +221,18 @@ function assembleBundle(isa: string, artifacts: string, toolTail: string, adviso
   return bundle;
 }
 
-function invokeCodex(codexBin: string, bundle: string): Promise<{ stdout: string; stderr: string; code: number | null }> {
+// Unique per-invocation temp path for codex's --output-last-message file.
+// pid + a monotonic counter avoids collision across concurrent/repeat runs
+// (ISC-5). No Date.now()/random needed — pid+counter is deterministic-enough.
+let __codexOutSeq = 0;
+function codexOutPath(): string {
+  return join(tmpdir(), `cato-codex-last-${process.pid}-${++__codexOutSeq}.txt`);
+}
+
+function invokeCodex(
+  codexBin: string,
+  bundle: string
+): Promise<{ stdout: string; stderr: string; code: number | null; outFile: string }> {
   return new Promise((resolvePromise) => {
     // A .cmd/.bat shim (npm-global installs ship one) cannot be launched by
     // CreateProcess directly — spawn needs shell:true for it, else it throws.
@@ -229,9 +240,29 @@ function invokeCodex(codexBin: string, bundle: string): Promise<{ stdout: string
     // literals and the bundle is piped via stdin, so shell:true is injection-safe.
     const useShell = /\.(cmd|bat)$/i.test(codexBin);
     const command = useShell ? `"${codexBin}"` : codexBin;
+    const outFile = codexOutPath();
+    // Capture the model's FINAL message from -o <file> — NOT scraped stdout.
+    // Scraping stdout broke on Windows: codex's console renderer repaints lines
+    // with \r/ANSI escapes that append (not overwrite) when piped, so the greedy
+    // verdict regex matched a polluted, duplicated, truncated span and JSON.parse
+    // failed or returned a mangled object. -o writes only the final message to a
+    // file deterministically. --skip-git-repo-check: codex 0.142.4 rejects a
+    // non-git cwd without it (exit 1). --color never: don't animate into the pipe.
     const proc = spawn(
       command,
-      ["exec", "--sandbox", "read-only", "--model", "gpt-5.5", "-"],
+      [
+        "exec",
+        "--sandbox",
+        "read-only",
+        "--skip-git-repo-check",
+        "--color",
+        "never",
+        "--model",
+        "gpt-5.5",
+        "-o",
+        outFile,
+        "-",
+      ],
       { stdio: ["pipe", "pipe", "pipe"], shell: useShell }
     );
     let stdout = "";
@@ -241,7 +272,7 @@ function invokeCodex(codexBin: string, bundle: string): Promise<{ stdout: string
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolvePromise(r);
+      resolvePromise({ ...r, outFile });
     };
     const timer = setTimeout(() => {
       proc.kill("SIGTERM");
@@ -262,14 +293,67 @@ function invokeCodex(codexBin: string, bundle: string): Promise<{ stdout: string
   });
 }
 
-function extractJSON(rawStdout: string): CatoResponse {
-  // Codex CLI wraps output with session metadata. Find the JSON object.
-  const jsonMatch = rawStdout.match(/\{[\s\S]*"verdict"[\s\S]*\}/);
-  if (!jsonMatch) {
+// Strip ANSI escape sequences and carriage returns. Codex's renderer repaints
+// with \x1b[...m / \x1b[2K / \r; when piped, those get appended not overwritten,
+// so they pollute the buffer mid-JSON. Applied only to the SCRAPED-STDOUT fallback
+// path — the -o file is already clean, but stripping it too is harmless.
+function stripAnsi(s: string): string {
+  return s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "").replace(/\r/g, "");
+}
+
+// Find the LAST balanced top-level {...} object, scanning right-to-left. The old
+// greedy /\{[\s\S]*"verdict"[\s\S]*\}/ matched from the first "{" (often a repainted
+// intermediate fragment) to the last "}", spanning duplicated/truncated repaints —
+// it "matched" but failed to parse. This returns a single well-formed object even
+// when the verdict JSON itself contains nested {} or escape-looking strings.
+function lastBalancedObject(s: string): string | null {
+  let end = s.lastIndexOf("}");
+  while (end >= 0) {
+    let depth = 0;
+    let inStr = false;
+    for (let i = end; i >= 0; i--) {
+      const c = s[i];
+      if (inStr) {
+        if (c === '"') {
+          let b = 0;
+          let j = i - 1;
+          while (j >= 0 && s[j] === "\\") {
+            b++;
+            j--;
+          }
+          if (b % 2 === 0) inStr = false;
+        }
+        continue;
+      }
+      if (c === '"') {
+        inStr = true;
+        continue;
+      }
+      if (c === "}") depth++;
+      else if (c === "{") {
+        depth--;
+        if (depth === 0) {
+          const candidate = s.slice(i, end + 1);
+          if (candidate.includes('"verdict"')) return candidate;
+          break; // this object had no verdict — try the next "}" to its left
+        }
+      }
+    }
+    end = s.lastIndexOf("}", end - 1);
+  }
+  return null;
+}
+
+function extractJSON(raw: string): CatoResponse {
+  // Codex CLI wraps output with session metadata (and, on the stdout path, repaint
+  // noise). Sanitize, then extract the last balanced verdict object.
+  const cleaned = stripAnsi(raw);
+  const candidate = lastBalancedObject(cleaned);
+  if (!candidate) {
     return { verdict: "skipped", reason: "no JSON in codex output" };
   }
   try {
-    return JSON.parse(jsonMatch[0]) as CatoResponse;
+    return JSON.parse(candidate) as CatoResponse;
   } catch (err) {
     return { verdict: "skipped", reason: `parse error: ${(err as Error).message}` };
   }
@@ -336,21 +420,60 @@ async function main() {
   ]);
   const bundle = assembleBundle(isa, artifacts, toolTail, args.advisorVerdict);
 
-  const { stdout, stderr, code } = await invokeCodex(CODEX_BIN, bundle);
+  const { stdout, stderr, code, outFile } = await invokeCodex(CODEX_BIN, bundle);
+  // Best-effort cleanup of the -o temp file once we've read it (ISC-6, never throws).
+  const cleanupOutFile = async () => {
+    try {
+      await unlink(outFile);
+    } catch {
+      /* file may not exist (spawn error / timeout before write) — ignore */
+    }
+  };
+
   if (code === 124) {
+    await cleanupOutFile();
     const resp = { verdict: "skipped" as const, reason: `codex timeout at ${CODEX_TIMEOUT_MS / 1000}s` };
     await appendFinding(args.slug, args.advisorVerdict, resp, tier);
     console.log(JSON.stringify(resp));
     return;
   }
   if (code !== 0) {
+    await cleanupOutFile();
     const resp = { verdict: "skipped" as const, reason: `codex exit ${code}: ${stderr.slice(0, 200)}` };
     await appendFinding(args.slug, args.advisorVerdict, resp, tier);
     console.log(JSON.stringify(resp));
     return;
   }
 
-  const parsed = extractJSON(stdout);
+  // Prefer the -o final-message file (deterministic, no repaint noise). This is why
+  // the Windows truncation is structurally impossible: the animation stream is no
+  // longer the data channel. Fallback ladder (ISC-7): try the file → if it is
+  // empty/unreadable OR present-but-unparseable, try sanitized stdout → only then
+  // skip. A present-but-invalid file must NOT strand a good verdict sitting in
+  // stdout (Advisor gap #2), so we parse the file and fall through on skip.
+  let fileContent = "";
+  try {
+    if (existsSync(outFile)) {
+      fileContent = (await readFile(outFile, "utf8")).trim();
+    }
+  } catch {
+    /* unreadable — fileContent stays "" */
+  }
+  await cleanupOutFile();
+
+  let parsed: CatoResponse;
+  let capturedVia: string;
+  const fromFile = fileContent.length > 0 ? extractJSON(fileContent) : null;
+  if (fromFile && fromFile.verdict !== "skipped") {
+    parsed = fromFile;
+    capturedVia = "output-last-message";
+  } else {
+    parsed = extractJSON(stdout);
+    capturedVia = "stdout-fallback";
+  }
+  if (parsed.verdict !== "skipped") {
+    (parsed as CatoResponse & { captured_via?: string }).captured_via = capturedVia;
+  }
   if (parsed.tokens_used && !parsed.cost_usd_est) {
     parsed.cost_usd_est = estimateCost(parsed.tokens_used);
   }
@@ -358,7 +481,13 @@ async function main() {
   console.log(JSON.stringify(parsed));
 }
 
-main().catch(async (err) => {
-  console.error(JSON.stringify({ verdict: "error", reason: err.message }));
-  process.exit(1);
-});
+// Exported for unit testing the extraction path against the REAL production
+// functions (not a scratch copy) — Rule 1b target authenticity.
+export { extractJSON, lastBalancedObject, stripAnsi };
+
+if (import.meta.main) {
+  main().catch(async (err) => {
+    console.error(JSON.stringify({ verdict: "error", reason: err.message }));
+    process.exit(1);
+  });
+}

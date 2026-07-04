@@ -65,7 +65,7 @@ FOR: Multi-step, complex, or difficult work. Troubleshooting, debugging, buildin
 - PAI Inference Tool: Use `bun TOOLS/Inference.ts fast|standard|smart`, never import `@anthropic-ai/sdk` directly.
 - Algorithm exceptions: Ratings (single number after RATE) → MINIMAL. Acknowledgments ("ok", "thanks") → MINIMAL. Greetings → respond naturally.
 - Effort shortcuts: `/e1` (Standard+fast-path), `/e2` (Extended), `/e3` (Advanced), `/e4` (Deep), `/e5` (Comprehensive). Append to any message to override auto-detection.
-- **Forge auto-include**: Any coding task (implement, refactor, debug, build, migrate) at effort E3/E4/E5 MUST include Forge in EXECUTE — spawn via `Agent(subagent_type="Forge", ...)`. Forge runs GPT-5.4 via `codex exec` at `model_reasoning_effort=high`, specializes in quality + completeness. Distinct from Engineer (Claude-family). Also invoke whenever {PRINCIPAL.NAME} names "Forge" at any tier — name-match overrides the tier gate. Skip at E1/E2 unless {PRINCIPAL.NAME} named him. See `PAI/ALGORITHM/capabilities.md` → "Forge auto-include binding".
+- **Forge auto-include**: Any coding task (implement, refactor, debug, build, migrate) at effort E3/E4/E5 MUST include Forge in EXECUTE — spawn via `Agent(subagent_type="Forge", ...)`. Forge runs GPT-5.5 via `codex exec` at `model_reasoning_effort=high`, specializes in quality + completeness. Distinct from Engineer (Claude-family). Also invoke whenever {PRINCIPAL.NAME} names "Forge" at any tier — name-match overrides the tier gate. Skip at E1/E2 unless {PRINCIPAL.NAME} named him. See `PAI/ALGORITHM/capabilities.md` → "Forge auto-include binding".
 
 ---
 

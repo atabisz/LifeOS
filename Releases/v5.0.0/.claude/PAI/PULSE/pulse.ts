@@ -78,6 +78,7 @@ let imessageModule: any = null
 let assistantModule: any = null
 let performanceModule: any = null
 let syslogModule: any = null
+let tabFreshnessModule: any = null
 
 async function loadModules(config: PulseConfig) {
   if (config.voice?.enabled !== false) {
@@ -99,6 +100,12 @@ async function loadModules(config: PulseConfig) {
     wikiModule = await import("./modules/wiki")
   } catch (err) {
     log("warn", "Wiki module not available", { error: String(err) })
+  }
+  // Tab-freshness module — always load (no config gate); ported from LifeOS v6.
+  try {
+    tabFreshnessModule = await import("./modules/tab-freshness")
+  } catch (err) {
+    log("warn", "Tab-freshness module not available", { error: String(err) })
   }
   if (config.telegram?.enabled) {
     try {
@@ -382,6 +389,16 @@ async function main() {
     log("info", "Wiki module loaded")
   }
 
+  if (tabFreshnessModule) {
+    try {
+      await tabFreshnessModule.start()
+      log("info", "Tab-freshness module loaded")
+    } catch (err) {
+      log("error", "Tab-freshness module failed to start", { error: String(err) })
+      tabFreshnessModule = null
+    }
+  }
+
   if (assistantModule && config.da?.enabled) {
     assistantModule.startAssistant(config.da, enabledJobs)
     log("info", "Assistant module loaded")
@@ -425,6 +442,12 @@ async function main() {
       // Hook routes: /hooks/*
       if (pathname.startsWith("/hooks/")) {
         const resp = await handleHooksRequestAsync(req, pathname)
+        if (resp) return resp
+      }
+
+      // Tab-freshness route: /api/tab-freshness
+      if (tabFreshnessModule && pathname === "/api/tab-freshness") {
+        const resp = await tabFreshnessModule.handleRequest(req, pathname)
         if (resp) return resp
       }
 

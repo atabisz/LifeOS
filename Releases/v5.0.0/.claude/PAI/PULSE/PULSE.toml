@@ -19,6 +19,15 @@ dashboard_dir = "${USERPROFILE}/.claude/PAI/PULSE/Observability/out"
 # Example custom module — create your own in modules/
 # my_module = true
 
+# ── Telegram bot ──
+# grammY polling bot → Claude Agent SDK. Module gate: pulse.ts imports + starts
+# modules/telegram.ts only when enabled = true (defaults false).
+# SECRETS DO NOT GO HERE — PULSE.toml is git-tracked. The bot token and the
+# allowed-user IDs live in the gitignored ~/.claude/.env as TELEGRAM_BOT_TOKEN
+# and TELEGRAM_ALLOWED_USERS (comma-separated numeric Telegram user IDs).
+[telegram]
+enabled = true
+
 [voice]
 enabled = true
 # Provider is pinned to Piper (local, offline, no API key). ElevenLabs is
@@ -98,4 +107,23 @@ schedule = "0 4 * * 0"                 # growth_schedule — weekly Sun 4 AM, si
 type = "script"
 command = "bun run checks/da-growth.ts"
 output = "log"
-enabled = false                        # PHASE-GATE: autonomous persona mutation — enable after an observation window
+enabled = true                         # PHASE-GATE LIFTED 2026-07-04 (principal opt-in): autonomous persona mutation ON. Guards remain: ≤5pt/mo trait drift, never-autonomous {name,voice,relationship.dynamic}, anti-sycophancy floor {directness,precision}, max 50 opinions, ≤3 new/run. Formation also needs DA_GROWTH_EXTRACT=1 (set in ~/.claude/.env).
+
+# ── LifeOS "managing state" derive-on-edit trigger (cross-platform) ──
+# Primary trigger for the derive-on-change loop: edit a TELOS/IDEAL_STATE/
+# CURRENT_STATE source → DerivedSync recomputes PRINCIPAL_TELOS.md + LIFEOS_STATE.json.
+# Replaces the macOS-only launchd WatchPaths agent — Pulse's cron loop is pure JS
+# (matchesCron), so this fires identically on macOS/Linux/Windows. Minute-poll is
+# cheap: DerivedSync is SHA256-idempotent, so an unchanged poll is a free no-op.
+# cwd is PAI/Pulse (lib.ts spawnScript), so the path is relative like the da-jobs;
+# DerivedSync resolves HOME internally (HOME ?? USERPROFILE ?? homedir) — no reliance
+# on $HOME expanding in the job shell (unset under Windows Pulse autostart).
+[[job]]
+name = "derived-sync"
+schedule = "*/15 * * * *"              # every 15 min — trigger latency is low-leverage (deriver is
+                                       # SHA256-idempotent); a tighter poll only widens the overlap
+                                       # window with the SessionStart hook for no freshness gain.
+type = "script"
+command = "bun run ../TOOLS/DerivedSync.ts"
+output = "log"
+enabled = true

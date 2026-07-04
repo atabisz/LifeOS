@@ -359,13 +359,23 @@ function cmdCheck(): void {
     process.exit(1);
   }
 
-  // Version drift check: the master doc shouldn't mention an older Algorithm version than ALGORITHM/
+  // Version drift check: the master doc's CURRENT-VERSION POINTERS must not lag
+  // ALGORITHM/LATEST. Only pointer contexts count — the doctrine-highlights line
+  // deliberately cites older versions as feature provenance (e.g. "Scanner-First
+  // Ground Truth (v6.4.10)", "(v6.3.0) twelve-section ISA"), and those citations
+  // are correct history, not drift. A bare /v\d+\.\d+\.\d+/ match flagged every one
+  // of them, so `check` reported STALE on every release carrying dated highlights.
   const archContent = fs.readFileSync(ARCH_SOURCE, "utf-8");
   const current = detectAlgorithmVersion();
-  const cited = [...archContent.matchAll(/v(\d+\.\d+\.\d+)/g)].map(m => m[1]);
-  const stale = cited.filter(v => compareSemver(v, current) < 0);
+  const POINTER_PATTERNS = [
+    /Algorithm v(\d+\.\d+\.\d+)/g,        // "PAI 5.0.0 | Algorithm v6.4.11 | Memory v7.6"
+    /\*\*Version:\*\* v(\d+\.\d+\.\d+)/g, // "- **Version:** v6.4.11 (canonical: read ...)"
+    /currently v(\d+\.\d+\.\d+)/g,        // "Algorithm/v{VERSION}.md (currently v6.4.11)"
+  ];
+  const pointers = POINTER_PATTERNS.flatMap(re => [...archContent.matchAll(re)].map(m => m[1]));
+  const stale = pointers.filter(v => compareSemver(v, current) < 0);
   if (stale.length > 0) {
-    console.log(`STALE: PAISystemArchitecture.md references older Algorithm version(s) ${[...new Set(stale)].join(", ")} — current is v${current}`);
+    console.log(`STALE: PAISystemArchitecture.md current-version pointer(s) ${[...new Set(stale)].join(", ")} lag ALGORITHM/LATEST (v${current})`);
     process.exit(1);
   }
 

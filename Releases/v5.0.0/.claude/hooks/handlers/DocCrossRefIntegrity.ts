@@ -48,7 +48,7 @@ interface HookInput {
   hook_event_name: string;
 }
 
-interface DriftItem {
+export interface DriftItem {
   doc: string;
   pattern: string;
   reference: string;
@@ -666,7 +666,7 @@ function updateHookCount(actualCount: number): string | null {
 export async function handleDocCrossRefIntegrity(
   parsed: ParsedTranscript,
   hookInput: HookInput
-): Promise<void> {
+): Promise<DriftItem[]> {
   const handlerStart = Date.now();
   console.error(`${TAG} === Starting hybrid doc integrity check (deterministic + inference) ===`);
 
@@ -681,7 +681,7 @@ export async function handleDocCrossRefIntegrity(
 
   if (!hasAnySystemChange) {
     console.error(`${TAG} No meaningful system files modified, skipping`);
-    return;
+    return [];
   }
 
   console.error(`${TAG} System docs modified: ${hasDocChanges}`);
@@ -831,4 +831,11 @@ export async function handleDocCrossRefIntegrity(
     const reason = hasHookChanges ? 'hook system changes' : hasDocChanges ? 'system documentation changes' : 'system file changes';
     await notifyVoice(`Updated ${docNames} documentation after detecting ${reason}.`);
   }
+
+  // Step 11: Return the drift the deterministic layer detected but could NOT
+  // auto-fix (broken hook/handler/lib/doc references — counts and timestamps
+  // are auto-corrected above and don't appear here). The Stop hook surfaces
+  // these to the model via additionalContext so they get fixed this turn
+  // instead of scrolling past in stderr. (NEW — R3)
+  return allDrift;
 }
