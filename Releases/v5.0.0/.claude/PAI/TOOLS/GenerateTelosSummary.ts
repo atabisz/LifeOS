@@ -15,10 +15,17 @@
  * - Staleness detection via timestamp (Vex's TTL requirement)
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs';
 import { join } from 'path';
+import { homedir } from 'os';
 
-const TELOS_DIR = join(process.env.HOME || '', '.claude/PAI/USER/TELOS');
+// HOME ?? USERPROFILE ?? homedir(): $HOME is unset under Windows Pulse autostart
+// ([[pulse-windows-home-path-bug]]). This runs as a child of DerivedSync's
+// cross-platform trigger, so it must resolve HOME the same way — a bare
+// `process.env.HOME || ''` would resolve a CWD-relative tree and silently no-op.
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir();
+const PAI_DIR = process.env.PAI_DIR || join(HOME, '.claude', 'PAI');
+const TELOS_DIR = join(PAI_DIR, 'USER', 'TELOS');
 const OUTPUT_PATH = join(TELOS_DIR, 'PRINCIPAL_TELOS.md');
 
 interface ParsedItem {
@@ -290,7 +297,12 @@ function generate(): string {
 
 // Main
 const summary = generate();
-writeFileSync(OUTPUT_PATH, summary);
+// Atomic write (temp + rename): PRINCIPAL_TELOS.md is @-imported into CLAUDE.md at
+// every session start, and this can be SIGTERM-killed mid-run (DerivedSync's
+// SessionStart hook has a 30s timeout) — a torn write would degrade startup context.
+const TMP_PATH = `${OUTPUT_PATH}.${process.pid}.tmp`;
+writeFileSync(TMP_PATH, summary);
+renameSync(TMP_PATH, OUTPUT_PATH);
 const lineCount = summary.split('\n').length;
 console.log(`✅ Generated PRINCIPAL_TELOS.md (${lineCount} lines) at ${OUTPUT_PATH}`);
 console.error(`📋 TELOS summary regenerated: ${lineCount} lines from source files`);
