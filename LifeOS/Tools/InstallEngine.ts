@@ -98,9 +98,13 @@ export function detectOS(): OsInfo {
 }
 
 export function detectTool(name: string, versionCmd: string): ToolInfo {
-  const path = tryExec(`command -v ${name}`);
+  // Resolve the binary with Bun.which — cross-platform, honors PATHEXT (.exe/.cmd)
+  // on Windows, and needs no shell. The prior probe used a POSIX shell builtin that
+  // cmd.exe cannot run, so bun/git were misreported absent on Windows (every entry
+  // point is `#!/usr/bin/env bun`, so Bun.which is always available).
+  const path = Bun.which(name);
   if (!path) return { installed: false };
-  const out = tryExec(versionCmd);
+  const out = tryExec(versionCmd); // `bun --version` etc. run fine via cmd.exe
   const m = out?.match(/(\d+\.\d+[.\d]*)/);
   return { installed: true, version: m?.[1] || out || undefined, path };
 }
