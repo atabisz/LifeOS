@@ -2594,6 +2594,50 @@ function parseMetrics(raw: string): Array<{
     })
 }
 
+// Compute the "stranded" set purely from the reference graph already parsed —
+// no source authoring needed. Mirrors summary.ts' drift logic server-side:
+//   - work_no_goal: work items whose project implements no goal (orphan work)
+//   - goals_no_strategy: goals no strategy implements (no path forward)
+//   - strategies_idle: strategies that implement nothing (idle plays)
+// Shapes match the client Stranded type. Returns null only when everything is
+// empty (nothing to strand) so the client renders no section rather than an
+// empty one.
+function computeStranded(
+  goals: Array<{ id: string; title: string }>,
+  strategies: Array<{ id: string; title: string; implements: string[] }>,
+  projects: Array<{ id: string; title: string; strategy: string; work: Array<{ id: string; title: string; owner: string }> }>,
+): { work_no_goal: Array<{ id: string; title: string; owner: string; age: string }>; goals_no_strategy: Array<{ id: string; title: string; reason: string }>; strategies_idle: Array<{ id: string; title: string; reason: string }> } | null {
+  const implementedGoalIds = new Set(strategies.flatMap((s) => s.implements))
+  const goals_no_strategy = goals
+    .filter((g) => !implementedGoalIds.has(g.id))
+    .map((g) => ({ id: g.id, title: g.title, reason: "no strategy implements it" }))
+  const strategies_idle = strategies
+    .filter((s) => s.implements.length === 0)
+    .map((s) => ({ id: s.id, title: s.title, reason: "implements no goal" }))
+  // A project is "goal-bearing" if its strategy implements ≥1 goal; work under a
+  // project whose strategy implements nothing is orphan work.
+  const goalBearingStrategy = new Set(strategies.filter((s) => s.implements.length > 0).map((s) => s.id))
+  const work_no_goal = projects
+    .filter((p) => !goalBearingStrategy.has(p.strategy))
+    .flatMap((p) => p.work.map((w) => ({ id: w.id, title: w.title, owner: w.owner, age: "" })))
+  if (work_no_goal.length === 0 && goals_no_strategy.length === 0 && strategies_idle.length === 0) return null
+  return { work_no_goal, goals_no_strategy, strategies_idle }
+}
+
+// Parse `## Ideal State` prose into { horizon, note }. Horizon = a `by <date>`
+// / `**Horizon:**` hint if present; note = the first non-empty line.
+function buildIdealStateMeta(raw: string): { horizon: string; note: string } | null {
+  if (!raw || !raw.trim()) return null
+  // Drop leading markdown heading lines so the note is the first real prose,
+  // not "# Ideal State".
+  const body = raw.split("\n").filter((l) => !/^\s*#{1,6}\s/.test(l)).join("\n")
+  const horizon = pickLabeledValue(body, "Horizon") ??
+    (body.match(/\bby\s+((?:[A-Z][a-z]+\.?\s*)?\d{4}|\d{4})/)?.[1] ?? "")
+  const note = firstParagraph(body)
+  if (!horizon && !note) return null
+  return { horizon, note }
+}
+
 // Normalize a status token to the client's green|amber|red enum. Unknown /
 // absent → "amber" ("needs a look") rather than falsely claiming "green".
 function normStatus(s: string | null | undefined): "green" | "amber" | "red" {
@@ -2697,49 +2741,46 @@ function buildDimensionsFromIdealState(): Array<{ id: string; label: string; cur
   const idealDir = join(TELOS_DIR, "IDEAL_STATE")
   if (!existsSync(idealDir)) return []
 
+  // HZ-5 reconcile: emit the 7 GRANULAR dimensions that goals/metrics actually
+  // reference (health, money, freedom, creative, relationships, rhythms,
+  // infrastructure) — NOT the 4 composites the old surface emitted, which left
+  // Goal.dims / Metric.color unresolved and summary.ts drift a constant 0.
+  // cur + velo come from LIFEOS_STATE.json (per-dim {pct, velo}); a dim appears
+  // if it has state OR an IDEAL_STATE/<DIM>.md file, so a fresh install with no
+  // state still surfaces the dims it has authored an ideal for.
   const statePath = join(TELOS_DIR, "LIFEOS_STATE.json")
-  let pcts: Record<string, number> = {}
+  const state: Record<string, { pct?: number; velo?: number }> = {}
   if (existsSync(statePath)) {
     try {
-      const parsed = JSON.parse(readFileSync(statePath, "utf-8")) as { dimensions?: Record<string, { pct?: number }> }
+      const parsed = JSON.parse(readFileSync(statePath, "utf-8")) as { dimensions?: Record<string, { pct?: number; velo?: number }> }
       for (const [id, d] of Object.entries(parsed.dimensions ?? {})) {
-        if (typeof d?.pct === "number") pcts[id] = d.pct
+        if (d && typeof d === "object") state[id] = d
       }
     } catch {
       // LIFEOS_STATE.json corrupt — fall through with all zeroes
     }
   }
 
-  const avg = (...vals: number[]) => {
-    const present = vals.filter((v) => Number.isFinite(v))
-    if (present.length === 0) return 0
-    return Math.round(present.reduce((a, b) => a + b, 0) / present.length)
-  }
-
-  // Each surface dim declares how it derives from underlying state. The
-  // existence check guards against fully-empty IDEAL_STATE/ on fresh installs;
-  // any dim with a corresponding source file (or any source for composites)
-  // appears in the output.
-  const surfaces: Array<{
-    id: string
-    label: string
-    color: string
-    sources: string[]                  // filenames in IDEAL_STATE/ that back this surface
-    cur: number
-  }> = [
-    { id: "health",            label: "Health",            color: "--health",        sources: ["HEALTH.md"],
-      cur: Math.round(pcts.health ?? 0) },
-    { id: "creative_freedom",  label: "Creative Freedom",  color: "--creative",      sources: ["CREATIVE.md", "FREEDOM.md"],
-      cur: avg(pcts.creative ?? 0, pcts.freedom ?? 0) },
-    { id: "relationships",     label: "Relationships",     color: "--relationships", sources: ["RELATIONSHIPS.md"],
-      cur: Math.round(pcts.relationships ?? 0) },
-    { id: "finances",          label: "Finances",          color: "--money",         sources: ["MONEY.md", "FINANCES.md"],
-      cur: Math.round(pcts.finances ?? pcts.money ?? 0) },
+  const DIMS: Array<{ id: string; label: string; color: string; file: string }> = [
+    { id: "health",         label: "Health",         color: "--health",         file: "HEALTH.md" },
+    { id: "money",          label: "Money",          color: "--money",          file: "MONEY.md" },
+    { id: "freedom",        label: "Freedom",        color: "--freedom",        file: "FREEDOM.md" },
+    { id: "creative",       label: "Creative",       color: "--creative",       file: "CREATIVE.md" },
+    { id: "relationships",  label: "Relationships",  color: "--relationships",  file: "RELATIONSHIPS.md" },
+    { id: "rhythms",        label: "Rhythms",        color: "--rhythms",        file: "RHYTHMS.md" },
+    { id: "infrastructure", label: "Infrastructure", color: "--infrastructure", file: "INFRASTRUCTURE.md" },
   ]
 
-  return surfaces
-    .filter((s) => s.sources.some((f) => existsSync(join(idealDir, f))))
-    .map(({ sources: _sources, ...rest }) => ({ ...rest, ideal: 100, velo: 0 }))
+  return DIMS
+    .filter((d) => state[d.id] !== undefined || existsSync(join(idealDir, d.file)))
+    .map((d) => ({
+      id: d.id,
+      label: d.label,
+      color: d.color,
+      cur: typeof state[d.id]?.pct === "number" ? Math.round(state[d.id]!.pct!) : 0,
+      ideal: 100,
+      velo: typeof state[d.id]?.velo === "number" ? state[d.id]!.velo! : 0,
+    }))
 }
 
 // Reads the unified TELOS.md and splits it into a map of {sectionTitle:
@@ -3391,6 +3432,8 @@ async function handleTelosOverview(): Promise<Response> {
     })
     const metrics = parseMetrics(metricsRaw)
     const projects = parseProjects(projectsRaw)
+    const stranded = computeStranded(goals, strategies, projects)
+    const idealStateMeta = buildIdealStateMeta(idealStateRaw)
 
     const dimensions = buildDimensionsFromIdealState()
     const snapshot = buildSnapshotFromCurrentState()
@@ -3431,8 +3474,8 @@ async function handleTelosOverview(): Promise<Response> {
 
     return Response.json({
       meta: { isPersonalized },
-      owner: null,
-      idealState: null,
+      owner: null, // owner.name has no clean identity source in this handler; day/streak need a store — deferred (Phase 4 note)
+      idealState: idealStateMeta,
       dimensions: dimensions.length > 0 ? dimensions : null,
       snapshot,
       problems,
@@ -3445,7 +3488,7 @@ async function handleTelosOverview(): Promise<Response> {
       team: null,
       budget: null,
       recommendations: null,
-      stranded: null,
+      stranded,
       subtabs: null,
       preferences,
       narrativeSeed: null,
