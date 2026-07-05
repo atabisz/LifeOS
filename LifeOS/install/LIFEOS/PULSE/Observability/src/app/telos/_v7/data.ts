@@ -19,6 +19,11 @@ export interface Dimension {
   ideal: number;
   velo: number;
   color: string;
+  // How `cur` was derived: "coverage" = real have/partial/missing rows
+  // (achievement toward ideal), "setup" = IDEAL_STATE articulation %
+  // (how fully written, not achievement). Optional — absent on the sample
+  // fixture and older API payloads, which the prose treats as "setup".
+  mode?: "coverage" | "setup" | null;
 }
 
 export interface SnapshotMetric {

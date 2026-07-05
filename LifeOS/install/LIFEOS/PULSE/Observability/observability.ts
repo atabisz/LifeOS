@@ -2762,7 +2762,7 @@ function parseProjects(raw: string): Array<{
 //
 // Composite rule for creative_freedom: average the underlying creative and
 // freedom percentages from LIFEOS_STATE.json. Missing source dimension contributes 0.
-function buildDimensionsFromIdealState(): Array<{ id: string; label: string; cur: number; ideal: number; velo: number; color: string }> {
+function buildDimensionsFromIdealState(): Array<{ id: string; label: string; cur: number; ideal: number; velo: number; color: string; mode: "coverage" | "setup" | null }> {
   const idealDir = join(TELOS_DIR, "IDEAL_STATE")
   if (!existsSync(idealDir)) return []
 
@@ -2774,10 +2774,10 @@ function buildDimensionsFromIdealState(): Array<{ id: string; label: string; cur
   // if it has state OR an IDEAL_STATE/<DIM>.md file, so a fresh install with no
   // state still surfaces the dims it has authored an ideal for.
   const statePath = join(TELOS_DIR, "LIFEOS_STATE.json")
-  const state: Record<string, { pct?: number; velo?: number }> = {}
+  const state: Record<string, { pct?: number; velo?: number; mode?: "coverage" | "setup" | null; source_file?: string }> = {}
   if (existsSync(statePath)) {
     try {
-      const parsed = JSON.parse(readFileSync(statePath, "utf-8")) as { dimensions?: Record<string, { pct?: number; velo?: number }> }
+      const parsed = JSON.parse(readFileSync(statePath, "utf-8")) as { dimensions?: Record<string, { pct?: number; velo?: number; mode?: "coverage" | "setup" | null; source_file?: string }> }
       for (const [id, d] of Object.entries(parsed.dimensions ?? {})) {
         if (d && typeof d === "object") state[id] = d
       }
@@ -2808,6 +2808,14 @@ function buildDimensionsFromIdealState(): Array<{ id: string; label: string; cur
       cur: Math.round(state[d.id]!.pct!),
       ideal: 100,
       velo: typeof state[d.id]?.velo === "number" ? state[d.id]!.velo! : 0,
+      // "coverage" (real CURRENT_STATE rows) vs "setup" (IDEAL articulation %) —
+      // the UI words the number honestly per mode. If `mode` is absent (a stale
+      // pre-`mode` state file), fall back on `source_file`: a `CURRENT_STATE/*`
+      // source is coverage, anything else is setup. Defaults to the SAFE
+      // direction (a coverage dim never mislabeled "articulated").
+      mode:
+        state[d.id]?.mode ??
+        (state[d.id]?.source_file?.startsWith("CURRENT_STATE/") ? "coverage" : "setup"),
     }))
 }
 

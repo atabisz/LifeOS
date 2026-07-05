@@ -117,20 +117,44 @@ function buildHeadline(telos: Telos, voice: OwnerVoice): string {
       : `${sCap} ${voice.verb("have")} not yet articulated the ideal state across life dimensions.`;
   }
 
-  // NB: dimension `cur` is a "setup / articulation %" (how fully the IDEAL_STATE
-  // file is written), NOT how close the principal is to achieving the ideal —
-  // worded as articulation to match the ring label ("Dimension setup").
+  // NB: a dimension's `cur` is one of two things per `mode`: "coverage" (real
+  // CURRENT_STATE have/partial/missing rows — achievement toward ideal) or
+  // "setup" (IDEAL_STATE articulation %, how fully written — NOT achievement).
+  // The prose is worded per-mode so the same number never reads as life-progress
+  // it doesn't measure. When every dim is "setup" (the common case) the wording
+  // stays "articulated"; once any dim is on real coverage the neutral verb
+  // ("tracked") is used so the mixed set isn't mislabeled as pure articulation.
+  const modeOf = (d: Dimension) => d.mode ?? "setup";
+  const allSetup = dimensions.every((d) => modeOf(d) === "setup");
+  const singleMode = dimensions.every((d) => modeOf(d) === modeOf(dimensions[0]!));
   const avg = avgCur(dimensions);
-  const sortedByGap = [...dimensions].sort((a, b) => gap(a) - gap(b));
-  const mostArticulated = sortedByGap[0]!;
-  const leastArticulated = sortedByGap[sortedByGap.length - 1]!;
+  const avgVerb = allSetup ? "articulated" : "tracked";
+  const dimVerb = (d: Dimension) => (modeOf(d) === "coverage" ? "covered" : "articulated");
   const horizonClause = idealState.horizon ? ` (horizon ${idealState.horizon})` : "";
 
-  if (mostArticulated.id === leastArticulated.id) {
-    return `${voice.possessive} ideal state is ${fmtPct(avg)} articulated on average${horizonClause}.`;
+  if (dimensions.length === 1) {
+    const d = dimensions[0]!;
+    return `${voice.possessive} ideal state is ${fmtPct(d.cur)} ${dimVerb(d)}${horizonClause}.`;
   }
 
-  return `${voice.possessive} ideal state is ${fmtPct(avg)} articulated on average${horizonClause}. ${cap(lower(mostArticulated.label))} is the most fully set up at ${fmtPct(mostArticulated.cur)}; ${lower(leastArticulated.label)} the least at ${fmtPct(leastArticulated.cur)}.`;
+  const avgClause = `${voice.possessive} ideal state is ${fmtPct(avg)} ${avgVerb} on average${horizonClause}.`;
+
+  // Comparative superlatives ("furthest along", "the least") only mean something
+  // WITHIN one measurement axis. When every dim shares a mode we rank by gap and
+  // use them; across mixed modes (some coverage, some setup) a 70%-articulated and
+  // a 50%-covered are incommensurable, so we do NOT rank — we state the highest-
+  // and lowest-pct dims as standalone facts, each verb honest to its own mode.
+  if (singleMode) {
+    const sortedByGap = [...dimensions].sort((a, b) => gap(a) - gap(b));
+    const most = sortedByGap[0]!;
+    const least = sortedByGap[sortedByGap.length - 1]!;
+    return `${avgClause} ${cap(lower(most.label))} is furthest along at ${fmtPct(most.cur)} ${dimVerb(most)}; ${lower(least.label)} the least at ${fmtPct(least.cur)} ${dimVerb(least)}.`;
+  }
+
+  const byPct = [...dimensions].sort((a, b) => b.cur - a.cur);
+  const hi = byPct[0]!;
+  const lo = byPct[byPct.length - 1]!;
+  return `${avgClause} ${cap(lower(hi.label))} is ${fmtPct(hi.cur)} ${dimVerb(hi)}; ${lower(lo.label)} is ${fmtPct(lo.cur)} ${dimVerb(lo)}.`;
 }
 
 function cap(s: string): string {
@@ -143,12 +167,21 @@ function buildPosition(telos: Telos, voice: OwnerVoice): string {
   const sortedByGap = [...dimensions].sort((a, b) => gap(b) - gap(a));
   const widest = sortedByGap.slice(0, Math.min(2, sortedByGap.length)).filter((d) => gap(d) > 5);
   if (widest.length === 0) {
-    return `Every tracked dimension is fully articulated — setup is complete.`;
+    return `Every tracked dimension is at or near its ideal.`;
   }
-  // "gap" = articulation headroom (100 − setup%), how much of the ideal is still
-  // to be written — NOT a life-achievement gap.
-  const parts = widest.map((d) => `${lower(d.label)} (${fmtPct(gap(d))} left to articulate)`);
-  return `Least fully set up: ${joinList(parts)}.`;
+  // The `gap` (100 − cur) means different things per mode: for a "setup" dim it's
+  // articulation headroom (how much of the ideal is still to be WRITTEN); for a
+  // "coverage" dim it's real headroom toward the ideal (unmet items). Word each
+  // per its mode so a coverage gap isn't mislabeled "left to articulate".
+  const gapVerb = (d: Dimension) => ((d.mode ?? "setup") === "coverage" ? "to go" : "left to articulate");
+  const parts = widest.map((d) => `${lower(d.label)} (${fmtPct(gap(d))} ${gapVerb(d)})`);
+  // Header stays neutral ("Biggest gaps") rather than a comparative superlative
+  // when modes are mixed: each clause's gap verb is honest to its own mode, but a
+  // single ranked ordering would conflate coverage headroom with articulation
+  // headroom (see buildHeadline — same cross-axis caution).
+  const singleMode = dimensions.every((d) => (d.mode ?? "setup") === (dimensions[0]!.mode ?? "setup"));
+  const header = singleMode ? "Furthest from ideal" : "Biggest gaps";
+  return `${header}: ${joinList(parts)}.`;
 }
 
 function buildTraction(telos: Telos, voice: OwnerVoice): string {
