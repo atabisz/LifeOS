@@ -154,14 +154,28 @@ async function inferenceAttempt(options: InferenceOptions, modelOverride?: strin
     const env = { ...process.env };
     delete env.CLAUDECODE;
 
-    // BILLING: Always use subscription. Anthropic's credential precedence chain
+    // BILLING: Prefer subscription. Anthropic's credential precedence chain
     // (https://code.claude.com/docs/en/authentication#authentication-precedence)
     // puts BOTH ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN above CLAUDE_CODE_OAUTH_TOKEN,
     // so either one in env will silently override OAuth. Bun auto-loads ~/.claude/.env
     // into child processes, and some MCP/plugin setups export ANTHROPIC_AUTH_TOKEN —
-    // either path leaks subscription work onto API-key billing. Scrub both.
-    delete env.ANTHROPIC_API_KEY;
-    delete env.ANTHROPIC_AUTH_TOKEN;
+    // either path leaks subscription work onto API-key billing. Scrub both — EXCEPT
+    // when this machine authenticates through a gateway rather than OAuth subscription:
+    //   - a custom ANTHROPIC_BASE_URL (e.g. a local headroom proxy at 127.0.0.1 that
+    //     forwards to Bedrock) — the API key IS the intended credential there, and
+    //     there is no OAuth session to fall back to; scrubbing it breaks all inference.
+    //   - CLAUDE_CODE_USE_BEDROCK / _USE_VERTEX truthy — direct Bedrock/Vertex, which
+    //     authenticates via AWS_*/GCP creds; scrubbing ANTHROPIC_* is harmless but the
+    //     gateway detection below already covers the proxy case.
+    // Keep the key on a gateway; scrub only on the plain-Anthropic OAuth path.
+    const usesGateway =
+      (!!process.env.ANTHROPIC_BASE_URL && process.env.ANTHROPIC_BASE_URL.trim() !== '') ||
+      /^(1|true)$/i.test(process.env.CLAUDE_CODE_USE_BEDROCK ?? '') ||
+      /^(1|true)$/i.test(process.env.CLAUDE_CODE_USE_VERTEX ?? '');
+    if (!usesGateway) {
+      delete env.ANTHROPIC_API_KEY;
+      delete env.ANTHROPIC_AUTH_TOKEN;
+    }
 
     const hasImages = options.imagePaths && options.imagePaths.length > 0;
     const args = [
