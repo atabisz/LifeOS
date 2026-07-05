@@ -85,7 +85,7 @@ export default function AppHeader() {
               items) · right cluster. Nothing absolute, nothing overlaps. */}
           <div className="flex items-center h-14 gap-4 lg:gap-6">
             <Link href="/" className="flex items-center gap-3 shrink-0">
-              <Image src="/lifeos-logo.png" alt="LifeOS" width={28} height={28} className="h-7 w-7 object-contain" />
+              <Image src="/lifeos-logo.png" alt="LIFEOS" width={28} height={28} className="h-7 w-7 object-contain" />
               <span className="text-lg tracking-[0.25em] text-white" style={{ fontFamily: "'advocate-c14', sans-serif", fontWeight: 600 }}>
                 PULSE
               </span>

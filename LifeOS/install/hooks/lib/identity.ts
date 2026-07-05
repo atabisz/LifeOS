@@ -13,29 +13,29 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { parse as parseYaml } from 'yaml';
-import { loadPaiConfig } from '../../LIFEOS/TOOLS/PaiConfig';
+import { loadLifeosConfig } from '../../LIFEOS/TOOLS/LifeosConfig';
 
 const HOME = process.env.HOME!;
 const SETTINGS_PATH = join(HOME, '.claude/settings.json');
 
-// Identity-file paths derive from PaiConfig's userDir. On fresh installs where
+// Identity-file paths derive from LifeosConfig's userDir. On fresh installs where
 // LIFEOS_CONFIG.toml hasn't been created yet, fall back to the conventional
 // LIFEOS/USER/ location so identity loading still bootstraps. Lazy try/catch so
-// a malformed PaiConfig never breaks identity bootstrap.
-function paiUserDir(): string {
+// a malformed LifeosConfig never breaks identity bootstrap.
+function lifeosUserDir(): string {
   try {
-    return loadPaiConfig().paths.userDir;
+    return loadLifeosConfig().paths.userDir;
   } catch {
     return join(HOME, '.claude/LIFEOS/USER');
   }
 }
-const DA_IDENTITY_PATH = join(paiUserDir(), 'DIGITAL_ASSISTANT/DA_IDENTITY.md');
-const PRINCIPAL_IDENTITY_PATH = join(paiUserDir(), 'PRINCIPAL/PRINCIPAL_IDENTITY.md');
+const DA_IDENTITY_PATH = join(lifeosUserDir(), 'DIGITAL_ASSISTANT/DA_IDENTITY.md');
+const PRINCIPAL_IDENTITY_PATH = join(lifeosUserDir(), 'PRINCIPAL/PRINCIPAL_IDENTITY.md');
 
 const DEFAULT_IDENTITY = {
-  name: 'LifeOS',
+  name: 'LIFEOS',
   fullName: 'Personal AI',
-  displayName: 'LifeOS',
+  displayName: 'LIFEOS',
   mainDAVoiceID: '',
   color: '#3B82F6',
 };

@@ -5,7 +5,7 @@
   "description": "Names and terms with non-obvious pronunciations.",
   "entries": [
     { "key": "Schmidt", "value": "shmit", "notes": "silent c, soft-t" },
-    { "key": "LifeOS", "value": "P-A-I", "notes": "letters not 'pie'" }
+    { "key": "LIFEOS", "value": "P-A-I", "notes": "letters not 'pie'" }
   ],
   "meta": {
     "schemaVersion": "1.0.0",

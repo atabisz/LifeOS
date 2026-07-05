@@ -25,7 +25,7 @@ const TOOLS_DIR = resolve(HOME, ".claude/LIFEOS/TOOLS");
 const TEMPLATE_HTML = join(TOOLS_DIR, "ISARender/template.html");
 const TEMPLATE_CSS = join(TOOLS_DIR, "ISARender/template.css");
 // Brand logo: user override via LIFEOS_BRAND_LOGO_PATH env var (absolute path),
-// else system default under PAI/ASSETS/, else inert (empty src).
+// else system default under LIFEOS/ASSETS/, else inert (empty src).
 const BRAND_LOGO_PATH_OVERRIDE = process.env.LIFEOS_BRAND_LOGO_PATH ?? "";
 const BRAND_LOGO_PATH_DEFAULT = resolve(HOME, ".claude/LIFEOS/ASSETS/pai-logo.png");
 const WORK_DIR = resolve(HOME, ".claude/LIFEOS/MEMORY/WORK");

@@ -229,7 +229,7 @@ LifeOS 6.0 separates system code from user data across two directories. Code liv
 ├── settings.json
 ├── hooks/
 ├── skills/
-├── PAI/
+├── LIFEOS/
 │   ├── ALGORITHM/
 │   │   └── LATEST             # Algorithm doctrine version
 │   ├── DOCUMENTATION/

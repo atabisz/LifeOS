@@ -67,7 +67,7 @@ function preflightCodex(home: string): string | null {
   catch (_error: unknown) { return null; } // Safe: caller emits the exact unavailable JSON.
 }
 async function ensureSlugDir(home: string, slug: string): Promise<Paths> {
-  const slugDir = join(home, ".claude", "LifeOS", "MEMORY", "WORK", slug);
+  const slugDir = join(home, ".claude", "LIFEOS", "MEMORY", "WORK", slug);
   await mkdir(slugDir, { recursive: true }); // Local artifact I/O is unbounded so errors can surface naturally.
   return { eventsFile: join(slugDir, "forge-events.jsonl"), finalFile: join(slugDir, "forge-final.txt") };
 }

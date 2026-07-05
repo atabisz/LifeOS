@@ -22,7 +22,7 @@ import { filterContent, filterDaemonData, loadSecurityOverrides } from "./Securi
 // ─── Path Resolution ───
 
 const HOME = process.env.HOME || process.env.USERPROFILE || "";
-const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LifeOS");
+const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LIFEOS");
 const USER_DIR = join(LIFEOS_DIR, "USER");
 const MEMORY_DIR = join(LIFEOS_DIR, "MEMORY");
 const TELOS_DIR = join(USER_DIR, "TELOS");
@@ -66,7 +66,7 @@ function isExcluded(filePath: string): boolean {
 // ─── Public Projects List ───
 
 const PUBLIC_PROJECTS = [
-  "Website", "Fabric", "SecLists", "LifeOS", "Surface",
+  "Website", "Fabric", "SecLists", "LIFEOS", "Surface",
   "Human 3.0", "UL Site", "Daemon", "Substrate", "Telos",
   "TheAlgorithm", "FoundryServices", "Ladder", "LifeOS Marketing",
 ];

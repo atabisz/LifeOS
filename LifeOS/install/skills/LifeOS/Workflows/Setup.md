@@ -20,7 +20,7 @@ The skill ships everything for both tiers in its payload; nothing activates with
 
 ## Steps
 
-1. **DetectEnv** — `bun Tools/DetectEnv.ts` → `{os, harness, display, ssh, bun, existingInstall, isDevTree, settingsExists, claudeMdExists}`. Reuses `PAI/LIFEOS_INSTALL/engine/detect.ts` where it maps.
+1. **DetectEnv** — `bun Tools/DetectEnv.ts` → `{os, harness, display, ssh, bun, existingInstall, isDevTree, settingsExists, claudeMdExists}`. Reuses `LIFEOS/LIFEOS_INSTALL/engine/detect.ts` where it maps.
    - **If `isDevTree` → STOP.** Never mutate the author's source repo. Print the refusal and exit.
 2. **ScanConflicts** (read-only) — `bun Tools/ScanConflicts.ts` → existing settings hooks, skill-name collisions, existing populated config tree. Produces the branch decision for `LinkUser`.
 3. **Prereqs** — confirm `bun` present; confirm harness is one of the supported set; surface any missing prerequisite as a plain-language fix, do not auto-install system packages.

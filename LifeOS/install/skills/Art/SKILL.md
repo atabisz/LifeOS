@@ -335,7 +335,7 @@ User: "create icon for the skill system pack"
 → Generates 1K image with --remove-bg for transparency
 → Resizes to 256x256 RGBA PNG
 → Outputs to ~/Downloads/ for preview
-→ After approval, copies to ${PROJECTS_DIR}/PAI/Packs/icons/
+→ After approval, copies to ${PROJECTS_DIR}/LIFEOS/Packs/icons/
 ```
 
 ## Gotchas

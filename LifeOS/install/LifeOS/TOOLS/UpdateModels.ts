@@ -98,7 +98,7 @@ export function detectNewModelIds(text: string): string[] {
   return [...seen];
 }
 
-export const MODEL_RELEASES_PATH = join(CLAUDE_DIR, "LifeOS", "MEMORY", "OBSERVABILITY", "model-releases.jsonl");
+export const MODEL_RELEASES_PATH = join(CLAUDE_DIR, "LIFEOS", "MEMORY", "OBSERVABILITY", "model-releases.jsonl");
 
 /**
  * Build the propose-not-auto action commands for detected IDs. Each is a full,

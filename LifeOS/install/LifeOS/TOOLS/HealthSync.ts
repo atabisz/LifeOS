@@ -42,11 +42,11 @@ type CliCommand = "pull" | "status" | "current" | "auth";
 const HOME = process.env.HOME || "";
 const PREFIX = "[HealthSync]";
 const SOURCE_NAMES: readonly SourceName[] = ["oura", "eightsleep", "apple", "function"];
-const CURRENT_PATH = join(HOME, ".claude", "LifeOS", "USER", "HEALTH", "current.json");
+const CURRENT_PATH = join(HOME, ".claude", "LIFEOS", "USER", "HEALTH", "current.json");
 const HEALTHSYNC_LOG_PATH = join(
   HOME,
   ".claude",
-  "LifeOS",
+  "LIFEOS",
   "MEMORY",
   "OBSERVABILITY",
   "healthsync.jsonl",

@@ -129,8 +129,8 @@ export function scanApiKeys(
     join(home, ".profile"),
     join(configDir, ".env"),
     join(configDir, "credentials.env"),
-    join(home, ".config", "LifeOS", ".env"),
-    join(home, ".config", "LifeOS", "credentials.env"),
+    join(home, ".config", "LIFEOS", ".env"),
+    join(home, ".config", "LIFEOS", "credentials.env"),
   ];
 
   const patterns: Array<[keyof NonNullable<DetectionResult["existing"]["apiKeys"]>, RegExp]> = [
@@ -247,50 +247,50 @@ function countProjectRows(projectsPath: string): number {
   }
 }
 
-export function detectExistingUserContent(paiUserDir: string): ExistingUserContentDetection {
+export function detectExistingUserContent(lifeosUserDir: string): ExistingUserContentDetection {
   return {
     telos: {
-      mission: fileExists(paiUserDir, "TELOS/MISSION.md"),
-      goals: fileExists(paiUserDir, "TELOS/GOALS.md"),
-      goalsCount: countGoals(join(paiUserDir, "TELOS", "GOALS.md")),
-      activeProblems: fileExists(paiUserDir, "TELOS/ACTIVE_PROBLEMS.md"),
-      strategy: fileExists(paiUserDir, "TELOS/STRATEGY.md"),
-      principles: fileExists(paiUserDir, "TELOS/PRINCIPLES.md"),
-      areas: fileExists(paiUserDir, "TELOS/AREAS.md"),
-      now: fileExists(paiUserDir, "TELOS/NOW.md"),
+      mission: fileExists(lifeosUserDir, "TELOS/MISSION.md"),
+      goals: fileExists(lifeosUserDir, "TELOS/GOALS.md"),
+      goalsCount: countGoals(join(lifeosUserDir, "TELOS", "GOALS.md")),
+      activeProblems: fileExists(lifeosUserDir, "TELOS/ACTIVE_PROBLEMS.md"),
+      strategy: fileExists(lifeosUserDir, "TELOS/STRATEGY.md"),
+      principles: fileExists(lifeosUserDir, "TELOS/PRINCIPLES.md"),
+      areas: fileExists(lifeosUserDir, "TELOS/AREAS.md"),
+      now: fileExists(lifeosUserDir, "TELOS/NOW.md"),
     },
     identity: {
-      principalIdentity: fileExists(paiUserDir, "PRINCIPAL_IDENTITY.md"),
-      daIdentity: fileExists(paiUserDir, "DA_IDENTITY.md"),
-      workingStyle: fileExists(paiUserDir, "WORKINGSTYLE.md"),
-      rhetoricalStyle: fileExists(paiUserDir, "RHETORICALSTYLE.md"),
-      aiWritingPatterns: fileExists(paiUserDir, "AI_WRITING_PATTERNS.md"),
-      feed: fileExists(paiUserDir, "FEED.md"),
-      resume: fileExists(paiUserDir, "RESUME.md"),
-      definitions: fileExists(paiUserDir, "DEFINITIONS.md"),
-      coreContent: fileExists(paiUserDir, "CORECONTENT.md"),
-      beliefs: fileExists(paiUserDir, "BELIEFS.md"),
+      principalIdentity: fileExists(lifeosUserDir, "PRINCIPAL_IDENTITY.md"),
+      daIdentity: fileExists(lifeosUserDir, "DA_IDENTITY.md"),
+      workingStyle: fileExists(lifeosUserDir, "WORKINGSTYLE.md"),
+      rhetoricalStyle: fileExists(lifeosUserDir, "RHETORICALSTYLE.md"),
+      aiWritingPatterns: fileExists(lifeosUserDir, "AI_WRITING_PATTERNS.md"),
+      feed: fileExists(lifeosUserDir, "FEED.md"),
+      resume: fileExists(lifeosUserDir, "RESUME.md"),
+      definitions: fileExists(lifeosUserDir, "DEFINITIONS.md"),
+      coreContent: fileExists(lifeosUserDir, "CORECONTENT.md"),
+      beliefs: fileExists(lifeosUserDir, "BELIEFS.md"),
     },
     contacts: {
-      contacts: fileExists(paiUserDir, "CONTACTS.md"),
-      count: countContacts(join(paiUserDir, "CONTACTS.md")),
+      contacts: fileExists(lifeosUserDir, "CONTACTS.md"),
+      count: countContacts(join(lifeosUserDir, "CONTACTS.md")),
     },
     opinions: {
-      opinions: fileExists(paiUserDir, "OPINIONS.md"),
+      opinions: fileExists(lifeosUserDir, "OPINIONS.md"),
     },
     projects: {
-      projectsIndex: fileExists(paiUserDir, "PROJECTS.md"),
-      projectsDirectory: fileExists(paiUserDir, "PROJECTS"),
-      count: countProjectRows(join(paiUserDir, "PROJECTS.md")),
+      projectsIndex: fileExists(lifeosUserDir, "PROJECTS.md"),
+      projectsDirectory: fileExists(lifeosUserDir, "PROJECTS"),
+      count: countProjectRows(join(lifeosUserDir, "PROJECTS.md")),
     },
     business: {
-      present: fileExists(paiUserDir, "BUSINESS") || fileExists(paiUserDir, "BUSINESS.md"),
+      present: fileExists(lifeosUserDir, "BUSINESS") || fileExists(lifeosUserDir, "BUSINESS.md"),
     },
     finances: {
-      present: fileExists(paiUserDir, "FINANCES") || fileExists(paiUserDir, "FINANCES.md"),
+      present: fileExists(lifeosUserDir, "FINANCES") || fileExists(lifeosUserDir, "FINANCES.md"),
     },
     health: {
-      present: fileExists(paiUserDir, "HEALTH") || fileExists(paiUserDir, "HEALTH.md"),
+      present: fileExists(lifeosUserDir, "HEALTH") || fileExists(lifeosUserDir, "HEALTH.md"),
     },
   };
 }
@@ -345,7 +345,7 @@ function detectVoice(): DetectionResult["voice"] {
 export function detectSystem(): DetectionResult {
   const home = homedir();
   const paiDir = join(home, ".claude");
-  const configDir = process.env.LIFEOS_CONFIG_DIR || join(home, ".config", "LifeOS");
+  const configDir = process.env.LIFEOS_CONFIG_DIR || join(home, ".config", "LIFEOS");
 
   return {
     os: detectOS(),

@@ -77,7 +77,7 @@ function arg(a: string[], flag: string): string | undefined {
  * whichever actually exists; default to the all-caps runtime name.
  */
 function resolveLifeosDir(configRoot: string): string {
-  for (const name of ["LIFEOS", "LifeOS"]) {
+  for (const name of ["LIFEOS", "LIFEOS"]) {
     if (existsSync(join(configRoot, name))) return join(configRoot, name);
   }
   return join(configRoot, "LIFEOS");
@@ -412,7 +412,7 @@ function main(): void {
   const ctx: Ctx = {
     configRoot,
     lifeosDir: resolveLifeosDir(configRoot),
-    payloadRoot: join(skillRoot, "install", "LifeOS"),
+    payloadRoot: join(skillRoot, "install", "LIFEOS"),
     installRoot: join(skillRoot, "install"),
     home,
     launchAgents: join(home, "Library", "LaunchAgents"),

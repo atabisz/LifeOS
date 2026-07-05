@@ -18,7 +18,7 @@
 import { readdirSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { spawnSync } from "child_process";
-import { paiUserDir } from "./PaiConfig";
+import { lifeosUserDir } from "./LifeosConfig";
 
 const HOME = process.env.HOME!;
 const CLAUDE_DIR = join(HOME, ".claude");
@@ -331,9 +331,9 @@ function readDAIdentity(): string {
   const settingsPath = join(CLAUDE_DIR, "settings.json");
   try {
     const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
-    return settings.daidentity?.displayName || settings.daidentity?.name || settings.env?.DA || "LifeOS";
+    return settings.daidentity?.displayName || settings.daidentity?.name || settings.env?.DA || "LIFEOS";
   } catch {
-    return "LifeOS";
+    return "LIFEOS";
   }
 }
 
@@ -362,7 +362,7 @@ function countHooks(): number {
 }
 
 function countWorkItems(): string {
-  const workDir = join(CLAUDE_DIR, "LifeOS", "MEMORY", "WORK");
+  const workDir = join(CLAUDE_DIR, "LIFEOS", "MEMORY", "WORK");
   if (!existsSync(workDir)) return "0";
   let count = 0;
   try {
@@ -374,7 +374,7 @@ function countWorkItems(): string {
 }
 
 function countLearnings(): number {
-  const learningsDir = join(CLAUDE_DIR, "LifeOS", "MEMORY", "LEARNING");
+  const learningsDir = join(CLAUDE_DIR, "LIFEOS", "MEMORY", "LEARNING");
   if (!existsSync(learningsDir)) return 0;
   let count = 0;
   const countRecursive = (dir: string) => {
@@ -390,7 +390,7 @@ function countLearnings(): number {
 }
 
 function countUserFiles(): number {
-  const userDir = paiUserDir();
+  const userDir = lifeosUserDir();
   if (!existsSync(userDir)) return 0;
   let count = 0;
   const countRecursive = (dir: string) => {
@@ -484,7 +484,7 @@ function center(str: string, width: number): string {
 // ═══════════════════════════════════════════════════════════════════════
 
 function generatePaiArt(): string[] {
-  const name = "LifeOS";
+  const name = "LIFEOS";
   const letterColors = [COLORS.blue, COLORS.magenta, COLORS.cyan];
   const rows: string[] = ["", "", "", "", ""];
 

@@ -48,7 +48,7 @@ const PLACEHOLDER_LITERALS = new Set([
   "e.g., Atlas, Nova, Sage",
   "Ready to go",
   "User",
-  "LifeOS",
+  "LIFEOS",
 ]);
 
 const USER_MIGRATION_IDENTITY_FILES = [
@@ -77,18 +77,18 @@ const USER_MIGRATION_FULL_ENTRIES = [
 const TEMPLATE_EXTENSIONS = new Set([".md", ".json", ".yaml", ".sh", ".ts"]);
 
 const BACKUP_MIGRATION_CANDIDATES = [
-  ["LifeOS", "USER", "DIGITAL_ASSISTANT", "DA_IDENTITY.md"].join("/"),
-  ["LifeOS", "USER", "PRINCIPAL_IDENTITY.md"].join("/"),
-  ["LifeOS", "USER", "PRINCIPAL", "PRINCIPAL_IDENTITY.md"].join("/"),
-  ["LifeOS", "USER", "PROJECTS.md"].join("/"),
-  ["LifeOS", "USER", "TELOS", "PRINCIPAL_TELOS.md"].join("/"),
-  ["LifeOS", "USER", "TELOS", "TELOS.md"].join("/"),
-  ["LifeOS", "USER", "CONTACTS.md"].join("/"),
-  ["LifeOS", "USER", "DEFINITIONS.md"].join("/"),
-  ["LifeOS", "USER", "CANONICAL_CONTENT.md"].join("/"),
-  ["LifeOS", "USER", "PRINCIPAL", "RESUME.md"].join("/"),
-  ["LifeOS", "USER", "PRINCIPAL", "WRITINGSTYLE.md"].join("/"),
-  ["LifeOS", "USER", "PRINCIPAL", "PRONUNCIATIONS.json"].join("/"),
+  ["LIFEOS", "USER", "DIGITAL_ASSISTANT", "DA_IDENTITY.md"].join("/"),
+  ["LIFEOS", "USER", "PRINCIPAL_IDENTITY.md"].join("/"),
+  ["LIFEOS", "USER", "PRINCIPAL", "PRINCIPAL_IDENTITY.md"].join("/"),
+  ["LIFEOS", "USER", "PROJECTS.md"].join("/"),
+  ["LIFEOS", "USER", "TELOS", "PRINCIPAL_TELOS.md"].join("/"),
+  ["LIFEOS", "USER", "TELOS", "TELOS.md"].join("/"),
+  ["LIFEOS", "USER", "CONTACTS.md"].join("/"),
+  ["LIFEOS", "USER", "DEFINITIONS.md"].join("/"),
+  ["LIFEOS", "USER", "CANONICAL_CONTENT.md"].join("/"),
+  ["LIFEOS", "USER", "PRINCIPAL", "RESUME.md"].join("/"),
+  ["LIFEOS", "USER", "PRINCIPAL", "WRITINGSTYLE.md"].join("/"),
+  ["LIFEOS", "USER", "PRINCIPAL", "PRONUNCIATIONS.json"].join("/"),
 ] as const;
 
 function buildTemplateVars(state: InstallState): TemplateVars {
@@ -144,7 +144,7 @@ function readMigrationManifest(manifestPath: string): MigrationManifestEntry[] {
 }
 
 function appendMigrationManifest(entry: MigrationManifestEntry, paiDir: string): void {
-  const manifestPath = join(paiDir, "LifeOS", "MEMORY", "STATE", "install-migration.json");
+  const manifestPath = join(paiDir, "LIFEOS", "MEMORY", "STATE", "install-migration.json");
   mkdirSync(dirname(manifestPath), { recursive: true });
   const manifest = readMigrationManifest(manifestPath);
   manifest.push(entry);
@@ -188,8 +188,8 @@ export function substituteTemplates(rootDir: string, vars: TemplateVars): Substi
       name === ".git" ||
       parts.includes("node_modules") ||
       parts.includes(".git") ||
-      hasPair("LifeOS", "LIFEOS_INSTALL") ||
-      hasPair("LifeOS", "MEMORY")
+      hasPair("LIFEOS", "LIFEOS_INSTALL") ||
+      hasPair("LIFEOS", "MEMORY")
     );
   };
 
@@ -242,7 +242,7 @@ export function substituteTemplates(rootDir: string, vars: TemplateVars): Substi
   for (const filePath of [
     join(rootAbs, "CLAUDE.md"),
     join(rootAbs, "settings.json"),
-    join(rootAbs, "LifeOS", "LIFEOS_SYSTEM_PROMPT.md"),
+    join(rootAbs, "LIFEOS", "LIFEOS_SYSTEM_PROMPT.md"),
   ]) {
     if (existsSync(filePath)) processFile(filePath);
   }
@@ -259,9 +259,9 @@ export function substituteTemplates(rootDir: string, vars: TemplateVars): Substi
   }
 
   for (const scopedDir of [
-    join(rootAbs, "LifeOS", "USER"),
-    join(rootAbs, "LifeOS", "DOCUMENTATION"),
-    join(rootAbs, "LifeOS", "ALGORITHM"),
+    join(rootAbs, "LIFEOS", "USER"),
+    join(rootAbs, "LIFEOS", "DOCUMENTATION"),
+    join(rootAbs, "LIFEOS", "ALGORITHM"),
     join(rootAbs, "agents"),
     join(rootAbs, "hooks"),
     join(rootAbs, "skills"),
@@ -509,7 +509,7 @@ function findExistingEnvKey(keyName: string): string {
   const home = homedir();
   const primary = [
     join(home, ".claude", ".env"),
-    join(home, ".config", "LifeOS", ".env"),
+    join(home, ".config", "LIFEOS", ".env"),
   ];
   for (const envPath of primary) {
     const value = readKeyFromFile(envPath, keyName);
@@ -532,7 +532,7 @@ function findKeyInBackupDirs(keyName: string): { path: string; value: string }[]
       if (!entry.startsWith(".claude") || entry === ".claude") continue;
       for (const candidate of [
         join(home, entry, ".env"),
-        join(home, entry, ".config", "LifeOS", ".env"),
+        join(home, entry, ".config", "LIFEOS", ".env"),
       ]) {
         const value = readKeyFromFile(candidate, keyName);
         if (value) found.push({ path: candidate, value });
@@ -570,7 +570,7 @@ function inventoryExistingConfig(): { signals: string[] } {
   const home = homedir();
   const signals: string[] = [];
   // (1) `~/.config/LIFEOS/.env` — outside `~/.claude/`, often holds the prior key.
-  const configEnv = join(home, ".config", "LifeOS", ".env");
+  const configEnv = join(home, ".config", "LIFEOS", ".env");
   if (readKeyFromFile(configEnv, "ELEVENLABS_API_KEY")) {
     signals.push(`ElevenLabs key in ${configEnv.replace(home, "~")}`);
   }
@@ -580,7 +580,7 @@ function inventoryExistingConfig(): { signals: string[] } {
   try {
     for (const entry of readdirSync(home)) {
       if (!entry.startsWith(".claude") || entry === ".claude") continue;
-      for (const candidate of [join(home, entry, ".env"), join(home, entry, ".config", "LifeOS", ".env")]) {
+      for (const candidate of [join(home, entry, ".env"), join(home, entry, ".config", "LIFEOS", ".env")]) {
         if (readKeyFromFile(candidate, "ELEVENLABS_API_KEY")) {
           signals.push(`ElevenLabs key in ${candidate.replace(home, "~")}`);
         }
@@ -778,11 +778,11 @@ async function migrateUserContext(
   paiDir: string,
   emit: EngineEventHandler
 ): Promise<void> {
-  const newUserDir = join(paiDir, "LifeOS", "USER");
+  const newUserDir = join(paiDir, "LIFEOS", "USER");
   if (!existsSync(newUserDir)) return; // LIFEOS/USER/ not set up yet
 
   const legacyPaths = [
-    join(paiDir, "skills", "LifeOS", "USER"),   // v2.5–v3.0
+    join(paiDir, "skills", "LIFEOS", "USER"),   // v2.5–v3.0
     join(paiDir, "skills", "CORE", "USER"),  // v2.4 and earlier
   ];
 
@@ -808,7 +808,7 @@ async function migrateUserContext(
     try {
       rmSync(legacyDir, { recursive: true });
       // Symlink target is relative: from skills/LIFEOS/ or skills/CORE/ → ../../LIFEOS/USER
-      symlinkSync(join("..", "..", "LifeOS", "USER"), legacyDir);
+      symlinkSync(join("..", "..", "LIFEOS", "USER"), legacyDir);
       await emit({ event: "message", content: `Replaced ${label} with symlink to LIFEOS/USER.` });
     } catch {
       await emit({ event: "message", content: `Could not replace ${label} with symlink. User files were copied but old directory remains.` });
@@ -828,7 +828,7 @@ async function relocateUserToConfigDir(
   configDir: string,
   emit: EngineEventHandler
 ): Promise<void> {
-  const liveUserDir = join(paiDir, "LifeOS", "USER");
+  const liveUserDir = join(paiDir, "LIFEOS", "USER");
   const configUserDir = join(configDir, "USER");
 
   // Ensure ~/.config/LIFEOS exists regardless of whether the voice/.env path
@@ -1006,13 +1006,13 @@ export async function migrateUserContentFromBackup(
 ): Promise<void> {
   if (!state.backupPath || state.collected.scanConsent === "no") return;
 
-  const backupUserDir = join(state.backupPath, "LifeOS", "USER");
+  const backupUserDir = join(state.backupPath, "LIFEOS", "USER");
   if (!existsSync(backupUserDir)) {
     await emit({ event: "message", content: `No LIFEOS/USER content found in backup at ${state.backupPath}.` });
     return;
   }
 
-  const targetUserDir = join(state.detection?.paiDir || join(homedir(), ".claude"), "LifeOS", "USER");
+  const targetUserDir = join(state.detection?.paiDir || join(homedir(), ".claude"), "LIFEOS", "USER");
   if (!existsSync(targetUserDir)) mkdirSync(targetUserDir, { recursive: true });
 
   const entries =
@@ -1108,7 +1108,7 @@ export async function moveExistingClaudeToBackup(
     }
   }
 
-  const paiRoot = join(claudeDir, "LifeOS");
+  const paiRoot = join(claudeDir, "LIFEOS");
   if (existsSync(paiRoot)) {
     try {
       for (const entry of readdirSync(paiRoot)) {
@@ -1231,11 +1231,11 @@ export async function runSystemDetect(
     }
 
     if (state.collected.scanConsent === "yes-full" && state.backupPath) {
-      const liveUserDir = join(detection.paiDir, "LifeOS", "USER");
-      const backupUserDir = join(state.backupPath, "LifeOS", "USER");
+      const liveUserDir = join(detection.paiDir, "LIFEOS", "USER");
+      const backupUserDir = join(state.backupPath, "LIFEOS", "USER");
       if (existsSync(liveUserDir)) {
         try {
-          mkdirSync(join(state.backupPath, "LifeOS"), { recursive: true });
+          mkdirSync(join(state.backupPath, "LIFEOS"), { recursive: true });
           cpSync(liveUserDir, backupUserDir, { recursive: true });
           detection.existingUserContent = detectExistingUserContent(backupUserDir);
           await emit({
@@ -1476,7 +1476,7 @@ export async function runIdentity(
     "e.g., Atlas, Nova, Sage",
     state.collected.aiName
   );
-  state.collected.aiName = aiName.trim() || defaultAi || "LifeOS";
+  state.collected.aiName = aiName.trim() || defaultAi || "LIFEOS";
 
   // Catchphrase
   const defaultCatch = state.collected.catchphrase || `${state.collected.aiName} here, ready to go`;
@@ -1723,7 +1723,7 @@ export async function runRepository(
   // ~/.config/LIFEOS/USER/, with ~/.claude/LIFEOS/USER as a symlink. Runs before
   // migrateUserContext so the legacy-skill migration writes through the
   // symlink into the canonical location.
-  const configDirForRepo = state.detection?.configDir || join(homedir(), ".config", "LifeOS");
+  const configDirForRepo = state.detection?.configDir || join(homedir(), ".config", "LIFEOS");
   await emit({ event: "progress", step: "repository", percent: 80, detail: "Separating user data into ~/.config/LIFEOS/USER..." });
   await relocateUserToConfigDir(paiDir, configDirForRepo, emit);
 
@@ -1748,7 +1748,7 @@ export async function runConfiguration(
     6
   );
   const paiDir = state.detection?.paiDir || join(homedir(), ".claude");
-  const configDir = state.detection?.configDir || join(homedir(), ".config", "LifeOS");
+  const configDir = state.detection?.configDir || join(homedir(), ".config", "LIFEOS");
 
   // Generate settings.json
   await emit({ event: "progress", step: "configuration", percent: 20, detail: "Generating settings.json..." });
@@ -1756,7 +1756,7 @@ export async function runConfiguration(
   const config = generateSettingsJson({
     principalName: state.collected.principalName || "User",
     timezone: state.collected.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-    aiName: state.collected.aiName || "LifeOS",
+    aiName: state.collected.aiName || "LIFEOS",
     catchphrase: state.collected.catchphrase || "Ready to go",
     projectsDir: state.collected.projectsDir,
     temperatureUnit: state.collected.temperatureUnit,
@@ -1806,7 +1806,7 @@ export async function runConfiguration(
   // lacked LIFEOS/ALGORITHM/) with no LATEST file at all, and the statusline
   // displayed `ALG: —` forever. Always ensure both directory and a non-empty
   // LATEST exist by the time configuration completes.
-  const latestDir = join(paiDir, "LifeOS", "ALGORITHM");
+  const latestDir = join(paiDir, "LIFEOS", "ALGORITHM");
   const latestPath = join(latestDir, "LATEST");
   let latestExisting = "";
   try { latestExisting = readFileSync(latestPath, "utf-8").trim(); } catch {}
@@ -1854,7 +1854,7 @@ export async function runConfiguration(
     // countFiles follows the symlink and counts the canonical scaffold.
     // The legacy ~/.claude/skills/LIFEOS/USER path doesn't exist on fresh
     // v6.0 installs so reading from there returned 0 on every banner.
-    const fileCount = countFiles(join(paiDir, "LifeOS", "USER"));
+    const fileCount = countFiles(join(paiDir, "LIFEOS", "USER"));
     // Count workflows by scanning skill Tools directories for .ts files
     let workflowCount = 0;
     const skillsDir = join(paiDir, "skills");
@@ -1936,7 +1936,7 @@ export async function runConfiguration(
   const userShell = process.env.SHELL || "/bin/zsh";
   const rcFile = userShell.includes("bash") ? ".bashrc" : userShell.includes("fish") ? ".config/fish/config.fish" : ".zshrc";
   const rcPath = join(homedir(), rcFile);
-  const aliasLine = `alias pai='bun ${join(paiDir, "LifeOS", "TOOLS", "lifeos.ts")}'`;
+  const aliasLine = `alias pai='bun ${join(paiDir, "LIFEOS", "TOOLS", "lifeos.ts")}'`;
   const marker = "# LifeOS alias";
 
   // Shell-alias write is wrapped because an unwritable RC file (perm issue,
@@ -2003,7 +2003,7 @@ async function isPulseRunning(): Promise<boolean> {
 // Manage.sh substitutes __HOME__ in the public plist template, copies it to
 // ~/Library/LaunchAgents/com.lifeos.pulse.plist, and `launchctl load`s it.
 async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<boolean> {
-  const pulseDir = join(paiDir, "LifeOS", "PULSE");
+  const pulseDir = join(paiDir, "LIFEOS", "PULSE");
   const manageScript = join(pulseDir, "manage.sh");
 
   if (!existsSync(manageScript)) {
@@ -2058,7 +2058,7 @@ async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<b
 // `manage.sh restart` is idempotent: unloads the launchd plist, kills any
 // stale `bun pulse.ts`, reloads, waits up to 10s for :31337 to bind.
 async function reloadPulse(paiDir: string, emit: EngineEventHandler): Promise<void> {
-  const manageScript = join(paiDir, "LifeOS", "PULSE", "manage.sh");
+  const manageScript = join(paiDir, "LIFEOS", "PULSE", "manage.sh");
   if (!existsSync(manageScript)) return;
   // Check that Pulse is installed for the current platform before reloading.
   const serviceInstalled = process.platform === "darwin"
@@ -2079,7 +2079,7 @@ async function reloadPulse(paiDir: string, emit: EngineEventHandler): Promise<vo
 
 // Optional menu bar app — separate launchd plist + macOS .app bundle.
 async function installPulseMenuBar(paiDir: string, emit: EngineEventHandler): Promise<boolean> {
-  const menuBarInstall = join(paiDir, "LifeOS", "PULSE", "MenuBar", "install.sh");
+  const menuBarInstall = join(paiDir, "LIFEOS", "PULSE", "MenuBar", "install.sh");
   if (!existsSync(menuBarInstall)) {
     await emit({ event: "message", content: "Menu bar installer not found — skipping." });
     return false;
@@ -2114,7 +2114,7 @@ async function installPulseMenuBar(paiDir: string, emit: EngineEventHandler): Pr
 // MEMORY/WISDOM/FRAMES/_hypotheses/. The Pulse /hypotheses tab reads them
 // for review. Independent of Pulse runtime; only installed if user opts in.
 async function installDeriver(paiDir: string, emit: EngineEventHandler): Promise<boolean> {
-  const manageScript = join(paiDir, "LifeOS", "PULSE", "manage-deriver.sh");
+  const manageScript = join(paiDir, "LIFEOS", "PULSE", "manage-deriver.sh");
   if (!existsSync(manageScript)) {
     await emit({ event: "message", content: "Deriver installer not found — skipping." });
     return false;
@@ -2503,7 +2503,7 @@ export async function runVoiceSetup(
 
   // ── Save ElevenLabs key to .env (if provided) ──
   if (hasElevenLabsKey) {
-    const configDir = state.detection?.configDir || join(homedir(), ".config", "LifeOS");
+    const configDir = state.detection?.configDir || join(homedir(), ".config", "LIFEOS");
     const envPath = join(configDir, ".env");
     if (!existsSync(configDir)) mkdirSync(configDir, { recursive: true });
 
@@ -2537,7 +2537,7 @@ export async function runVoiceSetup(
     while (!voiceConfirmed) {
       await emit({ event: "progress", step: "voice", percent: 80, detail: "Testing voice output..." });
       try {
-        const aiName = state.collected.aiName || "LifeOS";
+        const aiName = state.collected.aiName || "LIFEOS";
         const userName = state.collected.principalName || "there";
         const testRes = await fetch("http://localhost:31337/notify", {
           method: "POST",
@@ -2655,7 +2655,7 @@ async function validateTelegramBotToken(token: string): Promise<TelegramValidati
 }
 
 async function restartPulse(paiDir: string): Promise<boolean> {
-  const manage = join(paiDir, "LifeOS", "PULSE", "manage.sh");
+  const manage = join(paiDir, "LIFEOS", "PULSE", "manage.sh");
   if (!existsSync(manage)) return false;
   return new Promise<boolean>((resolve) => {
     const child = spawn("bash", [manage, "restart"], { cwd: dirname(manage), stdio: ["ignore", "pipe", "pipe"] });

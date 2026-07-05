@@ -32,7 +32,7 @@ function extractDomains(
 
     // Extract domain from path: first meaningful segment
     // e.g., "settings.json" -> "settings", "hooks/PRDSync.hook.ts" -> "hooks"
-    // "MEMORY/STATE/work.json" -> "MEMORY", "LIFEOS/ALGORITHM/v3.8.0.md" -> "LifeOS"
+    // "MEMORY/STATE/work.json" -> "MEMORY", "LIFEOS/ALGORITHM/v3.8.0.md" -> "LIFEOS"
     const segments = configPath.replace(/^[./~]+/, "").split("/");
     let domain = segments[0] || "other";
 

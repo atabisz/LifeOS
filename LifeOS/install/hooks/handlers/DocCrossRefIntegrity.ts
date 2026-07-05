@@ -137,7 +137,7 @@ function getModifiedFiles(transcriptPath: string): Set<string> {
 
 function isSystemDocModified(modifiedFiles: Set<string>): boolean {
   for (const path of modifiedFiles) {
-    if (path.includes('PAI/') && path.endsWith('.md')) return true;
+    if (path.includes('LIFEOS/') && path.endsWith('.md')) return true;
   }
   return false;
 }
@@ -183,7 +183,7 @@ function isSystemFileModified(modifiedFiles: Set<string>): boolean {
       const relPath = filePath.slice(LIFEOS_DIR.length + 1);
       if (LIFEOS_EXCLUDED.some(ex => relPath.includes(ex))) continue;
 
-      if ((relPath.startsWith('PAI/') || relPath.includes('skills/')) && (relPath.endsWith('.md') || relPath.endsWith('.ts') || relPath.endsWith('.yaml') || relPath.endsWith('.yml'))) return true;
+      if ((relPath.startsWith('LIFEOS/') || relPath.includes('skills/')) && (relPath.endsWith('.md') || relPath.endsWith('.ts') || relPath.endsWith('.yaml') || relPath.endsWith('.yml'))) return true;
       if (relPath.includes('/Tools/') && relPath.endsWith('.ts')) return true;
       if (relPath.includes('/Workflows/') && relPath.endsWith('.md')) return true;
       continue;
@@ -291,7 +291,7 @@ function checkLibFileRefs(docsToCheck: string[], libsOnDisk: Set<string>): Drift
  */
 function checkSystemDocRefs(docsToCheck: string[], systemDocsOnDisk: Set<string>): DriftItem[] {
   const drift: DriftItem[] = [];
-  // Match backtick-wrapped or plain doc references in PAI/ (both old skills/PAI/ and new PAI/ paths)
+  // Match backtick-wrapped or plain doc references in LIFEOS/ (both old skills/LIFEOS/ and new LIFEOS/ paths)
   const sysDocRefRegex = /(?:`|'|")(?:~\/\.(?:claude|config\/PAI)\/)?(?:skills\/)?LifeOS\/([\w/]+\.md)(?:`|'|")/g;
 
   for (const docFile of docsToCheck) {
@@ -312,8 +312,8 @@ function checkSystemDocRefs(docsToCheck: string[], systemDocsOnDisk: Set<string>
         drift.push({
           doc: docFile,
           pattern: 'system_doc_ref',
-          reference: `PAI/${refTarget}`,
-          issue: `References "PAI/${refTarget}" but file does not exist`,
+          reference: `LIFEOS/${refTarget}`,
+          issue: `References "LIFEOS/${refTarget}" but file does not exist`,
         });
       }
     }
@@ -426,7 +426,7 @@ function buildInferenceContext(
   // Collect modified system files with their content — must match isSystemFileModified scope
   const relevantFiles = Array.from(modifiedFiles).filter(f =>
     f.includes('/hooks/') ||
-    f.includes('/PAI/') ||
+    f.includes('/LIFEOS/') ||
     f.includes('skills/') ||
     f.endsWith('settings.json') ||
     f.includes('/agents/') ||
@@ -778,7 +778,7 @@ export async function handleDocCrossRefIntegrity(
 
   // Update Last Updated timestamps for modified SYSTEM docs
   for (const path of modifiedFiles) {
-    if (path.includes('PAI/') && path.endsWith('.md')) {
+    if (path.includes('LIFEOS/') && path.endsWith('.md')) {
       const docFile = basename(path);
       const result = updateLastUpdatedTimestamp(docFile);
       if (result) {

@@ -163,7 +163,7 @@ function escapeRegex(str: string): string {
 }
 
 function loadPronunciations(customPath?: string): void {
-  const paiDir = join(process.env.HOME ?? "~", ".claude", "LifeOS")
+  const paiDir = join(process.env.HOME ?? "~", ".claude", "LIFEOS")
   const userPronPath = customPath ?? join(paiDir, "USER", "PRINCIPAL", "PRONUNCIATIONS.json")
 
   try {

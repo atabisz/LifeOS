@@ -1,6 +1,6 @@
 /**
  * Apple Health source module — reads the JSON file exported by the iPhone
- * Shortcut "LifeOS Health Export" into iCloud Drive (Shortcuts/PAI/).
+ * Shortcut "LifeOS Health Export" into iCloud Drive (Shortcuts/LIFEOS/).
  * Path contract is duplicated in LIFEOS/USER/HEALTH/SHORTCUT_SETUP.md — keep in sync.
  */
 import { join } from "node:path";
@@ -23,7 +23,7 @@ export const APPLE_EXPORT_PATH = join(
   "Mobile Documents",
   "iCloud~is~workflow~my~workflows",
   "Documents",
-  "LifeOS",
+  "LIFEOS",
   "health-export.json",
 );
 

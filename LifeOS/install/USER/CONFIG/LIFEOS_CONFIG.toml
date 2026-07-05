@@ -3,12 +3,12 @@
 # Bootstrap default. The LifeOS Setup + Interview fill in your real values.
 # Canonical source for principal identity, DA identity, voice config, integration
 # credentials, and path roots. System code reads these through
-# LIFEOS/TOOLS/PaiConfig.ts (loadPaiConfig()). Secrets stay in ~/.claude/.env — never here.
+# LIFEOS/TOOLS/LifeosConfig.ts (loadLifeosConfig()). Secrets stay in ~/.claude/.env — never here.
 #
 # This file lives under LIFEOS/USER/CONFIG/ (USER zone) — it never ships in a public
 # release with real values; this is the clean scaffold. It is yours; edit freely.
 #
-# Schema reference: the `PaiConfig` interface in LIFEOS/TOOLS/PaiConfig.ts.
+# Schema reference: the `LifeosConfig` interface in LIFEOS/TOOLS/LifeosConfig.ts.
 
 [principal]
 name = "Your Name"                 # required — your display name

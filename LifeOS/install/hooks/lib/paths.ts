@@ -37,7 +37,7 @@ export function expandPath(path: string): string {
  * plugin, bin/pai exports LIFEOS_DIR equal to CLAUDE_PLUGIN_ROOT (the flattened
  * claude-home root), so trusting LIFEOS_DIR first would drop the trailing /PAI
  * segment and mis-resolve paiPath() to ROOT/MEMORY instead of ROOT/LIFEOS/MEMORY.
- * Resolving via getClaudeDir() + 'LifeOS' keeps the live ~/.claude/LIFEOS →
+ * Resolving via getClaudeDir() + 'LIFEOS' keeps the live ~/.claude/LIFEOS →
  * plugin ${ROOT}/PAI mapping that the packer's ~/.claude/ → ${LIFEOS_DIR} rewrite assumes.
  */
 export function getPaiDir(): string {
@@ -81,7 +81,7 @@ export function getSettingsPath(): string {
 
 /**
  * Get the authoritative .env path (~/.claude/.env).
- * All credentials live here; PAI/.env is deprecated.
+ * All credentials live here; LIFEOS/.env is deprecated.
  */
 export function getEnvPath(): string {
   return join(getClaudeDir(), '.env');

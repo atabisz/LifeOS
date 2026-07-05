@@ -24,7 +24,7 @@ import { join, dirname } from "path";
 import { loadWorkConfig } from "./lib/work-config";
 
 const HOME = process.env.HOME || "";
-const STATE_PATH = join(HOME, ".claude", "LifeOS", "MEMORY", "STATE", "reminder-router-seen.json");
+const STATE_PATH = join(HOME, ".claude", "LIFEOS", "MEMORY", "STATE", "reminder-router-seen.json");
 
 interface HookInput {
   session_id?: string;

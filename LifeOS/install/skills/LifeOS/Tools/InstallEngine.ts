@@ -2,7 +2,7 @@
  * InstallEngine — shared install logic for the LifeOS bare-skill installer.
  *
  * This is a standalone, adapted subset of the legacy installer engine at
- * `PAI/LIFEOS_INSTALL/engine/` (detect.ts + the relevant types), reshaped for the
+ * `LIFEOS/LIFEOS_INSTALL/engine/` (detect.ts + the relevant types), reshaped for the
  * bare-skill context: no web/electron wizard, no separate types module, plus
  * the bare-skill extras the wizard never needed — harness detection (the skill
  * installs into Claude Code / Hermes / Cursor / OpenClaw) and dev-tree refusal
@@ -247,19 +247,19 @@ export interface ExistingUserContent {
  * Read-only scan of a user config tree for already-present content, so setup
  * can branch on "populated tree" vs "fresh scaffold" without overwriting.
  */
-export function detectExistingUserContent(paiUserDir: string): ExistingUserContent {
+export function detectExistingUserContent(lifeosUserDir: string): ExistingUserContent {
   // Covers both the current single-file schema (TELOS/TELOS.md) and the legacy
   // split layout (TELOS/MISSION.md, TELOS/GOALS.md).
   const telosPresent =
-    fileExists(paiUserDir, "TELOS/TELOS.md") ||
-    fileExists(paiUserDir, "TELOS/MISSION.md") ||
-    fileExists(paiUserDir, "TELOS/GOALS.md");
+    fileExists(lifeosUserDir, "TELOS/TELOS.md") ||
+    fileExists(lifeosUserDir, "TELOS/MISSION.md") ||
+    fileExists(lifeosUserDir, "TELOS/GOALS.md");
   const identityPresent =
-    fileExists(paiUserDir, "PRINCIPAL/PRINCIPAL_IDENTITY.md") ||
-    fileExists(paiUserDir, "PRINCIPAL_IDENTITY.md") ||
-    fileExists(paiUserDir, "DIGITAL_ASSISTANT/DA_IDENTITY.md");
-  const contactsPresent = fileExists(paiUserDir, "CONTACTS.md");
-  const projectsPresent = fileExists(paiUserDir, "PROJECTS.md");
+    fileExists(lifeosUserDir, "PRINCIPAL/PRINCIPAL_IDENTITY.md") ||
+    fileExists(lifeosUserDir, "PRINCIPAL_IDENTITY.md") ||
+    fileExists(lifeosUserDir, "DIGITAL_ASSISTANT/DA_IDENTITY.md");
+  const contactsPresent = fileExists(lifeosUserDir, "CONTACTS.md");
+  const projectsPresent = fileExists(lifeosUserDir, "PROJECTS.md");
   return {
     telosPresent,
     identityPresent,

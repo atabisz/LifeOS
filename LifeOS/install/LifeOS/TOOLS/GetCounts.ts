@@ -40,7 +40,7 @@ const HOME = process.env.HOME!;
 const CLAUDE_DIR = join(HOME, ".claude");
 // skills/, hooks/, settings.json live under CLAUDE_DIR.
 // MEMORY/, USER/ live under LIFEOS_DIR (which is CLAUDE_DIR/PAI).
-const LIFEOS_DIR = process.env.LIFEOS_DIR || join(CLAUDE_DIR, "LifeOS");
+const LIFEOS_DIR = process.env.LIFEOS_DIR || join(CLAUDE_DIR, "LIFEOS");
 
 interface Counts {
   skills: number;

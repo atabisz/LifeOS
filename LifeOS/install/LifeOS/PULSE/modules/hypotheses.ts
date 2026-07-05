@@ -28,7 +28,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync, unlinkSync, mkdir
 import { join } from "path";
 
 const HOME = process.env.HOME || "";
-const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LifeOS");
+const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LIFEOS");
 const FRAMES_DIR = join(LIFEOS_DIR, "MEMORY", "WISDOM", "FRAMES");
 const HYPOTHESES_DIR = join(FRAMES_DIR, "_hypotheses");
 const ARCHIVE_DIR = join(HYPOTHESES_DIR, "_archive");

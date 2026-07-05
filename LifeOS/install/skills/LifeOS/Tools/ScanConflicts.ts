@@ -40,7 +40,7 @@ function main(): void {
 
   const settingsHooks = scanSettingsHooks(join(configRoot, "settings.json"));
   const existingUserContent = detectExistingUserContent(userDir);
-  const lifeosSkillPresent = existsSync(join(skillsDir, "LifeOS"));
+  const lifeosSkillPresent = existsSync(join(skillsDir, "LIFEOS"));
 
   // Names only — scanApiKeys returns values, but we surface ONLY the provider keys.
   const apiKeyProviders = Object.keys(scanApiKeys(env.homeDir, join(configRoot, "LIFEOS", "USER", "CONFIG")));

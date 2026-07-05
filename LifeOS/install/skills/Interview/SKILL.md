@@ -22,7 +22,7 @@ The skill reads the constitutional files via the freshness tooling, scores each 
 | Workflow | Trigger | File |
 |----------|---------|------|
 | **ContextCheckin** | default `/interview` on a populated system; "context check-in", "telos check-in", "what's stale", "how are we doing on…", "still on…", "review context" | `Workflows/ContextCheckin.md` |
-| **Phase0Setup** | fresh install; DA name still reads "LifeOS"; PRINCIPAL_IDENTITY still reads "User"; PROJECTS sample-row only; `.env` missing required keys | `Workflows/Phase0Setup.md` |
+| **Phase0Setup** | fresh install; DA name still reads "LIFEOS"; PRINCIPAL_IDENTITY still reads "User"; PROJECTS sample-row only; `.env` missing required keys | `Workflows/Phase0Setup.md` |
 | **TelosCheckin** *(deprecated stub)* | back-compat for explicit "telos checkin" routing | `Workflows/TelosCheckin.md` (redirects to ContextCheckin) |
 
 **Routing decision (run before either workflow):**
@@ -56,7 +56,7 @@ bun ~/.claude/LIFEOS/TOOLS/InterviewScan.ts --json | jq '[.targets[] | select(.p
 
 - "/interview" on a populated system → routing probe via `InterviewScan.ts`, then ContextCheckin walking the stalest sections first ("G2 is 95 days old — still right?").
 - "what's stale?" → freshness summary from TelosFreshness, prioritized list, no edits unless approved.
-- Fresh install (DA name still "LifeOS", PROJECTS sample-row only) → Phase0Setup first, then ContextCheckin.
+- Fresh install (DA name still "LIFEOS", PROJECTS sample-row only) → Phase0Setup first, then ContextCheckin.
 
 ## Related
 

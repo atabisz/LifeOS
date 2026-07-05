@@ -31,7 +31,7 @@ if (!jobName) {
   process.exit(1)
 }
 
-const PULSE_DIR = join(process.env.HOME ?? "~", ".claude", "LifeOS", "PULSE")
+const PULSE_DIR = join(process.env.HOME ?? "~", ".claude", "LIFEOS", "PULSE")
 const config = await loadConfig(PULSE_DIR)
 const job = config.jobs.find((j) => j.name === jobName)
 if (!job) {

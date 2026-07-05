@@ -45,7 +45,7 @@ export class NoHometownError extends Error {
 const IDENTITY_DEFAULT = join(
   homedir(),
   ".claude",
-  "LifeOS",
+  "LIFEOS",
   "USER",
   "PRINCIPAL",
   "PRINCIPAL_IDENTITY.md"

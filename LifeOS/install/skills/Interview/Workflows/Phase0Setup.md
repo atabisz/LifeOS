@@ -2,7 +2,7 @@
 
 **Purpose:** On a fresh LifeOS install (or one where the bootstrap was never finished), walk the six setup targets that make Pulse work end-to-end: DA identity, Principal identity, voice IDs, credentials, first project, work repo. Once Phase 0 is done on a system, this workflow auto-skips and `/interview` routes to **TelosCheckin** instead.
 
-A fresh LifeOS install ships with placeholder identity ("LifeOS" / "User"), generic voice IDs, an empty `.env`, a sample-row PROJECTS table, and a templated `WORK.REPO` that points nowhere. Until Phase 0 runs, Pulse boots with the wrong DA name, voice notifications use the default Rachel voice, the Assistant module's diary writes to a non-existent DA directory, and the work pipeline crashes on the missing repo.
+A fresh LifeOS install ships with placeholder identity ("LIFEOS" / "User"), generic voice IDs, an empty `.env`, a sample-row PROJECTS table, and a templated `WORK.REPO` that points nowhere. Until Phase 0 runs, Pulse boots with the wrong DA name, voice notifications use the default Rachel voice, the Assistant module's diary writes to a non-existent DA directory, and the work pipeline crashes on the missing repo.
 
 ---
 
@@ -35,7 +35,7 @@ Walk the six setup targets one at a time. Each writes to a specific file. Voice-
 
 | # | Target | Files written | Skip-when |
 |---|--------|---------------|-----------|
-| 0.1 | **DA Identity** — name, full name, color, role, personality summary | `USER/DIGITAL_ASSISTANT/DA_IDENTITY.md` (always — YAML frontmatter holds structured schema, body holds prose); `USER/DA/{name}/DA_IDENTITY.md` (if multi-DA structure exists or principal opts in) | DA_IDENTITY.md no longer reads "LifeOS" / "LifeOS Assistant" |
+| 0.1 | **DA Identity** — name, full name, color, role, personality summary | `USER/DIGITAL_ASSISTANT/DA_IDENTITY.md` (always — YAML frontmatter holds structured schema, body holds prose); `USER/DA/{name}/DA_IDENTITY.md` (if multi-DA structure exists or principal opts in) | DA_IDENTITY.md no longer reads "LIFEOS" / "LifeOS Assistant" |
 | 0.2 | **Principal Identity** — name (with pronunciation), location, timezone, role, focus | `USER/PRINCIPAL/PRINCIPAL_IDENTITY.md` Quick Reference section | PRINCIPAL_IDENTITY.md no longer reads "User" with "(interview)" markers |
 | 0.3 | **Voice IDs** — main DA voice + algorithm voice (offer ElevenLabs library link or "use defaults") | `USER/DIGITAL_ASSISTANT/DA_IDENTITY.md` Voice section + `PULSE/PULSE.toml` `[voice]` block | Voice IDs no longer match the generic Rachel/Adam defaults |
 | 0.4 | **Credentials** — ANTHROPIC_API_KEY, ELEVENLABS_API_KEY (skippable with explanation), optional GH_TOKEN, STRIPE_KEY | `~/.claude/.env` (or `~/.config/LIFEOS/.env` symlink target) | `.env` exists with at least ANTHROPIC_API_KEY set |

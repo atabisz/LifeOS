@@ -7,8 +7,8 @@ import { homedir } from "node:os";
 
 const HOME = homedir();
 const LIFEOS_DIR = join(HOME, ".claude");
-const STATE_DIR = join(LIFEOS_DIR, "LifeOS", "MEMORY", "STATE");
-const WORK_DIR = join(LIFEOS_DIR, "LifeOS", "MEMORY", "WORK");
+const STATE_DIR = join(LIFEOS_DIR, "LIFEOS", "MEMORY", "STATE");
+const WORK_DIR = join(LIFEOS_DIR, "LIFEOS", "MEMORY", "WORK");
 // Claude Code names each project dir by its absolute path with "/" and "." mapped to "-",
 // e.g. $HOME/.claude -> "-Users-<user>--claude". Derive it from $HOME instead of hardcoding.
 const PROJECT_SLUG = LIFEOS_DIR.replace(/[/.]/g, "-");

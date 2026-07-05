@@ -3,7 +3,7 @@
  * LoadContext.hook.ts - Inject LifeOS dynamic context into Claude's Context (SessionStart)
  *
  * LifeOS v5.0 Context Architecture:
- * - Constitutional rules     → PAI/LIFEOS_SYSTEM_PROMPT.md (system prompt via --append-system-prompt-file)
+ * - Constitutional rules     → LIFEOS/LIFEOS_SYSTEM_PROMPT.md (system prompt via --append-system-prompt-file)
  * - Operational procedures   → CLAUDE.md (loaded natively by Claude Code)
  * - Contextual knowledge     → @imports in CLAUDE.md (native Claude Code mechanism, v5.0)
  * - Dynamic context          → this hook (relationship, learning, work)
@@ -27,7 +27,7 @@
  * - exit(0): Normal completion
  *
  * DESIGN (v5.0):
- * Constitutional rules live in the system prompt (PAI/LIFEOS_SYSTEM_PROMPT.md).
+ * Constitutional rules live in the system prompt (LIFEOS/LIFEOS_SYSTEM_PROMPT.md).
  * Operational procedures + contextual knowledge live in CLAUDE.md (@imports, native).
  * This hook injects dynamic, session-specific context only (relationship, learning, work).
  *
@@ -455,7 +455,7 @@ async function main() {
 LifeOS Dynamic Context (Auto-loaded at Session Start)
 ${relationshipContext ?? ''}${learningContext ? '\n---\n' + learningContext : ''}
 ---
-Dynamic context loaded. Constitutional rules are in the system prompt (PAI/LIFEOS_SYSTEM_PROMPT.md). Operational procedures are in CLAUDE.md.
+Dynamic context loaded. Constitutional rules are in the system prompt (LIFEOS/LIFEOS_SYSTEM_PROMPT.md). Operational procedures are in CLAUDE.md.
 </system-reminder>`;
 
       console.log(message);

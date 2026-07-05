@@ -17,9 +17,9 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { paiUserDir } from './PaiConfig';
+import { lifeosUserDir } from './LifeosConfig';
 
-const TELOS_DIR = join(paiUserDir(), 'TELOS');
+const TELOS_DIR = join(lifeosUserDir(), 'TELOS');
 const OUTPUT_PATH = join(TELOS_DIR, 'PRINCIPAL_TELOS.md');
 
 interface ParsedItem {

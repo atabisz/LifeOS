@@ -13,7 +13,7 @@
 import { readdirSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { spawnSync } from "child_process";
-import { paiUserDir } from "./PaiConfig";
+import { lifeosUserDir } from "./LifeosConfig";
 
 const HOME = process.env.HOME!;
 const CLAUDE_DIR = join(HOME, ".claude");
@@ -212,7 +212,7 @@ const COMPACT_CUBE = [
 const COMPACT_CUBE_WIDTH = 24;
 
 // ═══════════════════════════════════════════════════════════════════════
-// Block Letter Art for "LifeOS"
+// Block Letter Art for "LIFEOS"
 // ═══════════════════════════════════════════════════════════════════════
 
 const LIFEOS_BLOCK_ART = [
@@ -243,9 +243,9 @@ function readDAIdentity(): string {
   const settingsPath = join(CLAUDE_DIR, "settings.json");
   try {
     const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
-    return settings.daidentity?.displayName || settings.daidentity?.name || settings.env?.DA || "LifeOS";
+    return settings.daidentity?.displayName || settings.daidentity?.name || settings.env?.DA || "LIFEOS";
   } catch {
-    return "LifeOS";
+    return "LIFEOS";
   }
 }
 
@@ -302,7 +302,7 @@ function countLearnings(): number {
 }
 
 function countUserFiles(): number {
-  const userDir = paiUserDir();
+  const userDir = lifeosUserDir();
   if (!existsSync(userDir)) return 47;
   let count = 0;
   const countRecursive = (dir: string) => {
@@ -398,7 +398,7 @@ function colorLogo(lines: string[]): string[] {
     else color = GRADIENT.cyan1;
 
     // Special handling for LifeOS text
-    if (line.includes("LifeOS") || line.includes("P A I")) {
+    if (line.includes("LIFEOS") || line.includes("P A I")) {
       return line.replace(/P\s*A\s*I/,
         `${BOLD}${GRADIENT.blue1}P${RESET}${BOLD}${GRADIENT.purple1}A${RESET}${BOLD}${GRADIENT.cyan1}I${RESET}`
       );

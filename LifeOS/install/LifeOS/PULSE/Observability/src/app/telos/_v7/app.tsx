@@ -50,7 +50,7 @@ export function PaiLogo({ size = 22 }: PaiLogoProps) {
       width={size * (W / H)}
       height={size}
       viewBox={`0 0 ${W} ${H}`}
-      aria-label="LifeOS"
+      aria-label="LIFEOS"
       shapeRendering="crispEdges"
     >
       <rect x="0"  y={y(0)} width="75" height={rowH} fill={NAVY} />

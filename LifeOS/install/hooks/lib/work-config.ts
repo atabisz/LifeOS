@@ -30,7 +30,7 @@ import { join } from "path";
 declare const Bun: { spawnSync: (cmd: string[], opts?: any) => any };
 
 const HOME = process.env.HOME || "";
-const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LifeOS");
+const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LIFEOS");
 const REPO_JSON_PATH = join(LIFEOS_DIR, "USER", "WORK", "work_repo.json");
 const COLUMNS_YAML_PATH = join(LIFEOS_DIR, "USER", "WORK", "config.yaml");
 

@@ -32,7 +32,7 @@ import * as crypto from "crypto";
 // ============================================================================
 
 const CLAUDE_DIR = path.join(process.env.HOME!, ".claude");
-const LIFEOS_DIR = path.join(CLAUDE_DIR, "LifeOS");
+const LIFEOS_DIR = path.join(CLAUDE_DIR, "LIFEOS");
 const MEMORY_DIR = path.join(LIFEOS_DIR, "MEMORY");
 const LEARNING_DIR = path.join(MEMORY_DIR, "LEARNING");
 const RATINGS_FILE = path.join(LEARNING_DIR, "SIGNALS", "ratings.jsonl");

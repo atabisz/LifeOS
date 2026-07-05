@@ -69,7 +69,7 @@ const EXCLUDED_PATHS = [
 
 // High-priority paths that always warrant documentation
 const HIGH_PRIORITY_PATHS = [
-  'PAI/',
+  'LIFEOS/',
   'PAISYSTEMARCHITECTURE.md',
   'SKILLSYSTEM.md',
   'MEMORYSYSTEM.md',
@@ -500,7 +500,7 @@ export function generateDescriptiveTitle(changes: FileChange[]): string {
   const skillNames = new Set<string>();
   for (const p of paths) {
     const match = p.match(/skills\/([^/]+)\//);
-    if (match && match[1] !== 'LifeOS') skillNames.add(match[1]);
+    if (match && match[1] !== 'LIFEOS') skillNames.add(match[1]);
   }
 
   // Detect file types

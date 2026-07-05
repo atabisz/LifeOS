@@ -5,8 +5,8 @@ import { parseFrontmatter, serializeFrontmatter } from "../lib/frontmatter";
 import { sha256Hex } from "../lib/cache";
 
 const HOME = process.env.HOME!;
-const USER_ROOT = resolve(HOME, ".claude", "LifeOS", "USER");
-const EDITS_LOG = resolve(HOME, ".claude", "LifeOS", "MEMORY", "OBSERVABILITY", "pulse-edits.jsonl");
+const USER_ROOT = resolve(HOME, ".claude", "LIFEOS", "USER");
+const EDITS_LOG = resolve(HOME, ".claude", "LIFEOS", "MEMORY", "OBSERVABILITY", "pulse-edits.jsonl");
 const CONTAINMENT_PREFIX_DENY = ["MEMORY/PULSE_DATA", "MEMORY/OBSERVABILITY"];
 
 export interface EditRequest {
@@ -32,7 +32,7 @@ function isInUserTree(absPath: string): boolean {
 }
 
 function isContainmentPath(absPath: string): boolean {
-  const rel = absPath.replace(resolve(HOME, ".claude", "LifeOS") + "/", "");
+  const rel = absPath.replace(resolve(HOME, ".claude", "LIFEOS") + "/", "");
   return CONTAINMENT_PREFIX_DENY.some((p) => rel.startsWith(p));
 }
 

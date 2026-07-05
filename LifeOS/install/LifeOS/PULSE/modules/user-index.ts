@@ -23,7 +23,7 @@ import { readFileSync, writeFileSync, statSync, readdirSync, mkdirSync, existsSy
 import { join, relative, basename, dirname } from "path"
 
 const HOME = process.env.HOME ?? ""
-const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LifeOS")
+const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LIFEOS")
 const USER_DIR = join(LIFEOS_DIR, "USER")
 const STATE_DIR = join(LIFEOS_DIR, "PULSE", "state")
 const INDEX_PATH = join(STATE_DIR, "user-index.json")

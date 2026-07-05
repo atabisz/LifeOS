@@ -48,7 +48,7 @@ if [ -z "${USER_TZ:-}" ] && [ -r /etc/timezone ]; then
 fi
 USER_TZ="${USER_TZ:-UTC}"
 
-# LIFEOS_VERSION: read from PAI/VERSION (canonical, also read by install.sh,
+# LIFEOS_VERSION: read from LIFEOS/VERSION (canonical, also read by install.sh,
 # Banner.ts, _LIFEOS/Tools/UpdatePaiVersion.ts, ShadowRelease.ts, install web
 # server). Same multi-path pattern as ALGO_VERSION below to survive
 # hook-spawn contexts where HOME/LIFEOS_DIR may not resolve.
@@ -210,7 +210,7 @@ DA_NAME="${DA_NAME:-Assistant}"
 # Get user timezone from settings (for reset time display)
 USER_TZ="${USER_TZ:-UTC}"
 
-# LifeOS version was read from PAI/VERSION above; this is a defensive fallback.
+# LifeOS version was read from LIFEOS/VERSION above; this is a defensive fallback.
 LIFEOS_VERSION="${LIFEOS_VERSION:-—}"
 
 # ALGO_VERSION is set above from LATEST (single source of truth, v6.2.0+).
@@ -452,7 +452,7 @@ detect_terminal_width() {
     # spawn contexts (Claude Code's statusline subprocess on a headless
     # server, no TTY, no Kitty IPC, no /dev/tty) export COLUMNS=0, which
     # would otherwise pass `${COLUMNS:-80}` straight through and force
-    # MODE=nano — silently dropping CC/PAI/ALG/SK/WF/HK from the render.
+    # MODE=nano — silently dropping CC/LIFEOS/ALG/SK/WF/HK from the render.
     if [ -n "${COLUMNS:-}" ] && [ "$COLUMNS" -gt 0 ] 2>/dev/null; then
         echo "$COLUMNS"
     else
@@ -463,7 +463,7 @@ detect_terminal_width() {
 term_width=$(detect_terminal_width)
 
 # Final guard: if everything fell through and we still have an invalid
-# width, force normal mode rather than degrading to nano. ALG/PAI/CC
+# width, force normal mode rather than degrading to nano. ALG/LIFEOS/CC
 # version visibility matters more than format compactness here.
 if [ -z "$term_width" ] || [ "$term_width" -le 0 ] 2>/dev/null; then
     term_width=80

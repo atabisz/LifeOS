@@ -28,7 +28,7 @@ function isAutomated(): boolean {
  * Prompt for text input with optional default value.
  *
  * In automated mode we return an empty string and let the caller's own
- * fallback ("User", "LifeOS", etc.) take effect. The `defaultValue` here is
+ * fallback ("User", "LIFEOS", etc.) take effect. The `defaultValue` here is
  * really a UI placeholder hint ("Your name", "e.g., Atlas, Nova, Sage"),
  * NOT a sensible install-time default — returning it as the answer
  * persisted those literal hint strings into settings.json on automated

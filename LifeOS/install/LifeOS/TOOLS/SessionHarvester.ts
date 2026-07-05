@@ -34,7 +34,7 @@ const CLAUDE_DIR = path.join(process.env.HOME!, ".claude");
 // Linux: ${HOME}/.claude → ${HARNESS_USER_DIR}
 const CWD_SLUG = CLAUDE_DIR.replace(/[\/\.]/g, "-");
 const PROJECTS_DIR = path.join(CLAUDE_DIR, "projects", CWD_SLUG);
-const LEARNING_DIR = path.join(CLAUDE_DIR, "LifeOS", "MEMORY", "LEARNING");
+const LEARNING_DIR = path.join(CLAUDE_DIR, "LIFEOS", "MEMORY", "LEARNING");
 
 // Patterns indicating learning moments in conversations
 const CORRECTION_PATTERNS = [
@@ -392,7 +392,7 @@ function confidenceIcon(c: number): string {
   return "\u{1F534}";                  // red circle
 }
 
-const HARVEST_QUEUE_DIR = path.join(CLAUDE_DIR, "LifeOS", "MEMORY", "KNOWLEDGE", "_harvest-queue");
+const HARVEST_QUEUE_DIR = path.join(CLAUDE_DIR, "LIFEOS", "MEMORY", "KNOWLEDGE", "_harvest-queue");
 
 function writeToQueue(mem: MinedMemory): string {
   if (!fs.existsSync(HARVEST_QUEUE_DIR)) {

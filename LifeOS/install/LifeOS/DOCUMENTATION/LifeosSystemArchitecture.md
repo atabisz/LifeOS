@@ -208,8 +208,8 @@ The LifeOS live tree and the public release are structurally identical modulo a 
 - `~/.config/LIFEOS/USER/MEMORY/` — durable subset of memory (KNOWLEDGE, WORK/<slug>/ISA.md, RELATIONSHIP, WISDOM, PLANS, RESEARCH, STATE/work.json, BOOKMARKS, REFERENCE, SKILLS, PROJECT, TEAMS, PAISYSTEMUPDATES, VERIFICATION) git-tracked in the user's private USER-data repo; ephemeral subset (OBSERVABILITY, STATE caches, LEARNING signals, SECURITY artifacts, VOICE event log, _BROWSER_STATE) gitignored locally.
 
 **Four allowed access patterns** (any fifth pattern is a boundary violation):
-1. `PaiConfig.load()` typed loader (`LIFEOS/TOOLS/PaiConfig.ts`) — primary channel for identity, voice, integrations, paths
-2. Paths computed from `PaiConfig.paths.userDir + relative` — never from literal `LIFEOS/USER/` strings in system code
+1. `LifeosConfig.load()` typed loader (`LIFEOS/TOOLS/LifeosConfig.ts`) — primary channel for identity, voice, integrations, paths
+2. Paths computed from `LifeosConfig.paths.userDir + relative` — never from literal `LIFEOS/USER/` strings in system code
 3. At-startup `@`-imports declared at the top of `~/.claude/CLAUDE.md` (CC does NOT follow transitive `@`-imports)
 4. HTTP/IPC via the Pulse server at `localhost:31337`
 
@@ -220,7 +220,7 @@ The LifeOS live tree and the public release are structurally identical modulo a 
 
 **Two-repo sync** — `~/.claude/.git/hooks/pre-push` auto-commits and pushes `~/.config/LIFEOS/USER/` to the user's private USER-data repo before each push from `~/.claude/`. The two repos stay in sync structurally. A private "kai update" / "push both repos" workflow wraps this with 4 boundary gates (USER-zone leak check, DenyListCheck, both-remotes-private confirmation, post-push HEAD verification).
 
-Configuration files (`settings.json`, `CLAUDE.md`, `LIFEOS_SYSTEM_PROMPT.md`) are directly edited; `settings.json` is split into `settings.system.json` (public) + `settings.user.json` (USER) merged at SessionStart by `LIFEOS/TOOLS/MergeSettings.ts`. Identity values live in `settings.json` under `daidentity` and `principal` keys; private skills read credentials via `PaiConfig.ts` from `LIFEOS/USER/CONFIG/LIFEOS_CONFIG.toml`. Full contract: `LIFEOS/DOCUMENTATION/SystemUserBoundary.md`.
+Configuration files (`settings.json`, `CLAUDE.md`, `LIFEOS_SYSTEM_PROMPT.md`) are directly edited; `settings.json` is split into `settings.system.json` (public) + `settings.user.json` (USER) merged at SessionStart by `LIFEOS/TOOLS/MergeSettings.ts`. Identity values live in `settings.json` under `daidentity` and `principal` keys; private skills read credentials via `LifeosConfig.ts` from `LIFEOS/USER/CONFIG/LIFEOS_CONFIG.toml`. Full contract: `LIFEOS/DOCUMENTATION/SystemUserBoundary.md`.
 
 ---
 

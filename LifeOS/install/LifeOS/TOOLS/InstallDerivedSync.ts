@@ -87,7 +87,7 @@ async function install(): Promise<void> {
   }
   const bunPath = await detectBun();
   const bunDir = bunPath.replace(/\/bun$/, "");
-  const userDir = realpathSync(join(HOME, ".claude", "LifeOS", "USER"));
+  const userDir = realpathSync(join(HOME, ".claude", "LIFEOS", "USER"));
   console.log(`[InstallDerivedSync] detected bun at ${bunPath}`);
   const template = readFileSync(TEMPLATE_PATH, "utf-8");
   const materialized = template

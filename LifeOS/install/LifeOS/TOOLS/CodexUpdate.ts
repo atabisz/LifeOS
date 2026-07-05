@@ -21,7 +21,7 @@ import { join, dirname } from "path";
 
 const HOME = process.env.HOME || "";
 const PKG = "@openai/codex";
-const LOG = join(HOME, ".claude", "LifeOS", "MEMORY", "OBSERVABILITY", "codex-update.jsonl");
+const LOG = join(HOME, ".claude", "LIFEOS", "MEMORY", "OBSERVABILITY", "codex-update.jsonl");
 
 function codexVersion(): string | null {
   const r = spawnSync("codex", ["--version"], { encoding: "utf-8" });

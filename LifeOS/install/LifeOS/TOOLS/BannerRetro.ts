@@ -18,7 +18,7 @@
 import { readdirSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { spawnSync } from "child_process";
-import { paiUserDir } from "./PaiConfig";
+import { lifeosUserDir } from "./LifeosConfig";
 
 const HOME = process.env.HOME!;
 const CLAUDE_DIR = join(HOME, ".claude");
@@ -315,9 +315,9 @@ function readDAIdentity(): string {
   const settingsPath = join(CLAUDE_DIR, "settings.json");
   try {
     const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
-    return settings.daidentity?.displayName || settings.daidentity?.name || settings.env?.DA || "LifeOS";
+    return settings.daidentity?.displayName || settings.daidentity?.name || settings.env?.DA || "LIFEOS";
   } catch {
-    return "LifeOS";
+    return "LIFEOS";
   }
 }
 
@@ -334,7 +334,7 @@ function countSkills(): number {
 }
 
 function countUserFiles(): number {
-  const userDir = paiUserDir();
+  const userDir = lifeosUserDir();
   if (!existsSync(userDir)) return 0;
   let count = 0;
   const countRecursive = (dir: string) => {

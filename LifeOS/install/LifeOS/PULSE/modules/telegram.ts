@@ -16,7 +16,7 @@ import { disambiguateHomographs } from "../lib/homographs"
 import { join } from "path"
 import { appendFile, mkdir, readFile, rm } from "fs/promises"
 import { inference } from "../../TOOLS/Inference"
-import { loadPaiConfig } from "../../TOOLS/PaiConfig"
+import { loadLifeosConfig } from "../../TOOLS/LifeosConfig"
 import { read as readMemory, type ReadResult as MemoryReadResult } from "../../TOOLS/MemoryWriter"
 import { getRelevantContext } from "../../TOOLS/MemoryRetriever"
 import {
@@ -64,8 +64,8 @@ export interface TelegramConfig {
 
 const HOME = process.env.HOME ?? ""
 const CWD = join(HOME, ".claude")
-const STATE_DIR = join(HOME, ".claude", "LifeOS", "PULSE", "state", "telegram")
-const LOGS_DIR = join(HOME, ".claude", "LifeOS", "PULSE", "logs", "telegram")
+const STATE_DIR = join(HOME, ".claude", "LIFEOS", "PULSE", "state", "telegram")
+const LOGS_DIR = join(HOME, ".claude", "LIFEOS", "PULSE", "logs", "telegram")
 const STALE_ACK_CACHE_DIR = join(STATE_DIR, "ack-cache")
 const MAX_TELEGRAM_LENGTH = 4096
 const CURSOR = " ▌"
@@ -76,16 +76,16 @@ const IDLE_TIMEOUT_MS = 60 * 60 * 1000          // 1 hour — gap of silence tha
 const INFERENCE_HARD_BUDGET_MS = 10_000         // outer race cap on summarize; measured Sonnet subprocess cost is 4-6s, this gives slack without losing the voice trailing the text by too much
 const MIN_FALLBACK_WORDS = 6                    // a fallback summary shorter than this is presumed too thin to be worth voicing
 const MEANINGFUL_REPLY_WORDS = 25               // when a reply is at least this long, a too-short fallback is a regression — skip voice rather than ship a "0:00" stub
-const LIFEOS_DIR = join(HOME, ".claude", "LifeOS")
+const LIFEOS_DIR = join(HOME, ".claude", "LIFEOS")
 
 // Voice ID for outbound voice summaries. Read at module import from
-// PaiConfig — `[da.voices.main] voice_id` in LIFEOS/USER/CONFIG/LIFEOS_CONFIG.toml.
-// PaiConfig is the typed interface between system code (this file) and user
+// LifeosConfig — `[da.voices.main] voice_id` in LIFEOS/USER/CONFIG/LIFEOS_CONFIG.toml.
+// LifeosConfig is the typed interface between system code (this file) and user
 // data (the voice ID); the migration from direct settings.json reads to
-// PaiConfig is the Phase F win — one source of truth, no parallel paths.
+// LifeosConfig is the Phase F win — one source of truth, no parallel paths.
 //
 // Fallback: ElevenLabs' public "Rachel" voice (21m00Tcm4TlvDq8ikWAM) — used
-// only when PaiConfig is unavailable or missing required fields. Matches the
+// only when LifeosConfig is unavailable or missing required fields. Matches the
 // public release's bootstrap DA_IDENTITY template default so a fresh install
 // that hasn't run Interview yet still gets a functional (if generic) voice.
 // The fallback must remain a public voice — release-time scrubbing trusts
@@ -96,7 +96,7 @@ const LIFEOS_DIR = join(HOME, ".claude", "LifeOS")
 // caused Telegram and CLI voices to diverge.
 const DA_VOICE_ID = ((): string => {
   try {
-    const v = loadPaiConfig().da.voices.main.voiceId
+    const v = loadLifeosConfig().da.voices.main.voiceId
     if (v && typeof v === "string" && v.length > 0) return v
   } catch { /* fall through to public default */ }
   return "21m00Tcm4TlvDq8ikWAM"  // ElevenLabs "Rachel" — public voice

@@ -17,7 +17,7 @@ status: response-mode-crossover
 Native is the **NATIVE response mode** — set by `hooks/EffortRouter.hook.ts` at UserPromptSubmit when the EffortRouter classifier (level `max` via `EFFORT_MODEL`) determines the prompt's ideal state is pre-articulable in one line.
 
 When in NATIVE response mode:
-- The output template is the NATIVE template (see `PAI/LIFEOS_SYSTEM_PROMPT.md` § Mode Templates).
+- The output template is the NATIVE template (see `LIFEOS/LIFEOS_SYSTEM_PROMPT.md` § Mode Templates).
 - No ISA is created.
 - No 7-phase Algorithm runs.
 - Full skill / agent / parallel-research / extended-thinking capabilities remain available.
@@ -84,5 +84,5 @@ Five of six Pulse tabs map to ALGORITHM response mode plus an Algorithm-internal
 
 - All modes: [`README.md`](README.md)
 - Response mode classifier: `hooks/EffortRouter.hook.ts`
-- Mode templates (output shape): `PAI/LIFEOS_SYSTEM_PROMPT.md` § "Mode Templates"
-- Constitutional discriminator rule: `PAI/LIFEOS_SYSTEM_PROMPT.md` § "Mode Architecture"
+- Mode templates (output shape): `LIFEOS/LIFEOS_SYSTEM_PROMPT.md` § "Mode Templates"
+- Constitutional discriminator rule: `LIFEOS/LIFEOS_SYSTEM_PROMPT.md` § "Mode Architecture"

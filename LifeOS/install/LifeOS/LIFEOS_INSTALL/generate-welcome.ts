@@ -41,7 +41,7 @@ async function generateWelcome() {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
     // Try to read from config
-    const envPath = join(homedir(), ".config", "LifeOS", ".env");
+    const envPath = join(homedir(), ".config", "LIFEOS", ".env");
     if (existsSync(envPath)) {
       const envContent = readFileSync(envPath, "utf-8");
       const match = envContent.match(/ELEVENLABS_API_KEY=(.+)/);

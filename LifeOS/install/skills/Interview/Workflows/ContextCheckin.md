@@ -2,7 +2,7 @@
 
 **Purpose:** Open `/interview` by reading the freshness signal across every constitutional context file (TELOS plus the six other files that load at session start), surface the most-stale items as one of the most important things to look at, and drive a contextual peer conversation grounded in what's actually written. This is the default workflow on a populated system.
 
-For fresh installs (DA name still "LifeOS", placeholder identity, sample-row PROJECTS), route to **Phase0Setup** instead.
+For fresh installs (DA name still "LIFEOS", placeholder identity, sample-row PROJECTS), route to **Phase0Setup** instead.
 
 > Renamed from `TelosCheckin.md` — the original file is now a one-line redirect stub that points here. The workflow generalized when freshness extended from TELOS-only to all constitutional files.
 
@@ -192,7 +192,7 @@ curl -s -X POST http://localhost:31337/reload > /dev/null 2>&1 &
 
 ```
 read freshness ⇒ pai_system_prompt 112d/90d (most stale across both surfaces)
-Read PAI/LIFEOS_SYSTEM_PROMPT.md fully
+Read LIFEOS/LIFEOS_SYSTEM_PROMPT.md fully
 ```
 
 > "I read your context. **LIFEOS_SYSTEM_PROMPT** hasn't been touched in **112d** (threshold 90d). The Hard Prohibitions section says: *'Never self-rate responses or add unsolicited ratings. Never modify working features unprompted. Analysis means read-only…'* Still want all three of those, or has anything changed in how you want me to operate?"

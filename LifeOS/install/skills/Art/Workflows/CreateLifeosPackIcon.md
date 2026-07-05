@@ -98,7 +98,7 @@ bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --size 1K \
   --aspect-ratio 1:1 \
   --remove-bg \
-  --output ${PROJECTS_DIR}/PAI/Packs/icons/[PACK_NAME].png
+  --output ${PROJECTS_DIR}/LIFEOS/Packs/icons/[PACK_NAME].png
 ```
 
 **Flags explained:**
@@ -112,10 +112,10 @@ bun run ~/.claude/skills/Art/Tools/Generate.ts \
 Check the generated icon:
 ```bash
 # Verify file exists and size
-ls -la ${PROJECTS_DIR}/PAI/Packs/icons/[PACK_NAME].png
+ls -la ${PROJECTS_DIR}/LIFEOS/Packs/icons/[PACK_NAME].png
 
 # Check dimensions (requires imagemagick)
-file ${PROJECTS_DIR}/PAI/Packs/icons/[PACK_NAME].png
+file ${PROJECTS_DIR}/LIFEOS/Packs/icons/[PACK_NAME].png
 ```
 
 **Verification checklist:**
@@ -140,7 +140,7 @@ bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --size 1K \
   --aspect-ratio 1:1 \
   --remove-bg \
-  --output ${PROJECTS_DIR}/PAI/Packs/icons/pai-hook-system.png
+  --output ${PROJECTS_DIR}/LIFEOS/Packs/icons/pai-hook-system.png
 ```
 
 ### Example 2: Core Install Pack
@@ -153,7 +153,7 @@ bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --size 1K \
   --aspect-ratio 1:1 \
   --remove-bg \
-  --output ${PROJECTS_DIR}/PAI/Packs/icons/pai-core-install.png
+  --output ${PROJECTS_DIR}/LIFEOS/Packs/icons/pai-core-install.png
 ```
 
 ### Example 3: Memory System Pack
@@ -166,7 +166,7 @@ bun run ~/.claude/skills/Art/Tools/Generate.ts \
   --size 1K \
   --aspect-ratio 1:1 \
   --remove-bg \
-  --output ${PROJECTS_DIR}/PAI/Packs/icons/pai-memory-system.png
+  --output ${PROJECTS_DIR}/LIFEOS/Packs/icons/pai-memory-system.png
 ```
 
 ---
@@ -175,7 +175,7 @@ bun run ~/.claude/skills/Art/Tools/Generate.ts \
 
 All LifeOS pack icons go to:
 ```
-${PROJECTS_DIR}/PAI/Packs/icons/[PACK_NAME].png
+${PROJECTS_DIR}/LIFEOS/Packs/icons/[PACK_NAME].png
 ```
 
 **Naming convention:** Match the pack directory name exactly.
@@ -199,7 +199,7 @@ If an icon needs to be regenerated:
 
 Before marking icon complete:
 
-- [ ] **Exists** at `${PROJECTS_DIR}/PAI/Packs/icons/[PACK_NAME].png`
+- [ ] **Exists** at `${PROJECTS_DIR}/LIFEOS/Packs/icons/[PACK_NAME].png`
 - [ ] **Format** is PNG with transparency
 - [ ] **Size** approximately 256x256
 - [ ] **Colors** use blue primary, purple accent

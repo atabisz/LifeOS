@@ -10,7 +10,7 @@ import type { InstallState, StepId } from "./types";
 import { INSTALLER_VERSION } from "./types";
 
 const STATE_FILE = join(
-  process.env.LIFEOS_CONFIG_DIR || join(homedir(), ".config", "LifeOS"),
+  process.env.LIFEOS_CONFIG_DIR || join(homedir(), ".config", "LIFEOS"),
   "LIFEOS_INSTALL",
   "install-state.json"
 );

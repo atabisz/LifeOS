@@ -25,8 +25,8 @@ const MODULE_NAME = "local-intelligence"
 
 // Primary path: user-scoped customizations directory (per {{PRINCIPAL_NAME}} directive 2026-05-03).
 // Fallback path: legacy MEMORY/DATA path (used when customizations file absent).
-const CUSTOMIZATIONS_DIR = join(HOME, ".claude", "LifeOS", "USER", "CUSTOMIZATIONS", "SKILLS", "LocalIntelligence")
-const LEGACY_DATA_DIR = join(HOME, ".claude", "LifeOS", "MEMORY", "DATA", "LocalIntelligence")
+const CUSTOMIZATIONS_DIR = join(HOME, ".claude", "LIFEOS", "USER", "CUSTOMIZATIONS", "SKILLS", "LocalIntelligence")
+const LEGACY_DATA_DIR = join(HOME, ".claude", "LIFEOS", "MEMORY", "DATA", "LocalIntelligence")
 const LATEST_PATH = join(CUSTOMIZATIONS_DIR, "latest.json")
 const LEGACY_LATEST_PATH = join(LEGACY_DATA_DIR, "latest.json")
 const DATA_DIR = CUSTOMIZATIONS_DIR  // alias for existing references in this file

@@ -116,7 +116,7 @@ export async function openrouter(options: ORandOptions): Promise<ORResult> {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
-        "X-Title": "LifeOS",
+        "X-Title": "LIFEOS",
       },
       body: JSON.stringify({
         model,

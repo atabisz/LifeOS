@@ -36,7 +36,7 @@ import MiniSearch from "minisearch"
 // Path Construction
 
 const HOME = process.env.HOME ?? "~"
-const LIFEOS_DIR = join(HOME, ".claude", "LifeOS")
+const LIFEOS_DIR = join(HOME, ".claude", "LIFEOS")
 const DOCUMENTATION_DIR = join(LIFEOS_DIR, "DOCUMENTATION")
 const KNOWLEDGE_DIR = join(LIFEOS_DIR, "MEMORY", "KNOWLEDGE")
 const BOOKMARKS_DIR = join(LIFEOS_DIR, "MEMORY", "BOOKMARKS")

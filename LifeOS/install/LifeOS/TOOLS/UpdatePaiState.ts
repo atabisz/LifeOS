@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
- * UpdatePaiState — Writes LIFEOS_STATE.json with per-dimension pct scores read by
- * the statusline (PAI/LIFEOS_StatusLine.sh) STATE strip and the Pulse TELOS
+ * UpdateLifeosState — Writes LIFEOS_STATE.json with per-dimension pct scores read by
+ * the statusline (LIFEOS/LIFEOS_StatusLine.sh) STATE strip and the Pulse TELOS
  * dashboard rings.
  *
  * Pct semantics (v2 — honest "articulation / setup %", not a life-progress score):
@@ -25,15 +25,15 @@
  * principal runs the IDEAL_STATE interview.
  *
  * Usage:
- *   bun ~/.claude/LIFEOS/TOOLS/UpdatePaiState.ts
- *   bun ~/.claude/LIFEOS/TOOLS/UpdatePaiState.ts --json
+ *   bun ~/.claude/LIFEOS/TOOLS/UpdateLifeosState.ts
+ *   bun ~/.claude/LIFEOS/TOOLS/UpdateLifeosState.ts --json
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 
 const HOME = process.env.HOME || "";
-const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LifeOS");
+const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LIFEOS");
 const IDEAL_DIR = join(LIFEOS_DIR, "USER", "TELOS", "IDEAL_STATE");
 const CURRENT_DIR = join(LIFEOS_DIR, "USER", "TELOS", "CURRENT_STATE");
 const STATE_FILE = join(LIFEOS_DIR, "USER", "TELOS", "LIFEOS_STATE.json");

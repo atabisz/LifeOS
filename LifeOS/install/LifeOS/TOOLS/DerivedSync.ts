@@ -77,7 +77,7 @@ type RunSummary = {
 
 const HOME = process.env.HOME || "";
 const CLAUDE_DIR = join(HOME, ".claude");
-const LIFEOS_DIR = join(CLAUDE_DIR, "LifeOS");
+const LIFEOS_DIR = join(CLAUDE_DIR, "LIFEOS");
 const USER_DIR = join(LIFEOS_DIR, "USER");
 const TOOLS_DIR = join(LIFEOS_DIR, "TOOLS");
 const PULSE_PAGES_DIR = join(LIFEOS_DIR, "PULSE", "pages");
@@ -237,7 +237,7 @@ function plannedActions(changed: string[]): PlannedAction[] {
   if (stateSources.length > 0) {
     actions.push({
       kind: "pai-state",
-      cmd: ["bun", join(TOOLS_DIR, "UpdatePaiState.ts")],
+      cmd: ["bun", join(TOOLS_DIR, "UpdateLifeosState.ts")],
       timeoutMs: DEFAULT_TIMEOUT_MS,
       triggeredBy: stateSources,
     });

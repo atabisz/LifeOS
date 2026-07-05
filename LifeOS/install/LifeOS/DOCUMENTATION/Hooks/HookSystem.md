@@ -685,9 +685,9 @@ Hooks have access to all environment variables from `~/.claude/settings.json` `"
 ```json
 {
   "daidentity": {
-    "name": "LifeOS",
+    "name": "LIFEOS",
     "fullName": "Personal AI",
-    "displayName": "LifeOS",
+    "displayName": "LIFEOS",
     "color": "#3B82F6",
     "voices": {
       "main": { "voiceId": "{YourElevenLabsVoiceId}", "stability": 0.85, "similarityBoost": 0.7 },
@@ -711,7 +711,7 @@ const identity = getIdentity();    // { name, fullName, displayName, mainDAVoice
 const principal = getPrincipal();  // { name, pronunciation, timezone }
 
 // Convenience functions
-const DA_NAME = getDAName();        // "LifeOS"
+const DA_NAME = getDAName();        // "LIFEOS"
 const USER_NAME = getPrincipalName(); // "{YourName}"
 const VOICE_ID = getVoiceId();        // from settings.json daidentity.voices.main.voiceId
 ```

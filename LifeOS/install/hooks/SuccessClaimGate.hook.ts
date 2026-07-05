@@ -40,7 +40,7 @@ import { appendFileSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 
 const OBS_PATH = join(
-  process.env.LIFEOS_DIR || join(process.env.HOME!, ".claude", "LifeOS"),
+  process.env.LIFEOS_DIR || join(process.env.HOME!, ".claude", "LIFEOS"),
   "MEMORY",
   "OBSERVABILITY",
   "success-claim-gate.jsonl",

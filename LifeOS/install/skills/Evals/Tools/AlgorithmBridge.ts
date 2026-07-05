@@ -16,7 +16,7 @@ import { $ } from 'bun';
 
 const EVALS_DIR = join(import.meta.dir, '..');
 // Run artifacts live outside the skill tree (runtime state, not skill content).
-const RESULTS_DIR = join(EVALS_DIR, '..', '..', 'LifeOS', 'MEMORY', 'STATE', 'Evals-Results');
+const RESULTS_DIR = join(EVALS_DIR, '..', '..', 'LIFEOS', 'MEMORY', 'STATE', 'Evals-Results');
 
 /**
  * Run an eval suite for ALGORITHM verification

@@ -84,7 +84,7 @@ function collectValidationFiles(paiDir: string): string[] {
     path.includes("/node_modules/") ||
     path.includes("/.git/") ||
     path.includes("/LIFEOS/MEMORY/") ||
-    path.includes("/PAI/LIFEOS_INSTALL/");
+    path.includes("/LIFEOS/LIFEOS_INSTALL/");
 
   const addFile = (path: string): void => {
     if (existsSync(path) && extensions.has(extname(path)) && !shouldSkip(path)) {
@@ -113,12 +113,12 @@ function collectValidationFiles(paiDir: string): string[] {
 
   addFile(join(paiDir, "CLAUDE.md"));
   addFile(join(paiDir, "settings.json"));
-  addFile(join(paiDir, "LifeOS", "LIFEOS_SYSTEM_PROMPT.md"));
+  addFile(join(paiDir, "LIFEOS", "LIFEOS_SYSTEM_PROMPT.md"));
   addRootFileExplicit(join(paiDir, "LICENSE"));
   addRootFileExplicit(join(paiDir, "bunfig.toml"));
-  walk(join(paiDir, "LifeOS", "USER"));
-  walk(join(paiDir, "LifeOS", "DOCUMENTATION"));
-  walk(join(paiDir, "LifeOS", "ALGORITHM"));
+  walk(join(paiDir, "LIFEOS", "USER"));
+  walk(join(paiDir, "LIFEOS", "DOCUMENTATION"));
+  walk(join(paiDir, "LIFEOS", "ALGORITHM"));
   walk(join(paiDir, "agents"));
   walk(join(paiDir, "hooks"));
   walk(join(paiDir, "skills"));
@@ -181,7 +181,7 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
   }
 
   const paiDir = state.detection?.paiDir || join(homedir(), ".claude");
-  const configDir = state.detection?.configDir || join(homedir(), ".config", "LifeOS");
+  const configDir = state.detection?.configDir || join(homedir(), ".config", "LIFEOS");
   const checks: ValidationCheck[] = [];
 
   // 1. settings.json exists and is valid JSON
@@ -385,8 +385,8 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
 // failure during install would leave @-imports unable to reach identity files
 // and the system non-functional, with no other validation gate detecting it.
 export function runSymlinkContractCheck(paiDir: string): ValidationCheck {
-  const liveUserDir = join(paiDir, "LifeOS", "USER");
-  const expectedTarget = join(homedir(), ".config", "LifeOS", "USER");
+  const liveUserDir = join(paiDir, "LIFEOS", "USER");
+  const expectedTarget = join(homedir(), ".config", "LIFEOS", "USER");
 
   if (!existsSync(liveUserDir)) {
     return {
@@ -454,7 +454,7 @@ export function generateSummary(state: InstallState): InstallSummary {
   return {
     paiVersion: LIFEOS_VERSION,
     principalName: state.collected.principalName || "User",
-    aiName: state.collected.aiName || "LifeOS",
+    aiName: state.collected.aiName || "LIFEOS",
     timezone: state.collected.timezone || "UTC",
     voiceEnabled: state.completedSteps.includes("voice"),
     voiceMode: state.collected.elevenLabsKey ? "elevenlabs" : state.completedSteps.includes("voice") ? "macos-say" : "none",

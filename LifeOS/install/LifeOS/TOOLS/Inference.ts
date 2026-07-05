@@ -419,8 +419,8 @@ export async function synthesizeAdvisorState(): Promise<string> {
   const fs = await import("fs/promises");
   const path = await import("path");
   const home = process.env.HOME || process.env.USERPROFILE || "";
-  const workDir = path.join(home, ".claude", "LifeOS", "MEMORY", "WORK");
-  const stateFile = path.join(home, ".claude", "LifeOS", "MEMORY", "STATE", "work.json");
+  const workDir = path.join(home, ".claude", "LIFEOS", "MEMORY", "WORK");
+  const stateFile = path.join(home, ".claude", "LIFEOS", "MEMORY", "STATE", "work.json");
 
   // Try to read active session from work.json
   let activeSlug: string | undefined;

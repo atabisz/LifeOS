@@ -20,9 +20,9 @@ const PORT = parseInt(process.env.LIFEOS_INSTALL_PORT || "1337");
 const PUBLIC_DIR = join(import.meta.dir, "..", "public");
 
 // Read canonical LifeOS version on startup. The installer ships inside
-// ~/.claude/LIFEOS/LIFEOS_INSTALL/, so PAI/VERSION sits two levels up. The
+// ~/.claude/LIFEOS/LIFEOS_INSTALL/, so LIFEOS/VERSION sits two levels up. The
 // {{LIFEOS_VERSION}} placeholder in HTML responses is substituted on serve
-// — change PAI/VERSION (or run UpdatePaiVersion) and the installer banner
+// — change LIFEOS/VERSION (or run UpdatePaiVersion) and the installer banner
 // reflects the new version on next launch with no source edit needed.
 const LIFEOS_VERSION_FILE = join(import.meta.dir, "..", "..", "VERSION");
 const LIFEOS_VERSION: string = (() => {
@@ -96,7 +96,7 @@ const server = Bun.serve({
       const ext = extname(fullPath);
       const mime = MIME_TYPES[ext] || "application/octet-stream";
       // Substitute {{LIFEOS_VERSION}} in HTML responses so the installer
-      // banner always reflects the canonical PAI/VERSION on disk.
+      // banner always reflects the canonical LIFEOS/VERSION on disk.
       const isHtml = ext === ".html";
       const content = isHtml ? injectVersion(readFileSync(fullPath, "utf8")) : readFileSync(fullPath);
       return new Response(content, {

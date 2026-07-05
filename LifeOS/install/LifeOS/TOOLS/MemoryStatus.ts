@@ -33,7 +33,7 @@ import {
 import { read as readMemory } from "./MemoryWriter";
 
 const CLAUDE_ROOT = pathResolve(homedir(), ".claude");
-const LIFEOS_DIR = pathJoin(CLAUDE_ROOT, "LifeOS");
+const LIFEOS_DIR = pathJoin(CLAUDE_ROOT, "LIFEOS");
 const IDEAS_DIR = pathJoin(LIFEOS_DIR, "MEMORY", "IDEAS");
 const KNOWLEDGE_DIR = pathJoin(LIFEOS_DIR, "MEMORY", "KNOWLEDGE");
 const OBS_DIR = pathJoin(LIFEOS_DIR, "MEMORY", "OBSERVABILITY");

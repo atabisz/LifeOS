@@ -21,7 +21,7 @@ import { parse } from "smol-toml"
 // ── Load .env before anything else ──
 
 const HOME = process.env.HOME ?? "~"
-const LIFEOS_DIR = join(HOME, ".claude", "LifeOS")
+const LIFEOS_DIR = join(HOME, ".claude", "LIFEOS")
 const PULSE_DIR = join(LIFEOS_DIR, "PULSE")
 
 const envPath = join(HOME, ".claude", ".env")

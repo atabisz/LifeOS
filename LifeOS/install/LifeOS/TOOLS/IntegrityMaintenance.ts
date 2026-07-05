@@ -235,7 +235,7 @@ function generateDescriptiveTitle(changes: FileChange[]): string {
   const hasTools = paths.some(p => p.includes('/Tools/') && p.endsWith('.ts'));
   const hasHooks = paths.some(p => p.includes('hooks/'));
   const hasConfig = paths.some(p => p.endsWith('settings.json'));
-  const hasPAISystem = paths.some(p => p.includes('/PAI/'));
+  const hasPAISystem = paths.some(p => p.includes('/LIFEOS/'));
   const hasPAIUser = paths.some(p => p.includes('LIFEOS/USER/'));
 
   // Extract common patterns from filenames
@@ -297,7 +297,7 @@ function generateDescriptiveTitle(changes: FileChange[]): string {
   // LifeOS system changes
   else if (hasPAISystem) {
     const docNames = paths
-      .filter(p => p.includes('/PAI/'))
+      .filter(p => p.includes('/LIFEOS/'))
       .map(p => basename(p, '.md'));
     if (docNames.length === 1) {
       title = `${docNames[0]} Documentation Updated`;

@@ -2,11 +2,11 @@
   "$schema_note": "Machine-readable LifeOS→LifeOS rename map. Single source of truth for the rename. Consumed by humans, rename tooling, AND privacy/scrub gates (ShadowRelease G1-G14, sync-docs, DenyListCheck) — a gate grepping for a token that no longer exists passes vacuously, so gates MUST read this map, never hardcode the old mark. See RenamePlan.md for narrative.",
   "version": "1.0.0",
   "created": "2026-06-13",
-  "target_mark": "LifeOS",
+  "target_mark": "LIFEOS",
   "casing": {
-    "prose": "LifeOS",
+    "prose": "LIFEOS",
     "pascal_case_files": "LifeOs",
-    "rule": "Prose/branding/UI always 'LifeOS'. 'LifeOs' only where the PascalCase file convention forces it (e.g. LifeOsThesis.md). 'Life OS' (spaced) is retired."
+    "rule": "Prose/branding/UI always 'LIFEOS'. 'LifeOs' only where the PascalCase file convention forces it (e.g. LifeOsThesis.md). 'Life OS' (spaced) is retired."
   },
   "strata": {
     "historical": {
@@ -36,7 +36,7 @@
     { "id": 2, "name": "pulse-ui-display-strings", "scale": { "lines": 298, "files": 74 }, "verdict": "rename-now", "exceptions": ["PULSE/MenuBar/build/PAI Pulse.app bundle (codesign/launchd) -> at-cut", "pai-logo.png asset path -> at-cut"] },
     { "id": 3, "name": "filesystem-paths-dirs", "scale": { "lines": 3979, "files": 662 }, "verdict": "rename-at-cut", "breakage_points": ["~/.claude/LIFEOS/USER -> ~/.config/LIFEOS/USER symlink", "launchd com.lifeos.* WatchPaths/exec", "settings.json additionalDirectories + env block", "--append-system-prompt-file launcher path", "DerivedSync sha256 path-keyed state", "LIFEOS_StatusLine.sh", "USER/TELOS/LIFEOS_STATE.json readers (Pulse rings, statusline)"], "procedure": "one atomic op + compat symlink one release cycle; per-path probes as a migration ISA" },
     { "id": 4, "name": "env-vars-config-keys", "scale": { "occurrences": 1341, "files": 311, "live_reads": { "LIFEOS_DIR": 76, "LIFEOS_CONFIG_DIR": 33 } }, "verdict": "rename-at-cut-with-shim", "procedure": "introduce new names, keep PAI_* read-fallbacks one release, then retire; install.sh included" },
-    { "id": 5, "name": "code-identifiers", "scale": { "occurrences": 194, "files": 49 }, "verdict": "at-cut-or-never", "top": ["PaiConfig", "loadPaiConfig", "getPaiDir", "PAIEvent/usePAIEvents", "PAIAgentAdapter", "buildPaiContextBlock"] },
+    { "id": 5, "name": "code-identifiers", "scale": { "occurrences": 194, "files": 49 }, "verdict": "at-cut-or-never", "top": ["LifeosConfig", "loadLifeosConfig", "getPaiDir", "PAIEvent/usePAIEvents", "PAIAgentAdapter", "buildPaiContextBlock"] },
     { "id": 6, "name": "repo-remote-names", "scale": { "lines": 86, "files": 35 }, "verdict": "rename-at-cut-it-IS-the-cut", "procedure": "atomic GitHub rename (stars/clones redirect) -> same-day sweep of all 86 lines; work_repo.json attestation + private-remote URLs updated explicitly (redirects are not forever)" },
     { "id": 7, "name": "_LIFEOS-skill", "scale": { "occurrences": 235, "files": 99 }, "verdict": "rename-at-cut-via-CreateSkill", "notes": "same sweep as classes 3/4 so routing never points at a dead name; ud/ur/ut shortcuts included" },
     { "id": 8, "name": "mode-banners-hook-regexes", "scale": { "literals": 3, "hooks": 2 }, "verdict": "rename-at-cut", "members": ["LIFEOS_SYSTEM_PROMPT.md mode templates", "hooks/OutputFormatGate.hook.ts:49", "hooks/DriftReminder.hook.ts:39", "their tests"], "procedure": "one coordinated change, byte-parity verified between prompt and hooks" }
@@ -50,7 +50,7 @@
     "G3 TELOS goal (LifeOS to 50K stars) star-redirect continuity confirmed"
   ],
   "forbidden": [
-    "grep-and-sed 'LifeOS' globally (strata-blind)",
+    "grep-and-sed 'LIFEOS' globally (strata-blind)",
     "renaming ~/.claude itself (it does not move)",
     "creating any new public repo named LifeOS after the rename (would break the redirect)",
     "hand-editing generated artifacts (ARCHITECTURE_SUMMARY.md, PRINCIPAL_TELOS.md, LIFEOS_STATE.json)"

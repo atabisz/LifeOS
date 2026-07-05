@@ -13,7 +13,7 @@ import { CONTEXT_FRESHNESS_REGISTRY, parseFrontmatter, type ContextFile } from "
 import { currentModel } from "./models";
 
 const HOME = process.env.HOME || "";
-const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LifeOS");
+const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LIFEOS");
 const CLAUDE_DIR = dirname(LIFEOS_DIR);
 const AUDIT_PATH = join(
   LIFEOS_DIR,

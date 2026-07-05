@@ -34,7 +34,7 @@ import { homedir } from "node:os";
 // ── Paths ──
 
 const CLAUDE_ROOT = pathResolve(homedir(), ".claude");
-const LIFEOS_DIR = pathJoin(CLAUDE_ROOT, "LifeOS");
+const LIFEOS_DIR = pathJoin(CLAUDE_ROOT, "LIFEOS");
 const KNOWLEDGE_DIR = pathJoin(LIFEOS_DIR, "MEMORY", "KNOWLEDGE");
 
 export const PRINCIPAL_MEMORY_PATH = pathJoin(LIFEOS_DIR, "USER", "PRINCIPAL", "PRINCIPAL_MEMORY.md");

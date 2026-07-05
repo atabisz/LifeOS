@@ -44,7 +44,7 @@ interface ScoredSkill {
 const STDIN_TIMEOUT_MS = 300;
 const MAX_SKILLS_TO_EMIT = 3;
 const MIN_DISTINCT_TRIGGER_TOKEN_HITS = 2;
-const LIFEOS_DIR = process.env.LIFEOS_DIR || join(process.env.HOME || "", ".claude", "LifeOS");
+const LIFEOS_DIR = process.env.LIFEOS_DIR || join(process.env.HOME || "", ".claude", "LIFEOS");
 const SKILLS_DIR = join(process.env.HOME || "", ".claude", "skills");
 const CACHE_PATH = join(LIFEOS_DIR, "MEMORY", "STATE", "skill-index.json");
 
