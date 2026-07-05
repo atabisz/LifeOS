@@ -112,7 +112,7 @@ Legend: **WIRED** = parsed from real markdown · **NULL** = backend hard-returns
 | 9 | **Work** | ≈ Journal/execution items | **NULL** (nested in projects) | **MISSING** — no per-work source | **new** (part of `parseProjects`) or wire to `/api/work` | work items in project cards |
 | 10 | **Team** | *(corporate only — extension)* | **NULL** (`:3188`) | **MISSING** | **new** `parseTeam()` *(gated)* | team cards |
 | 11 | **Budget** | *(not Miessler — extension)* | **NULL** (`:3189`) | **MISSING** | **new** `parseBudget()` *(gated)* | budget cards |
-| — | **Ideal State / Dimensions** | Current→Ideal gap | **PARTIAL** — `buildDimensionsFromIdealState()` reads `IDEAL_STATE/`; `velo` may be 0 | exists (`IDEAL_STATE/`, `## Ideal State`) | verify velo source | dimension rings/bars |
+| — | **Ideal State / Dimensions** | Current→Ideal gap | **DONE (2026-07-06)** — `buildDimensionsFromIdealState()` surfaces per-dim `mode` (coverage/setup); 4 dims score by real CURRENT_STATE coverage (health 50, freedom 67, creative 60, relationships 67); `summary.ts` renders mode-aware "covered" vs "articulated" language (verified live). See `LIFEOS-STATE-PHASE2-REAL-COVERAGE.md`. | exists (`IDEAL_STATE/` + `CURRENT_STATE/`) | — | dimension rings/bars |
 | — | **Snapshot (mood/energy/focus)** | Current-state scores | **WIRED** — `CURRENT_STATE/SNAPSHOT.md` | exists | — | — |
 | — | **owner** | Who this is | **NULL** (`owner: null`, `:3177`) | identity file | read principal identity | footer/voice personalization |
 | — | **idealState {horizon,note}** | Target date | **NULL** (`:3178`) | `## Ideal State` | parse horizon/note | headline horizon clause |
