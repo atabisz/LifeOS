@@ -52,13 +52,20 @@ type DimensionId = (typeof DIMENSIONS)[number]["id"];
 
 interface DimensionState {
   pct: number | null;
+  velo: number | null;   // change in pct since the previous run (null until a prior point differs)
   tbd_count: number;
   last_updated: string | null;
   source_file: string;
 }
 
+// Bump when the pct FORMULA changes — velo is only meaningful across
+// same-formula runs; readPriorPcts() suppresses velo when the stored version
+// differs, so a formula change reads flat rather than a one-time artifact velo.
+const SCORER_VERSION = "substance-v2-exclude-notscored";
+
 interface PaiState {
   generated_at: string;
+  scorer_version: string;
   dimensions: Record<DimensionId, DimensionState>;
 }
 
@@ -83,6 +90,7 @@ function computeFromCurrent(file: string): DimensionState | null {
   const pct = Math.round(((have + 0.5 * partial) / total) * 100);
   return {
     pct,
+    velo: null,   // filled by build() from prior-run delta
     tbd_count: missing,
     last_updated: readFrontmatterDate(content),
     source_file: `CURRENT_STATE/${file}`,
@@ -102,7 +110,7 @@ function computeFromIdeal(file: string): DimensionState {
   const path = join(IDEAL_DIR, file);
   if (!existsSync(path)) {
     // No file → unmeasured (null), NOT 0%/failing. UI renders null as "not tracked".
-    return { pct: null, tbd_count: 0, last_updated: null, source_file: file };
+    return { pct: null, velo: null, tbd_count: 0, last_updated: null, source_file: file };
   }
   const content = readFileSync(path, "utf-8");
   const type = readFrontmatterType(content);
@@ -114,7 +122,7 @@ function computeFromIdeal(file: string): DimensionState {
   // Deliberate opt-out / directional north-star are not scored (a choice, not a
   // gap) → pct null → "not tracked".
   if (type === "opt-out" || type === "north-star") {
-    return { pct: null, tbd_count, last_updated, source_file: `IDEAL_STATE/${file}` };
+    return { pct: null, velo: null, tbd_count, last_updated, source_file: `IDEAL_STATE/${file}` };
   }
 
   // type: target (or unspecified) → score by authored SUBSTANCE (populated
@@ -122,23 +130,67 @@ function computeFromIdeal(file: string): DimensionState {
   // auto-100; 100 = exceptional depth. Replaces the old `100 − TBD×10`, which
   // scored a vague empty file 100% and LOWERED the score for honestly flagging
   // a gap. pct = "how fully articulated" (a setup %), NOT "how close to ideal".
-  const sections = (content.match(/^##\s+/gm) || []).length;
-  const bullets  = (content.match(/^\s*[-*]\s+/gm) || []).length;
+  // A section the author marked "not scored"/"aspirational" and its bullets are
+  // EXCLUDED — counting them would inflate the score against the author's intent.
+  const { sections, bullets } = countScorableSubstance(content);
   const pct = Math.max(0, Math.min(100, sections * 10 + bullets * 5));
-  return { pct, tbd_count, last_updated, source_file: `IDEAL_STATE/${file}` };
+  return { pct, velo: null, tbd_count, last_updated, source_file: `IDEAL_STATE/${file}` };
+}
+
+// Count `## ` sections and their `- ` bullets, SKIPPING any section whose heading
+// declares itself out of scope ("not scored" / "aspirational") and every bullet
+// under it.
+function countScorableSubstance(content: string): { sections: number; bullets: number } {
+  // Exclude only when the heading carries the out-of-scope flag in a `(...)`
+  // qualifier (e.g. "## North-star (aspirational, not scored)") — so a legit
+  // "## Aspirations" heading isn't false-excluded by a bare substring match.
+  const EXCLUDE = /\([^)]*\b(?:not\s+scored|aspirational)\b[^)]*\)/i;
+  let sections = 0, bullets = 0, excluding = false;
+  for (const line of content.split("\n")) {
+    const h = line.match(/^##\s+(.*)$/);
+    if (h) { excluding = EXCLUDE.test(h[1]); if (!excluding) sections++; continue; }
+    if (!excluding && /^\s*[-*]\s+/.test(line)) bullets++;
+  }
+  return { sections, bullets };
 }
 
 function computeState(file: string): DimensionState {
   return computeFromCurrent(file) ?? computeFromIdeal(file);
 }
 
+// Read prior LIFEOS_STATE.json → { dimId: prior_pct } for velo.
+function readPriorPcts(): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!existsSync(STATE_FILE)) return out;
+  try {
+    const prev = JSON.parse(readFileSync(STATE_FILE, "utf-8")) as {
+      scorer_version?: string;
+      dimensions?: Record<string, { pct?: number | null }>;
+    };
+    if (prev.scorer_version !== SCORER_VERSION) return out; // cross-formula → suppress velo
+    for (const [id, d] of Object.entries(prev.dimensions ?? {})) {
+      if (typeof d?.pct === "number") out[id] = d.pct;
+    }
+  } catch { /* corrupt prior → no velo basis */ }
+  return out;
+}
+
 function build(): PaiState {
+  // velo = change in pct since the PREVIOUS run. Null until a prior numeric pct
+  // exists AND differs from now — so a first run, an unmeasured dim, or an
+  // unchanged dim all read "flat/not tracked", never a fabricated trend.
+  const prior = readPriorPcts();
   const dimensions = {} as Record<DimensionId, DimensionState>;
   for (const d of DIMENSIONS) {
-    dimensions[d.id] = computeState(d.file);
+    const s = computeState(d.file);
+    if (typeof s.pct === "number" && typeof prior[d.id] === "number" && s.pct !== prior[d.id]) {
+      s.velo = s.pct - prior[d.id];
+    }
+    dimensions[d.id] = s;
   }
   return {
     generated_at: new Date().toISOString(),
+    scorer_version: SCORER_VERSION,
     dimensions,
   };
 }
@@ -155,7 +207,8 @@ function main(): void {
     for (const d of DIMENSIONS) {
       const s = state.dimensions[d.id];
       const pctStr = s.pct === null ? "—" : `${s.pct}%`;
-      console.log(`  ${d.id.padEnd(14)} ${pctStr.padStart(5)}  (${s.tbd_count} TBDs, updated ${s.last_updated ?? "unknown"})`);
+      const veloStr = s.velo === null ? "" : ` ${s.velo > 0 ? "+" : ""}${s.velo}`;
+      console.log(`  ${d.id.padEnd(14)} ${pctStr.padStart(5)}${veloStr.padStart(4)}  (${s.tbd_count} TBDs, updated ${s.last_updated ?? "unknown"})`);
     }
   }
 }
