@@ -26,6 +26,10 @@ const SUMMARY_OUTPUT = path.join(LIFEOS_DIR, "DOCUMENTATION", "ARCHITECTURE_SUMM
 const ALGORITHM_DIR = path.join(LIFEOS_DIR, "ALGORITHM");
 const MEMORY_SYSTEM_DOC = path.join(LIFEOS_DIR, "DOCUMENTATION", "Memory", "MemorySystem.md");
 const CLAUDE_MD = path.join(HOME, ".claude", "CLAUDE.md");
+// Framework-version source of truth — a single-line semver file, mirroring how
+// ALGORITHM/LATEST anchors the Algorithm version. The CLAUDE.md heading is a
+// downstream display validated against this, not the source (see detectPaiVersion).
+const VERSION_FILE = path.join(LIFEOS_DIR, "VERSION");
 
 // ============================================================================
 // Version detection (source-of-truth lookups — no hardcoded versions)
@@ -68,12 +72,28 @@ function detectMemoryVersion(): string {
   return match?.[1] ?? "unknown";
 }
 
-/** Detect LifeOS version from the first `# LifeOS X.Y.Z` heading in global CLAUDE.md */
-function detectPaiVersion(): string {
+/** Read the `# LifeOS X.Y.Z` heading from global CLAUDE.md (downstream display / fallback). */
+function readPaiVersionFromHeading(): string {
   if (!fs.existsSync(CLAUDE_MD)) return "unknown";
   const content = fs.readFileSync(CLAUDE_MD, "utf-8");
-  const match = content.match(/^#\s*(?:LifeOS|LifeOS)\s+([\d.]+)/m);
+  const match = content.match(/^#\s*(?:PAI|LifeOS)\s+([\d.]+)/m);
   return match?.[1] ?? "unknown";
+}
+
+/**
+ * Detect the framework version. Source of truth is the VERSION file (single-line
+ * semver, like ALGORITHM/LATEST); the CLAUDE.md heading is a downstream display.
+ * VERSION-first, heading-fallback: a tree without a VERSION file (or with a
+ * malformed one) degrades gracefully to the prior heading-parse behavior rather
+ * than failing — so wiring VERSION in can never break detection on a tree lacking it.
+ */
+function detectPaiVersion(): string {
+  if (fs.existsSync(VERSION_FILE)) {
+    const v = fs.readFileSync(VERSION_FILE, "utf-8").trim();
+    if (/^\d+\.\d+\.\d+$/.test(v)) return v;
+    // malformed VERSION → don't poison detection; fall through to the heading.
+  }
+  return readPaiVersionFromHeading();
 }
 
 // ============================================================================
@@ -356,6 +376,19 @@ function cmdCheck(): void {
   if (stale.length > 0) {
     console.log(`STALE: LifeosSystemArchitecture.md references older Algorithm version(s) ${[...new Set(stale)].join(", ")} — current is v${current}`);
     process.exit(1);
+  }
+
+  // Framework-version drift: VERSION is the source of truth; the CLAUDE.md heading
+  // is a downstream display. If they diverge, flag it — this is exactly the failure
+  // that let the framework version sit stale through the whole PAI→LIFEOS rename. We
+  // WARN and exit stale; we deliberately do NOT auto-rewrite the constitution heading.
+  if (fs.existsSync(VERSION_FILE)) {
+    const versionFile = fs.readFileSync(VERSION_FILE, "utf-8").trim();
+    const heading = readPaiVersionFromHeading();
+    if (/^\d+\.\d+\.\d+$/.test(versionFile) && heading !== "unknown" && heading !== versionFile) {
+      console.log(`STALE: CLAUDE.md framework heading (${heading}) diverges from VERSION (${versionFile}) — bump the heading to match the source of truth`);
+      process.exit(1);
+    }
   }
 
   console.log("FRESH: Summary is up to date");
