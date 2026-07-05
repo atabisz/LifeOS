@@ -53,6 +53,7 @@ type DimensionId = (typeof DIMENSIONS)[number]["id"];
 interface DimensionState {
   pct: number | null;
   velo: number | null;   // change in pct since the previous run (null until a prior point differs)
+  mode: "coverage" | "setup" | null;   // coverage = real have/partial/missing rows; setup = IDEAL articulation %; null = not tracked
   tbd_count: number;
   last_updated: string | null;
   source_file: string;
@@ -91,6 +92,7 @@ function computeFromCurrent(file: string): DimensionState | null {
   return {
     pct,
     velo: null,   // filled by build() from prior-run delta
+    mode: "coverage",   // real have/partial/missing rows → achievement toward ideal
     tbd_count: missing,
     last_updated: readFrontmatterDate(content),
     source_file: `CURRENT_STATE/${file}`,
@@ -110,7 +112,7 @@ function computeFromIdeal(file: string): DimensionState {
   const path = join(IDEAL_DIR, file);
   if (!existsSync(path)) {
     // No file → unmeasured (null), NOT 0%/failing. UI renders null as "not tracked".
-    return { pct: null, velo: null, tbd_count: 0, last_updated: null, source_file: file };
+    return { pct: null, velo: null, mode: null, tbd_count: 0, last_updated: null, source_file: file };
   }
   const content = readFileSync(path, "utf-8");
   const type = readFrontmatterType(content);
@@ -122,7 +124,7 @@ function computeFromIdeal(file: string): DimensionState {
   // Deliberate opt-out / directional north-star are not scored (a choice, not a
   // gap) → pct null → "not tracked".
   if (type === "opt-out" || type === "north-star") {
-    return { pct: null, velo: null, tbd_count, last_updated, source_file: `IDEAL_STATE/${file}` };
+    return { pct: null, velo: null, mode: null, tbd_count, last_updated, source_file: `IDEAL_STATE/${file}` };
   }
 
   // type: target (or unspecified) → score by authored SUBSTANCE (populated
@@ -134,7 +136,7 @@ function computeFromIdeal(file: string): DimensionState {
   // EXCLUDED — counting them would inflate the score against the author's intent.
   const { sections, bullets } = countScorableSubstance(content);
   const pct = Math.max(0, Math.min(100, sections * 10 + bullets * 5));
-  return { pct, velo: null, tbd_count, last_updated, source_file: `IDEAL_STATE/${file}` };
+  return { pct, velo: null, mode: "setup", tbd_count, last_updated, source_file: `IDEAL_STATE/${file}` };
 }
 
 // Count `## ` sections and their `- ` bullets, SKIPPING any section whose heading
