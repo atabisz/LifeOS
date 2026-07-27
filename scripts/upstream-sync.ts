@@ -1,8 +1,14 @@
 #!/usr/bin/env bun
 /**
  * upstream-sync — the reviewable channel for folding a LifeOS public release into
- * the maintainer's PAI/-shaped live tree, which is a DIVERGENT FORK from the
- * release (no shared git history; see MEMORY/WORK/upgrade-v5-to-v6/ISA.md).
+ * the maintainer's live tree, which is a DIVERGENT FORK from the release (no
+ * shared git history; see MEMORY/WORK/upgrade-v5-to-v6/ISA.md).
+ *
+ * THREE SHAPES, not two. The pinned baseline is PAI/-shaped (historical), the
+ * release payload is LIFEOS/-shaped, and LIVE was itself renamed PAI/ -> LIFEOS/
+ * on 2026-07-05. So a baseline path needs a DIFFERENT map per side:
+ * `normalizeRelPath` (release side) and `toLiveRelPath` (live side). Assuming one
+ * map covered both is what silently turned 504 CONFLICTs into "add"s.
  *
  * The problem git can't solve alone: subtree/submodule/orphan-merge all need a
  * shared object graph + rename detection, and the PAI/->LifeOS/ rename makes
@@ -41,9 +47,13 @@ const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const RELEASE_PAYLOAD = path.join(REPO_ROOT, "LifeOS", "install");
 const BASELINE_ROOT = path.join(REPO_ROOT, "scripts", "upstream-sync", "baseline");
 
+// LIFEOS_DIR is the current override (matches build-release.ts); PAI_DIR is kept
+// for back-compat with older invocations. Both name the CONFIG ROOT (~/.claude),
+// not the framework subdir inside it.
 function liveRoot(): string {
   const home = process.env.HOME || os.homedir();
-  return process.env.PAI_DIR ? path.resolve(process.env.PAI_DIR) : path.join(home, ".claude");
+  const override = process.env.LIFEOS_DIR ?? process.env.PAI_DIR;
+  return override ? path.resolve(override) : path.join(home, ".claude");
 }
 
 /** Rewrite a release-relative path into its PAI/-shaped baseline path. */
@@ -56,6 +66,36 @@ export function normalizeRelPath(rel: string): string {
       return seg;
     })
     .join("/");
+}
+
+/**
+ * Rewrite a PAI/-shaped BASELINE path into the path it occupies in the LIVE tree.
+ *
+ * The baseline is pinned in the historical PAI/ shape, but live was renamed
+ * PAI/ -> LIFEOS/ on 2026-07-05. Without this map every `PAI/*` baseline path
+ * resolved to `~/.claude/PAI/...`, which no longer exists, so `liveHas` was
+ * always false and `classifyThreeWay` returned "add" — inverting the tool's core
+ * safety promise for 504 paths that were really CONFLICTs.
+ *
+ * This is the LIVE-side complement of `normalizeRelPath` (which is release-side
+ * only) and the exact inverse of build-release.ts's `toDestRel`. Root-anchored,
+ * matching that function, rather than per-segment: a nested dir that merely
+ * happens to be named PAI is not the framework root.
+ *
+ * The USER clause encodes the installer's own contract — LinkUser.ts makes
+ * `<configRoot>/LIFEOS/USER` the live location of the payload's top-level
+ * `install/USER` tree — so USER files compare against real live content instead
+ * of reading as pure additions.
+ *
+ * Known release-only paths deliberately left unmapped (they are installer inputs
+ * with no live counterpart, and correctly read as "add"): `install.sh`,
+ * `CLAUDE.template.md`, `settings.system.json`, `settings.enhancements.json`.
+ */
+export function toLiveRelPath(baseRel: string): string {
+  if (baseRel === "PAI/PAI_SYSTEM_PROMPT.md") return "LIFEOS/LIFEOS_SYSTEM_PROMPT.md";
+  if (baseRel === "PAI" || baseRel.startsWith("PAI/")) return "LIFEOS" + baseRel.slice("PAI".length);
+  if (baseRel === "USER" || baseRel.startsWith("USER/")) return "LIFEOS/" + baseRel;
+  return baseRel;
 }
 
 // Every text-ish source form present in the payload MUST normalize, else its
@@ -163,7 +203,7 @@ function classifyThreeWay(baseRel: string): Klass {
     .map((seg) => (seg === "PAI" ? "LifeOS" : seg === "PAI_SYSTEM_PROMPT.md" ? "LIFEOS_SYSTEM_PROMPT.md" : seg))
     .join("/");
   const releaseAbs = path.join(RELEASE_PAYLOAD, ...relRel.split("/"));
-  const liveAbs = path.join(liveRoot(), ...baseRel.split("/"));
+  const liveAbs = path.join(liveRoot(), ...toLiveRelPath(baseRel).split("/"));
 
   const baseBytes = existsSync(baseAbs) && statSync(baseAbs).isFile() ? readFileSync(baseAbs) : null;
   const relBytes = existsSync(releaseAbs) && statSync(releaseAbs).isFile()
@@ -229,41 +269,93 @@ function main(argv: string[]): number {
 
   const showConflicts = argv.includes("--conflicts");
   const showAdds = argv.includes("--adds");
+  // The default caps below are display ergonomics, but a truncated list reads as a
+  // complete one: a specific path can be absent from BOTH detail views and still be
+  // classified, which is how the PAI/->LIFEOS/ misclassification stayed invisible.
+  // --all removes the caps so a named file can be searched for and trusted.
+  const showAll = argv.includes("--all");
+  const conflictCap = showAll ? buckets.conflict.length : 40;
+  const addCap = showAll ? buckets.add.length : 60;
   if (showConflicts) {
     console.log("CONFLICTS (live diverges — your ahead-of-safety edits live here):");
-    for (const rel of buckets.conflict.slice(0, 40)) {
-      const stat = gitStat(path.join(BASELINE_ROOT, ...rel.split("/")), path.join(liveRoot(), ...rel.split("/")));
+    for (const rel of buckets.conflict.slice(0, conflictCap)) {
+      const stat = gitStat(path.join(BASELINE_ROOT, ...rel.split("/")), path.join(liveRoot(), ...toLiveRelPath(rel).split("/")));
       console.log(`  CONFLICT ${rel}  ${stat}`);
     }
-    if (buckets.conflict.length > 40) console.log(`  ... +${buckets.conflict.length - 40} more`);
+    if (buckets.conflict.length > conflictCap) console.log(`  ... +${buckets.conflict.length - conflictCap} more (use --all)`);
     console.log("");
   }
   if (showAdds) {
     console.log("ADDS (new upstream files — candidate quick-win ports):");
-    for (const rel of buckets.add.slice(0, 60)) console.log(`  ADD ${rel}`);
-    if (buckets.add.length > 60) console.log(`  ... +${buckets.add.length - 60} more`);
+    for (const rel of buckets.add.slice(0, addCap)) console.log(`  ADD ${rel}`);
+    if (buckets.add.length > addCap) console.log(`  ... +${buckets.add.length - addCap} more (use --all)`);
     console.log("");
   }
-  console.log("Next: `--conflicts` / `--adds` for detail. Landing items is a later gated increment (guarded apply).");
+  console.log("Next: `--conflicts` / `--adds` for detail (`--all` to defeat the display caps).");
+  console.log("Landing items is a later gated increment (guarded apply).");
   return 0;
 }
 
 // ── Self-test (pure path-mapping logic; no fs) ────────────────────────────────
+// Covers BOTH directions. The release-only version of this test passed while the
+// live side was unmapped, so a green here previously said nothing about whether
+// `liveAbs` resolved — hence the round-trip and live-shape cases below.
 function runSelfTest(): number {
-  const cases: { in: string; want: string }[] = [
+  const releaseCases: { in: string; want: string }[] = [
     { in: "LifeOS/PULSE/modules/work.ts", want: "PAI/PULSE/modules/work.ts" },
     { in: "LifeOS/LIFEOS_SYSTEM_PROMPT.md", want: "PAI/PAI_SYSTEM_PROMPT.md" },
     { in: "skills/BiasCheck/SKILL.md", want: "skills/BiasCheck/SKILL.md" }, // no framework-root token → unchanged
     { in: "hooks/EffortRouter.hook.ts", want: "hooks/EffortRouter.hook.ts" },
   ];
+  const liveCases: { in: string; want: string }[] = [
+    // The regression this map exists for: PAI/ is gone from live as of 2026-07-05.
+    { in: "PAI/TOOLS/Inference.ts", want: "LIFEOS/TOOLS/Inference.ts" },
+    { in: "PAI/PAI_SYSTEM_PROMPT.md", want: "LIFEOS/LIFEOS_SYSTEM_PROMPT.md" },
+    { in: "PAI/ALGORITHM/LATEST", want: "LIFEOS/ALGORITHM/LATEST" },
+    // LinkUser's contract: payload USER/ lives at <configRoot>/LIFEOS/USER.
+    { in: "USER/TELOS/GOALS.md", want: "LIFEOS/USER/TELOS/GOALS.md" },
+    // Shared-shape paths are identical in both trees.
+    { in: "hooks/EffortRouter.hook.ts", want: "hooks/EffortRouter.hook.ts" },
+    { in: "skills/BiasCheck/SKILL.md", want: "skills/BiasCheck/SKILL.md" },
+    // Root-anchored, not per-segment: a nested dir named PAI is not the root.
+    { in: "skills/PAI/SKILL.md", want: "skills/PAI/SKILL.md" },
+    // Installer inputs with no live counterpart stay unmapped (correctly "add").
+    { in: "install.sh", want: "install.sh" },
+    { in: "settings.system.json", want: "settings.system.json" },
+  ];
   let pass = 0;
-  for (const c of cases) {
+  let total = 0;
+  for (const c of releaseCases) {
+    total += 1;
     const got = normalizeRelPath(c.in);
     if (got === c.want) pass += 1;
-    else console.error(`FAIL ${c.in} → got ${got}, want ${c.want}`);
+    else console.error(`FAIL release ${c.in} → got ${got}, want ${c.want}`);
   }
-  console.log(`${pass}/${cases.length} passed`);
-  return pass === cases.length ? 0 : 1;
+  for (const c of liveCases) {
+    total += 1;
+    const got = toLiveRelPath(c.in);
+    if (got === c.want) pass += 1;
+    else console.error(`FAIL live ${c.in} → got ${got}, want ${c.want}`);
+  }
+  // Round-trip: release → baseline → live must land on the live framework root.
+  for (const [releaseRel, wantLive] of [
+    ["LifeOS/TOOLS/Inference.ts", "LIFEOS/TOOLS/Inference.ts"],
+    ["LifeOS/LIFEOS_SYSTEM_PROMPT.md", "LIFEOS/LIFEOS_SYSTEM_PROMPT.md"],
+  ] as const) {
+    total += 1;
+    const got = toLiveRelPath(normalizeRelPath(releaseRel));
+    if (got === wantLive) pass += 1;
+    else console.error(`FAIL round-trip ${releaseRel} → got ${got}, want ${wantLive}`);
+  }
+  // Anti-case: no live path may retain a PAI/ framework root, or liveAbs misses.
+  total += 1;
+  const leaks = [...releaseCases, ...liveCases]
+    .map((c) => toLiveRelPath(normalizeRelPath(c.in)))
+    .filter((p) => p === "PAI" || p.startsWith("PAI/"));
+  if (leaks.length === 0) pass += 1;
+  else console.error(`FAIL anti: ${leaks.length} live path(s) still PAI/-rooted: ${leaks.join(", ")}`);
+  console.log(`${pass}/${total} passed`);
+  return pass === total ? 0 : 1;
 }
 
 if (import.meta.main) process.exit(main(process.argv.slice(2)));
