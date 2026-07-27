@@ -1,0 +1,60 @@
+name: Repo integrity gates
+
+# The repo's own integrity checks, actually run.
+#
+# Two gates, both previously uncalled:
+#
+#   Tools/validate-protected.ts     — the public-file sentinel. Protected docs must still identify
+#                                     themselves as this project, must exist on disk, and must not
+#                                     carry secrets/PII/private paths. It had NO caller: it sat red
+#                                     for two weeks after the July rebrand (a stale `PAI` token
+#                                     requirement vs a correctly-rebranded SECURITY.md) and nothing
+#                                     noticed, because nothing ran it.
+#
+#   Tools/validate-payload-json.ts  — the payload-shape gate. settings.system.json and
+#                                     hooks/hooks.json decide the shape of every install; a stray
+#                                     comma in either breaks all of them. The launch-parity smoke
+#                                     tests only see these files indirectly, through the fixture
+#                                     their generator produces.
+#
+# NO PATH FILTERS, deliberately. The JSON gate reads every tracked *.json in the repo (76 files)
+# and the protected gate reads root docs, so any honest filter would be near-universal — and a
+# filter that fails to match is how a wired gate silently never runs and the absence reads as
+# green. Both gates finish in seconds; running them always is cheaper than reasoning about globs.
+#
+# The JSON gate's --self-test runs FIRST. A gate that has lost its ability to fail must be caught
+# here, not trusted. (Same antecedent-proof pattern as the launch-parity smoke tests.)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Prove the gate can go RED before trusting a green result.
+      - name: Payload JSON gate — self-test (must be able to fail)
+        run: bun Tools/validate-payload-json.ts --self-test
+
+      # settings.system.json + hooks/hooks.json shape, then every other tracked JSON parses.
+      # The gate prints the shape it verified (key count, event/command/http counts) so a silent
+      # drop shows up in this log rather than passing quietly.
+      - name: Payload JSON gate
+        run: bun Tools/validate-payload-json.ts
+
+      # Protected public files: project identity present, listed files exist, no secrets/PII.
+      # `git ls-files` is used inside the gate, so the checkout above must be a real git tree.
+      - name: Protected files gate
+        run: bun Tools/validate-protected.ts

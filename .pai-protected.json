@@ -4,13 +4,18 @@
   "version": "2.0",
   "protected": {
     "core_documents": {
-      "description": "Core PAI documentation that differs from Kai",
+      "description": "Core public documentation. Each must still identify itself as this project — the sentinel that catches a wholesale overwrite with private or foreign content.",
       "files": [
         "README.md",
-        "INSTALL.md",
         "SECURITY.md"
       ],
-      "validation": "Must contain 'PAI' or 'Personal AI Infrastructure' in content"
+      "validation": "Must contain the project identity in content",
+      "identity_tokens": [
+        "LifeOS",
+        "LIFEOS",
+        "PAI",
+        "Personal AI Infrastructure"
+      ]
     },
     "pai_infrastructure": {
       "description": "PAI-specific infrastructure code",

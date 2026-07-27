@@ -40,6 +40,9 @@ interface ProtectedManifest {
       patterns?: string[];
       exception_files?: string[];
       validation?: string;
+      /** Accepted project-identity strings for the identity sentinel. Declared in the manifest —
+       *  NOT hardcoded here — so a rebrand is a one-line manifest edit. See checkFileContent. */
+      identity_tokens?: string[];
     };
     protected_patterns?: ProtectedPatterns;
   };
@@ -237,8 +240,16 @@ function checkFileContent(filePath: string, manifest: ProtectedManifest): {
 } {
   const fullPath = join(PAI_ROOT, filePath);
 
+  // A manifest-listed protected file that isn't on disk is a VIOLATION, not a pass. This used to
+  // early-return `{valid:true}`, which meant a protected doc could be deleted or moved and the
+  // gate would report ✅ for it — the loudest possible failure mode reported as the quietest.
+  // (Real instance: INSTALL.md moved to LifeOS/INSTALL.md in 2c008192 and silently "passed" for
+  // months.) This also means STAGING A DELETION of a protected file now fails the gate — which is
+  // the point of calling it protected: removing one should be a deliberate manifest edit, not a
+  // quiet ✅. The bulk sensitive-content scan still skips absent files (a deleted ordinary file
+  // has no content to scan); only the manifest's own protected list is held to existence.
   if (!existsSync(fullPath)) {
-    return { valid: true, violations: [] };
+    return { valid: false, violations: ['Protected file listed in the manifest is missing from disk'] };
   }
 
   const content = readFileSync(fullPath, 'utf-8');
@@ -291,10 +302,17 @@ function checkFileContent(filePath: string, manifest: ProtectedManifest): {
       continue;
     }
 
-    // Core documents must reference PAI
-    if (category.validation.includes('PAI')) {
-      if (!content.includes('PAI') && !content.includes('Personal AI Infrastructure')) {
-        violations.push(`Missing required reference to "PAI" or "Personal AI Infrastructure"`);
+    // Identity sentinel: a core public document must still name this project. Catches a wholesale
+    // overwrite with private or foreign content (the dual-repo hazard this manifest was built for).
+    //
+    // The accepted strings come from the manifest's `identity_tokens`, NOT from a literal here.
+    // The old form selected the check with `validation.includes('PAI')` and then hardcoded the
+    // tokens — two places holding the same fact, so the July rebrand drifted them apart and this
+    // gate went red on a correctly-rebranded SECURITY.md. Now a rename is one manifest line.
+    if (category.identity_tokens?.length) {
+      const tokens = category.identity_tokens;
+      if (!tokens.some(t => content.includes(t))) {
+        violations.push(`Missing project identity — expected one of: ${tokens.map(t => `"${t}"`).join(', ')}`);
       }
     }
 
