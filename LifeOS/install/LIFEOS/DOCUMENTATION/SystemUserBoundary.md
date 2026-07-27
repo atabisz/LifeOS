@@ -3,6 +3,7 @@ last_updated: 2026-06-13T00:00:00Z
 last_updated_by: LifeOS docs reframe wave (refs re-verified against live tree)
 convention: pai-freshness-v1
 applies_to: LifeOS v6.0.0+ (proposed)
+version: 1.1.4
 ---
 
 # System / User Boundary
@@ -27,7 +28,7 @@ Public-by-construction code, documentation, and templates that ship in every Lif
 |------|--------|
 | `~/.claude/CLAUDE.md` | SYSTEM (after Phase C — split into system router + user @-imports) |
 | `~/.claude/settings.json` | SYSTEM (after Phase B — split into system defaults + user overlay merged at startup) |
-| `~/.claude/install.sh` | SYSTEM (sanitize in Phase A) |
+| `~/.claude/skills/LifeOS/install/install.sh` | SYSTEM (installer bootstrap — ships inside the `LifeOS/` skill; there is no root-level `install.sh` in a release) |
 | `~/.claude/LICENSE` | SYSTEM |
 | `~/.claude/.gitignore`, `.gitattributes`, `.gitmodules`, `.mcp.json`, `.lsp.json`, `bunfig.toml` | SYSTEM (config) |
 | `~/.claude/LIFEOS/LIFEOS_SYSTEM_PROMPT.md` | SYSTEM (after Phase C — operational rules with user-specific content move out) |
@@ -53,7 +54,7 @@ Private, user-owned data that ships in the user's own private repo and is mounte
 |------|--------|
 | `~/.claude/.env`, `.env.*` | USER (secrets) |
 | `~/.claude/LIFEOS/USER/**` (symlink → `~/.config/LIFEOS/USER/**`) | USER (identity, TELOS, projects, integrations, contacts, finances, health, business, customizations) |
-| `~/.claude/LIFEOS/MEMORY/**` (symlink → `~/.config/LIFEOS/USER/MEMORY/**`, post-Phase-G.2, 2026-05-23) | USER (work history, knowledge graph, learning signals, observability logs, research, reflections, relationships). Durable subset (KNOWLEDGE, WORK/<slug>/ISA.md, RELATIONSHIP, WISDOM, PLANS, RESEARCH, STATE/work.json, BOOKMARKS, REFERENCE, SKILLS, PROJECT, TEAMS, PAISYSTEMUPDATES, VERIFICATION) is git-tracked in the user's private USER-data repo; ephemeral subset (OBSERVABILITY JSONLs, _BROWSER_STATE, LEARNING signals, SECURITY artifacts, VOICE event log, STATE caches, _AIRGRADIENT, _NETWORK, _HELIOS, PULSE_DATA, SCRATCHPAD, RAW, AUTO, CALLS, INBOX, ARCHIVE, DATA, WORK/<slug>/* intermediates) gitignored from the private repo, local-only. |
+| `~/.claude/LIFEOS/MEMORY/**` (symlink → `~/.config/LIFEOS/USER/MEMORY/**`, post-Phase-G.2, 2026-05-23) | USER (work history, knowledge graph, learning signals, observability logs, research, reflections, relationships). Durable subset (KNOWLEDGE, WORK/<slug>/ISA.md, RELATIONSHIP, WISDOM, PLANS, RESEARCH, STATE/work.json, BOOKMARKS, REFERENCE, SKILLS, PROJECT, TEAMS, SYSTEMUPDATES, VERIFICATION) is git-tracked in the user's private USER-data repo; ephemeral subset (OBSERVABILITY JSONLs, _BROWSER_STATE, LEARNING signals, SECURITY artifacts, VOICE event log, STATE caches, _AIRGRADIENT, _NETWORK, _HELIOS, PULSE_DATA, SCRATCHPAD, RAW, AUTO, CALLS, INBOX, ARCHIVE, DATA, WORK/<slug>/* intermediates) gitignored from the private repo, local-only. |
 | `~/.claude/LIFEOS/ARBOL/**` | USER (private cloud worker code) |
 | `~/.claude/LIFEOS/Backups/**` | USER (backup state) |
 | `~/.claude/skills/_<name>/**` (underscore-prefixed) | USER (private/proprietary skills) |
@@ -82,7 +83,7 @@ Harness-owned or LifeOS-runtime-owned ephemeral files. Never shipped, never user
 |------|--------|------------|
 | `~/.claude/sessions/`, `todos/`, `tasks/`, `teams/` | RUNTIME (Claude Code harness) | yes |
 | `~/.claude/history.jsonl` | RUNTIME (Claude Code) | yes (under root anchors) |
-| `~/.claude/cache/`, `shell-snapshots/`, `session-env/`, `paste-cache/`, `file-history/` | RUNTIME (harness/PAI) | yes |
+| `~/.claude/cache/`, `shell-snapshots/`, `session-env/`, `paste-cache/`, `file-history/` | RUNTIME (harness/LifeOS) | yes |
 | `~/.claude/.next/`, `.wrangler/`, `.venv/`, `coverage/`, `test-results/`, `telemetry/` | RUNTIME (build/test) | partial — telemetry/ is NOT gitignored and contains identity-bearing data; add to .gitignore in Phase A |
 | `~/.claude/plugins/`, `Plugins/` | RUNTIME (Claude Code plugin install state) | partial |
 | `~/.claude/ide/` | RUNTIME (Claude Code IDE state) | implied |
@@ -103,7 +104,7 @@ Anything else — direct `Read('LIFEOS/USER/...')`, hardcoded voice IDs in modul
 
 ## Two-repo sync (post-Phase-G.1, 2026-05-22)
 
-The USER tree is its own private git repo: `~/.config/LIFEOS/USER/` → the user's `<your-username>/<your-user-data-repo>` (PRIVATE GitHub). The SYSTEM tree is `~/.claude/` → the user's `<your-username>/.claude` (PRIVATE GitHub). A pre-push hook at `~/.claude/.git/hooks/pre-push` (1836 bytes) auto-commits and pushes the USER repo before every `git push` from `~/.claude/`, so the two repos stay in sync structurally. A workflow ("update the kai repo" / "push both repos") wraps this with four boundary gates: (G1) USER-zone leak check on pending `~/.claude` changes, (G2) `DenyListCheck.ts` must return 0 real-leaks, (G3) both remotes confirmed private via `gh api`, (G4) post-push HEAD verification on both repos. **Pre-flight refuses to proceed if the public LifeOS repo appears in either remote** — this workflow is explicit private-only. Public LifeOS release goes through the shadow-release pipeline (`skills/_LIFEOS/Tools/ShadowRelease.ts`) with the separate 14-gate sanitization.
+The USER tree is its own private git repo: `~/.config/LIFEOS/USER/` → the user's `<your-username>/<your-user-data-repo>` (PRIVATE GitHub). The SYSTEM tree is `~/.claude/` → the user's `<your-username>/.claude` (PRIVATE GitHub). A pre-push hook at `~/.claude/.git/hooks/pre-push` (1836 bytes) auto-commits and pushes the USER repo before every `git push` from `~/.claude/`, so the two repos stay in sync structurally. A workflow ("update the kai repo" / "push both repos") wraps this with four boundary gates: (G1) USER-zone leak check on pending `~/.claude` changes, (G2) `DenyListCheck.ts` must return 0 real-leaks, (G3) both remotes confirmed private via `gh api`, (G4) post-push HEAD verification on both repos. **Pre-flight refuses to proceed if the public LifeOS repo appears in either remote** — this workflow is explicit private-only. Public LifeOS release goes through the shadow-release pipeline (`skills/_LIFEOS/Tools/ShadowRelease.ts`) with the separate 14-gate sanitization; the shipped distribution unit is the single `LifeOS/` skill emitted from that staging tree, not the `.claude/` clone.
 
 ## Enforcement layers
 

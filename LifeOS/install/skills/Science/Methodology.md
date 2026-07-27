@@ -1,6 +1,6 @@
 # Science Methodology - The Deep Dive
 
-**This document elaborates on each phase of the scientific method as applied within PAI.**
+**This document elaborates on each phase of the scientific method as applied within LifeOS.**
 
 The power of this methodology is its universality and its iteration speed. Apply it at micro-scale (TDD cycles) or macro-scale (product strategy). The pattern remains the same.
 
@@ -311,7 +311,7 @@ Ask:
 |--------|-------|
 | **Code** | Worktrees (parallel experiments), TDD, Feature flags |
 | **Prompts** | Evals skill, A/B testing |
-| **UI/UX** | Worktrees, Browser skill (`agent-browser`), Design variants |
+| **UI/UX** | Worktrees, Interceptor skill, Design variants |
 | **Business** | A/B tests, Small launches, Pilot programs |
 | **Ideas** | Small audience tests, Draft → feedback loops |
 

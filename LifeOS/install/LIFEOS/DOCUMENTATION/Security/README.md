@@ -1,3 +1,7 @@
+---
+version: 1.7.4
+---
+
 # LifeOS Security — Minimal v2
 
 > A Life OS holds a life — goals, health, finances, relationships, credentials (`LIFEOS/DOCUMENTATION/LifeOs/LifeOsThesis.md`). The security model below exists because an OS trusted to run your life must be harder to subvert than the chatbots it replaces: external content is data, dangerous shapes get gated, and the boundary holds even when the principal isn't watching.
@@ -96,11 +100,11 @@ The release pipeline has its own constitutional surface: the **deny-list** at `~
 | `skills/_LIFEOS/Tools/DenyListCheck.ts` | Step 0.5 precheck CLI — invoked at the start of every release-flavored workflow. `rg -i -f` over the live tree, classifies each hit as `private-zone` (in containment, will be scrubbed), `benign` (in `PATTERN_ALLOWLIST_FILES`), or `real-leak` (block release). |
 | `skills/_LIFEOS/TOOLS/ShadowRelease.ts` | Loads patterns at startup into `IDENTITY_PATTERNS` / `CF_ID_PATTERNS` / `PRIVATE_TOKEN_PATTERNS` (the G2 / G3 / G6 gate inputs). Same file, same patterns — no drift possible between precheck and build gates. |
 
-The ten release-flavored workflows under `skills/_LIFEOS/Workflows/` (`CreateShadowRelease`, `CreateRelease`, `DeployShadowToServer`, `UpdateShadowRelease`, `CheckReleaseSecurity`, `PrivacyCheck`, `SecretScanning`, `IntegrityCheck`, `CrossRepoValidation`, `PushToPAI`) all begin with a `## Step 0.5: Deny-list precheck` block invoking the CLI. Sub-2-second fail-fast guard before any rsync/copy/push touches the staging tree — additive defense against G2/G3/G6 which run later, inside the build.
+The ten release-flavored workflows under `skills/_LIFEOS/Workflows/` (`CreateShadowRelease`, `CreateRelease`, `DeployShadowToServer`, `UpdateShadowRelease`, `CheckReleaseSecurity`, `PrivacyCheck`, `SecretScanning`, `IntegrityCheck`, `CrossRepoValidation`, `PushToLifeos`) all begin with a `## Step 0.5: Deny-list precheck` block invoking the CLI. Sub-2-second fail-fast guard before any rsync/copy/push touches the staging tree — additive defense against G2/G3/G6 which run later, inside the build.
 
 Adding a pattern: append the regex line under the right section in `DENY_LIST.txt`. The next precheck run picks it up; the next `ShadowRelease.ts` build picks it up at startup. No code to edit.
 
-Hard exclusions (kept OUT of the deny-list, intentionally): `github.com/danielmiessler/PAI` (legitimate public clone URL), `fTtv3eikoepIosk8dTZ5` (Algorithm voice, intentionally shipped).
+Hard exclusions (kept OUT of the deny-list, intentionally): the public repo clone URL, `github.com/<repo-owner>/LifeOS` (legitimate attribution), `fTtv3eikoepIosk8dTZ5` (Algorithm voice, intentionally shipped).
 
 ## What's NOT Here (and why)
 

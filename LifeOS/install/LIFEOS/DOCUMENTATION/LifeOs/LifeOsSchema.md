@@ -1,6 +1,10 @@
+---
+version: 1.0.4
+---
+
 # Life OS Schema
 
-> **The canonical shape of the USER directory in PAI.**
+> **The canonical shape of the USER directory in LifeOS.**
 >
 > Everything your DA knows about you lives in one flat, biography-style tree. This spec defines the rules every LifeOS user follows — so the same Pulse dashboard, the same Interview skill, the same Daemon aggregator, and the same skills work for everyone out of the box.
 
@@ -237,7 +241,7 @@ USER/BoardGames.md        # new taste file
 - **`ShadowRelease.ts` never reads USER/.** It reads `skills/_LIFEOS/RELEASE_TEMPLATES/USER/` + this spec.
 
 New LifeOS user experience:
-1. Clone LifeOS → `Templates/User/` is copied to `USER/`
+1. Install LifeOS the platform-agnostic, AI-native way: hand the installer (`skills/LifeOS/install/install.sh`, or the install doc) to your own AI/harness, which installs the `LifeOS/` skill and scaffolds `USER/` from the release templates (`skills/_LIFEOS/RELEASE_TEMPLATES/USER/`). No `git clone` into `~/.claude`.
 2. Run `Interview` skill → conversation walks them through filling in files, phase by phase
 3. Pulse dashboard lights up as files gain content
 4. Daemon publishes nothing until the user sets `publish:` flags

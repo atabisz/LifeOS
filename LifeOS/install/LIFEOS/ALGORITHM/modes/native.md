@@ -1,4 +1,5 @@
 ---
+status: RETIRED 2026-07-11 — historical doctrine. Modes/tiers were abolished with Algorithm v8 and system prompt v3.0.0 (one adaptive format). Kept as record only; nothing routes here.
 last_updated: 2026-05-13
 last_updated_by: kai
 convention: pai-freshness-v1
@@ -14,7 +15,7 @@ status: response-mode-crossover
 
 ## What Native is
 
-Native is the **NATIVE response mode** — set by `hooks/EffortRouter.hook.ts` at UserPromptSubmit when the EffortRouter classifier (level `max` via `EFFORT_MODEL`) determines the prompt's ideal state is pre-articulable in one line.
+Native is the **NATIVE response mode** — set by `TheRouter.hook.ts` (retired 2026-07-11) at UserPromptSubmit when the TheRouter classifier (level `max` via `EFFORT_MODEL`) determines the prompt's ideal state is pre-articulable in one line.
 
 When in NATIVE response mode:
 - The output template is the NATIVE template (see `LIFEOS/LIFEOS_SYSTEM_PROMPT.md` § Mode Templates).
@@ -35,7 +36,7 @@ Even though no ISA is created, NATIVE response runs record session metadata to `
 
 ## When NATIVE response mode is selected
 
-EffortRouter classifier rules (from `EffortRouter.hook.ts`):
+TheRouter classifier rules (from `TheRouter.hook.ts`):
 
 - Fact lookup with one tool call.
 - Single-line edit on a named file.
@@ -52,7 +53,7 @@ The discriminator is whether the **ideal state is pre-articulable in one line**.
 
 **A short, clearly-stated *question* is not NATIVE by virtue of being short.** Route by the ANSWER, not the question: if a good answer would be *retrieved* (facts to look up and assemble) it's NATIVE; if it must be *constructed* by analytical synthesis against external/contested evidence, its correctness not checkable at a glance — a hard science / philosophy / technical question whose answer doesn't exist until you build it — it's ALGORITHM (E3 default, E4 across contested fields). The test is VERIFIABILITY, not synthesis: opinion/advice/personal-judgment questions ("should I learn Rust or Go", "why do I procrastinate") stay NATIVE even though they synthesize — the reader can weigh the take at a glance. A one-line question is not a one-line answer. This is the canonical NATIVE→ALGORITHM misroute.
 
-Under-escalation is the failure mode the EffortRouter was built to prevent. When in doubt between NATIVE and ALGORITHM E3, the classifier picks ALGORITHM E3.
+Under-escalation is the failure mode the TheRouter was built to prevent. When in doubt between NATIVE and ALGORITHM E3, the classifier picks ALGORITHM E3.
 
 ## ISA frontmatter (not used)
 
@@ -83,6 +84,6 @@ Five of six Pulse tabs map to ALGORITHM response mode plus an Algorithm-internal
 ## Cross-references
 
 - All modes: [`README.md`](README.md)
-- Response mode classifier: `hooks/EffortRouter.hook.ts`
+- Response mode classifier: `TheRouter.hook.ts` (retired 2026-07-11)
 - Mode templates (output shape): `LIFEOS/LIFEOS_SYSTEM_PROMPT.md` § "Mode Templates"
 - Constitutional discriminator rule: `LIFEOS/LIFEOS_SYSTEM_PROMPT.md` § "Mode Architecture"

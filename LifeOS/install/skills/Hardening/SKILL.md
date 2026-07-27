@@ -1,6 +1,7 @@
 ---
 name: Hardening
-description: Apply hardening techniques to LifeOS's test and code surface — property-based testing via fast-check (ISCs as universally-quantified claims, random inputs shrunk to minimal counterexamples), mutation testing via Stryker, CRAP-complexity scoring, DRY duplication detection, acceptance-test mutation (perturb ISC text to catch fluff). Strengthens existing tests, never adds functionality; detail in body. USE WHEN harden, hardening, property test, property based testing, PBT, fast-check, mutation test, mutation testing, Stryker, CRAP score, CRAP analysis, DRY scan, jscpd, acceptance test mutation, strengthen tests, sharpen ISCs, find bugs example tests miss, universal quantified claim, shrink counterexample, what bugs am I missing, test the tests, test of the test. NOT FOR writing new feature tests (use bun test directly), grading agent output quality (use Evals), UI verification with real Chrome (use Interceptor), finding security vulnerabilities (use _HELIOS), or building new functionality.
+version: 1.0.3
+description: "Hardens LifeOS tests via property/mutation testing. USE WHEN harden, hardening, property test, property based testing, PBT, fast-check, mutation test, mutation testing, Stryker, CRAP score, CRAP analysis, DRY scan, jscpd, acceptance test mutation, strengthen tests, sharpen ISCs, find bugs example tests miss, universal quantified claim, shrink counterexample, what bugs am I missing, test the tests, test of the test. NOT FOR writing new feature tests (use bun test directly), grading agent output quality (use Evals), UI verification with real Chrome (use Interceptor), finding security vulnerabilities (use _HELIOS), or building new functionality."
 ---
 
 # Hardening Skill
@@ -46,7 +47,7 @@ All five satisfy the same intent: **strengthen the test of the test, the test of
 ## Integration Points
 
 - **Testing Doctrine Rule #11** — names fast-check as the property-testing primitive (`LIFEOS/DOCUMENTATION/Testing/TestingDoctrine.md`).
-- **ISA format** — new `bun-property` ISC type with `property | generator | runs` columns (`LIFEOS/DOCUMENTATION/ISA/IsaFormat.md` § ISC Type Vocabulary).
+- **ISA format** — new `bun-property` ISC type with `property | generator | runs` columns (`LIFEOS/DOCUMENTATION/Isa/IsaFormat.md` § ISC Type Vocabulary).
 - **Algorithm v6.10.0 candidate** — VERIFY-phase Hardening gate at E4/E5; `PropertyAudit` as capability #20 (`LIFEOS/ALGORITHM/v6.10.0.md`).
 - **System prompt** — Verification Is the Mechanism section at top (`LIFEOS/LIFEOS_SYSTEM_PROMPT.md`).
 - **BitterPillEngineering skill** — `AcceptanceTestMutation` is the mechanized form of BPE's "would a smarter model render this rule unnecessary" applied to ISCs.

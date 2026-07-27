@@ -1,3 +1,7 @@
+---
+provenance: template
+---
+
 # SHARED
 
 **Purpose:** Cross-skill static assets that multiple components reference — color palettes, animation frames, icon mappings, verb lists, and similar shared resources.
@@ -6,4 +10,4 @@
 
 **How it gets populated:** By the user explicitly, or by skills that contribute shared assets at install time. Adding a new shared resource is a deliberate act: it implies a contract that consuming components agree to read from the same location.
 
-**Sample state for fresh installs:** Just this README plus the `Spinner/` subdir. Real content appears as you use PAI.
+**Sample state for fresh installs:** Just this README plus the `Spinner/` subdir. Real content appears as you use LifeOS.

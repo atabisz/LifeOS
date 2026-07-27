@@ -45,10 +45,10 @@ export function getLifeosDir(): string {
     return join(getClaudeDir(), 'LIFEOS');
   }
 
-  const envPaiDir = process.env.LIFEOS_DIR;
+  const envLifeosDir = process.env.LIFEOS_DIR;
 
-  if (envPaiDir) {
-    return expandPath(envPaiDir);
+  if (envLifeosDir) {
+    return expandPath(envLifeosDir);
   }
 
   return join(homedir(), '.claude', 'LIFEOS');

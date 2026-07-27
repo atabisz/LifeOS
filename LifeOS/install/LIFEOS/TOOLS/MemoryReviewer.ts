@@ -46,6 +46,7 @@ import { add as memoryAdd, type AddResult } from "./MemorySystem";
 import { read as memoryWriterRead } from "./MemoryWriter";
 import { isKnownType, type TypedItem } from "./MemoryTypes";
 import { inference } from "./Inference";
+import { getPrincipalName, getDAName } from "../../hooks/lib/identity";
 import {
   applyProposalEdit,
   markProposal,
@@ -195,7 +196,7 @@ There are four item types. Output EXACTLY this JSON shape:
 
 {
   "items": [
-    {"type": "memory", "actor": "daniel" | "kai", "op": "set", "entries": ["PREFIX: durable fact ~provenance", "..."]},
+    {"type": "memory", "actor": "principal" | "assistant", "op": "set", "entries": ["PREFIX: durable fact ~provenance", "..."]},
     {"type": "idea", "title": "short title", "content": "the idea body", "confidence": 0.0-1.0, "related": [{"slug": "...", "type": "..."}]},
     {"type": "knowledge", "entity_type": "person" | "company" | "research", "name": "...", "content": "...", "confidence": 0.0-1.0, "related": [{"slug": "...", "type": "..."}]},
     {"type": "proposal", "target_kind": "identity" | "style" | "definition" | "canonical-content" | "resume" | "operational-rule" | "projects" | "contacts", "target_file": "absolute path", "edit": "the proposed addition", "confidence": 0.0-1.0, "rationale": "why this"}
@@ -204,7 +205,7 @@ There are four item types. Output EXACTLY this JSON shape:
 
 TYPE GUIDANCE:
 
-- memory — durable facts about {{PRINCIPAL_NAME}} ("daniel") or about {{DA_NAME}} ("kai"), stored in a small hot-layer file loaded into EVERY turn. This is CURATION, not appending. You are handed the file's CURRENT entries (see the user message). You return, via op:"set", the FULL desired list for that file — the next state you want. The system REPLACES the file with your list. Whatever you omit is forgotten. This is how memory stays alive: you add, you merge, you supersede, you drop.
+- memory — durable facts about {{PRINCIPAL_NAME}} ("principal") or about {{DA_NAME}} ("assistant"), stored in a small hot-layer file loaded into EVERY turn. This is CURATION, not appending. You are handed the file's CURRENT entries (see the user message). You return, via op:"set", the FULL desired list for that file — the next state you want. The system REPLACES the file with your list. Whatever you omit is forgotten. This is how memory stays alive: you add, you merge, you supersede, you drop.
 
   MEMORY CURATION RULES:
   - Emit ONE memory item per actor you want to change, with op:"set" and the complete entries array. Don't emit an item for an actor whose file needs no change.
@@ -285,8 +286,8 @@ OUTPUT RULES:
 A confident "nothing to save" is correct.`;
 
 export interface CurrentMemorySnapshot {
-  daniel: string[];
-  kai: string[];
+  principal: string[];
+  assistant: string[];
 }
 
 const PRINCIPAL_MEMORY_PATH = pathResolve(CLAUDE_ROOT, "LIFEOS/USER/PRINCIPAL/PRINCIPAL_MEMORY.md");
@@ -298,7 +299,7 @@ export function readCurrentMemorySnapshot(): CurrentMemorySnapshot {
     const r = memoryWriterRead(path);
     return "code" in r ? [] : r.entries;
   };
-  return { daniel: readEntries(PRINCIPAL_MEMORY_PATH), kai: readEntries(DA_MEMORY_PATH) };
+  return { principal: readEntries(PRINCIPAL_MEMORY_PATH), assistant: readEntries(DA_MEMORY_PATH) };
 }
 
 function renderCurrentMemory(snap: CurrentMemorySnapshot | undefined): string[] {
@@ -311,8 +312,8 @@ function renderCurrentMemory(snap: CurrentMemorySnapshot | undefined): string[] 
   return [
     "── CURRENT MEMORY STATE (curate this — your op:\"set\" REPLACES it) ──",
     "",
-    ...fmt("DANIEL", snap.daniel),
-    ...fmt("KAI", snap.kai),
+    ...fmt("PRINCIPAL", snap.principal),
+    ...fmt("ASSISTANT", snap.assistant),
   ];
 }
 
@@ -332,6 +333,34 @@ export function buildReviewerUserPrompt(exchanges: Exchange[], currentMemory?: C
   }
   lines.push("Curate memory (return the full desired list per file you change via op:\"set\") and extract any idea/knowledge/proposal items. Return JSON only.");
   return lines.join("\n");
+}
+
+/**
+ * Resolve {{PRINCIPAL_NAME}} / {{DA_NAME}} placeholders to the installed identity.
+ *
+ * The release scrubber (ShadowRelease's identity map) rewrites the author's names
+ * to these placeholders in every shipped file, so a fresh install's reviewer
+ * prompts arrive full of literal `{{…}}` braces that nothing substituted — the
+ * model was handed raw placeholders. Substitute them at prompt-build time from the
+ * canonical loader (PRINCIPAL_IDENTITY.md core.name / settings.json daidentity.name),
+ * guarding against empty or still-braced values with a neutral fallback so an
+ * un-interviewed install never leaks a placeholder into the prompt. No-op in the
+ * live tree, where the prompt carries real names and no placeholders.
+ */
+export function renderNames(text: string): string {
+  const safe = (fn: () => string, fallback: string): string => {
+    try {
+      const n = (fn() || "").trim();
+      return n.length > 0 && !n.includes("{{") && !n.includes("}}") ? n : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const principal = safe(getPrincipalName, "the principal");
+  const assistant = safe(getDAName, "the assistant");
+  return text
+    .replace(/\{\{\s*PRINCIPAL_NAME\s*\}\}/g, principal)
+    .replace(/\{\{\s*DA_NAME\s*\}\}/g, assistant);
 }
 
 // ── Output parsing ──
@@ -527,9 +556,13 @@ export async function review(opts: ReviewOptions = {}): Promise<ReviewResult> {
   // 3. Build prompt — inject CURRENT memory state so the reviewer curates
   //    against reality (the op:"set" path REPLACES, so it must see what's there).
   const snapshot = readCurrentMemorySnapshot();
-  const userPrompt = buildReviewerUserPrompt(exchanges, snapshot);
+  // Resolve {{PRINCIPAL_NAME}} / {{DA_NAME}} placeholders (present in shipped
+  // installs after the release scrubber) to the configured identity before the
+  // prompts reach the model. No-op in the live tree.
+  const systemPrompt = renderNames(REVIEWER_SYSTEM_PROMPT);
+  const userPrompt = renderNames(buildReviewerUserPrompt(exchanges, snapshot));
   writeRunDebug(runId, {
-    "prompt.system.md": REVIEWER_SYSTEM_PROMPT,
+    "prompt.system.md": systemPrompt,
     "prompt.user.md": userPrompt,
     "transcript.txt": `Source: ${transcript}\nExchanges: ${exchanges.length}\n`,
   });
@@ -543,7 +576,7 @@ export async function review(opts: ReviewOptions = {}): Promise<ReviewResult> {
   } else {
     const startedAt = Date.now();
     const result = await inference({
-      systemPrompt: REVIEWER_SYSTEM_PROMPT,
+      systemPrompt,
       userPrompt,
       level: "medium",
       expectJson: false,         // we parse ourselves for tolerance
@@ -616,7 +649,7 @@ async function smokeTest(): Promise<number> {
   };
 
   // 1. Output parsing — clean JSON
-  const p1 = parseReviewerOutput('{"items":[{"type":"memory","actor":"daniel","content":"PREFERENCE: terse"}]}');
+  const p1 = parseReviewerOutput('{"items":[{"type":"memory","actor":"principal","content":"PREFERENCE: terse"}]}');
   check("parse: clean JSON envelope", p1.ok && p1.output.items.length === 1);
 
   // 2. Output parsing — markdown-fenced JSON
@@ -628,7 +661,7 @@ async function smokeTest(): Promise<number> {
   check("parse: nothing-to-save", p3.ok && p3.output.items.length === 0);
 
   // 4. Output parsing — unknown types filtered
-  const p4 = parseReviewerOutput('{"items":[{"type":"memory","actor":"daniel","content":"X"},{"type":"nonsense","content":"Y"}]}');
+  const p4 = parseReviewerOutput('{"items":[{"type":"memory","actor":"principal","content":"X"},{"type":"nonsense","content":"Y"}]}');
   check("parse: unknown-type items dropped", p4.ok && p4.output.items.length === 1 && p4.output.items[0].type === "memory");
 
   // 5. Output parsing — malformed JSON
@@ -637,7 +670,7 @@ async function smokeTest(): Promise<number> {
 
   // 6. Dispatch — dry-run
   const dryItems: TypedItem[] = [
-    { type: "memory", actor: "daniel", content: "PREFERENCE: smoke dry-run" },
+    { type: "memory", actor: "principal", content: "PREFERENCE: smoke dry-run" },
     { type: "idea", title: "Smoke Dry Idea", content: "..." },
   ];
   const { summary: drySum } = dispatchItems(dryItems, { dryRun: true });
@@ -647,7 +680,7 @@ async function smokeTest(): Promise<number> {
   // 7. End-to-end with mocked inference — full pipeline
   const mockResponse = JSON.stringify({
     items: [
-      { type: "memory", actor: "daniel", content: "PREFERENCE: smoke E2E mock" },
+      { type: "memory", actor: "principal", content: "PREFERENCE: smoke E2E mock" },
       { type: "proposal", target_file: pathJoin(homedir(), ".claude/LIFEOS/USER/PRINCIPAL/PRINCIPAL_IDENTITY.md"), edit: "RULE: E2E mock", confidence: 0.5, rationale: "smoke" },
     ],
   });

@@ -14,7 +14,7 @@
  * }
  *
  * Output:
- * - Creates PAISYSTEMUPDATES entry with AI-generated narrative
+ * - Creates SYSTEMUPDATES entry with AI-generated narrative
  * - Sends voice notification with summary
  */
 
@@ -109,7 +109,7 @@ interface UpdateData {
 // ============================================================================
 
 const LIFEOS_DIR = process.env.HOME + '/.claude/LIFEOS';
-const CREATE_UPDATE_SCRIPT = join(LIFEOS_DIR, 'skills/_LIFEOS/TOOLS/CreateUpdate.ts');
+const CREATE_UPDATE_SCRIPT = join(LIFEOS_DIR, 'skills/_LIFEOS/Tools/CreateUpdate.ts');
 
 // Words that indicate generic/bad titles - reject these
 const GENERIC_TITLE_PATTERNS = [
@@ -235,8 +235,8 @@ function generateDescriptiveTitle(changes: FileChange[]): string {
   const hasTools = paths.some(p => p.includes('/Tools/') && p.endsWith('.ts'));
   const hasHooks = paths.some(p => p.includes('hooks/'));
   const hasConfig = paths.some(p => p.endsWith('settings.json'));
-  const hasPAISystem = paths.some(p => p.includes('/LIFEOS/'));
-  const hasPAIUser = paths.some(p => p.includes('LIFEOS/USER/'));
+  const hasLifeosSystem = paths.some(p => p.includes('/LIFEOS/'));
+  const hasLifeosUser = paths.some(p => p.includes('LIFEOS/USER/'));
 
   // Extract common patterns from filenames
   const fileNames = paths.map(p => basename(p, '.md').replace(/\.ts$/, ''));
@@ -295,7 +295,7 @@ function generateDescriptiveTitle(changes: FileChange[]): string {
     title = 'System Configuration Updated';
   }
   // LifeOS system changes
-  else if (hasPAISystem) {
+  else if (hasLifeosSystem) {
     const docNames = paths
       .filter(p => p.includes('/LIFEOS/'))
       .map(p => basename(p, '.md'));
@@ -306,7 +306,7 @@ function generateDescriptiveTitle(changes: FileChange[]): string {
     }
   }
   // LifeOS user changes
-  else if (hasPAIUser) {
+  else if (hasLifeosUser) {
     const docNames = paths
       .filter(p => p.includes('LIFEOS/USER/'))
       .map(p => basename(p, '.md'));
@@ -719,7 +719,7 @@ async function generateVerboseNarrative(
         future_impact: aiNarrative.future_impact,
         future_bullets: aiNarrative.future_bullets,
         verification_steps: aiNarrative.verification_steps,
-        verification_commands: [`bun ~/.claude/skills/_LIFEOS/TOOLS/UpdateSearch.ts recent 5`],
+        verification_commands: [`bun ~/.claude/skills/_LIFEOS/Tools/UpdateSearch.ts recent 5`],
         confidence: 'high',
       },
       aiTitle: aiNarrative.title,
@@ -749,7 +749,7 @@ async function generateVerboseNarrative(
       future_impact: `The ${changeType.replace('_', ' ')} will use updated behavior.`,
       future_bullets: ['Changes are active for future sessions'],
       verification_steps: ['Changes applied via automatic detection'],
-      verification_commands: [`bun ~/.claude/skills/_LIFEOS/TOOLS/UpdateSearch.ts recent 5`],
+      verification_commands: [`bun ~/.claude/skills/_LIFEOS/Tools/UpdateSearch.ts recent 5`],
       confidence: 'medium',
     },
   };

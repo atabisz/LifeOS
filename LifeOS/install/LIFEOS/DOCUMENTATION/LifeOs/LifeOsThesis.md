@@ -4,6 +4,7 @@ last_updated_by: kai
 last_reviewed: 2026-07-02
 last_reviewed_by: kai
 convention: pai-freshness-v1
+version: 1.0.6
 ---
 
 # LifeOS — The Life Operating System Thesis
@@ -124,7 +125,7 @@ All of these belong to the Dashboard because the Dashboard is *everything you ca
 - **Day-in-the-Life preview** — reverse-engineered from your 2036 target
 - **Respark signals** — the play / creativity / dreaming layer
 
-Pulse is not PAI. Pulse is one window onto PAI. A LifeOS with no dashboard would still be a LifeOS. A dashboard with no OS behind it would be a widget.
+Pulse is not LifeOS. Pulse is one window onto LifeOS. A LifeOS with no dashboard would still be a LifeOS. A dashboard with no OS behind it would be a widget.
 
 ---
 

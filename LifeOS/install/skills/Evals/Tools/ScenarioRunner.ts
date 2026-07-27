@@ -108,6 +108,7 @@ async function main(): Promise<void> {
   const runId = `${scenarioId}_${new Date().toISOString().replace(/[:.]/g, '-')}`;
   const skillDir = resolve(dirname(new URL(import.meta.url).pathname), '..');
   // Run artifacts live outside the skill tree (runtime state, not skill content).
+  // 'LIFEOS' exactly — 'LifeOS' only resolved on case-insensitive filesystems (#1461 class).
   const runDir = join(skillDir, '..', '..', 'LIFEOS', 'MEMORY', 'STATE', 'Evals-Results', scenarioId, runId);
   mkdirSync(runDir, { recursive: true });
   mkdirSync(join(runDir, 'transcripts'), { recursive: true });

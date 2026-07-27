@@ -1,4 +1,5 @@
 ---
+status: RETIRED 2026-07-11 — historical doctrine. Modes/tiers were abolished with Algorithm v8 and system prompt v3.0.0 (one adaptive format). Kept as record only; nothing routes here.
 last_updated: 2026-05-13
 last_updated_by: kai
 convention: pai-freshness-v1
@@ -36,7 +37,7 @@ A Loop run:
 
 ## When Loop engages
 
-Auto-detection by `hooks/EffortRouter.hook.ts` (extended classifier):
+Auto-detection by `TheRouter.hook.ts` (retired 2026-07-11) (extended classifier):
 
 ```
 LOOP_HINT: yes | no
@@ -184,6 +185,6 @@ The ID-stability rule (v6.5.0) is preserved across iterations: ISC IDs never re-
 - All modes: [`README.md`](README.md)
 - Goal anchor mechanism: `../v6.5.0.md` § "Principal-Stated Goal"
 - Density gate (one-question pattern): `../v6.5.0.md` § "Density × Tier Gate"
-- Loop skill (router): `~/.claude/skills/loop/SKILL.md`
+- Loop skill (router): `~/.claude/skills/Loop/SKILL.md`
 - LoopRunner.ts (pending): LIFEOS/TOOLS/LoopRunner.ts — next ISA, not yet on disk
 - Algorithm v6.6.0 doctrine bump (pending): `../v6.6.0.md` — paired with LoopRunner ship

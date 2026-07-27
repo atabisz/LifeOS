@@ -34,7 +34,7 @@ export interface ToolInfo {
   path?: string;
 }
 
-export type Harness = "claude-code" | "hermes" | "cursor" | "openclaw" | "unknown";
+export type Harness = "claude-code" | "opencode" | "hermes" | "cursor" | "openclaw" | "unknown";
 
 export interface HarnessInfo {
   name: Harness;
@@ -42,6 +42,13 @@ export interface HarnessInfo {
   skillsDir?: string;
   /** The config root the harness resolves (e.g. ~/.claude). */
   configRoot?: string;
+  /**
+   * "detected" = the harness binary was found on PATH; "assumed" = inferred
+   * from a config dir alone, or the clean-machine default. The Setup workflow
+   * must confirm an "assumed" harness with the user before branching (#1448 —
+   * a leftover ~/.claude dir sent an OpenCode install down the Claude Code path).
+   */
+  confidence: "detected" | "assumed";
 }
 
 export interface EnvDetection {
@@ -109,23 +116,37 @@ export function detectTool(name: string, versionCmd: string): ToolInfo {
 
 /**
  * Detect which harness is hosting this install and where it loads skills from.
- * Order: explicit env (CLAUDE_CONFIG_DIR) → Claude Code (~/.claude) →
- * Hermes (~/.hermes) → Cursor (~/.cursor) → OpenClaw (~/.openclaw) → unknown.
+ * Signal strength (#1448): config dir + harness binary on PATH beats config dir
+ * alone beats binary alone — a leftover ~/.claude dir on a machine without the
+ * claude CLI must not out-rank a live OpenCode install. Anything short of a
+ * binary match is reported as confidence "assumed", never as fact.
  */
 export function detectHarness(home: string): HarnessInfo {
-  const candidates: Array<{ name: Harness; root: string; skills: string }> = [
-    { name: "claude-code", root: process.env.CLAUDE_CONFIG_DIR || join(home, ".claude"), skills: "skills" },
-    { name: "hermes", root: join(home, ".hermes"), skills: "skills" },
-    { name: "cursor", root: join(home, ".cursor"), skills: "skills" },
-    { name: "openclaw", root: join(home, ".openclaw"), skills: "skills" },
+  const candidates: Array<{ name: Harness; root: string; skills: string; bin: string }> = [
+    { name: "claude-code", root: process.env.CLAUDE_CONFIG_DIR || join(home, ".claude"), skills: "skills", bin: "claude" },
+    { name: "opencode", root: process.env.OPENCODE_CONFIG_DIR || join(home, ".config", "opencode"), skills: "skills", bin: "opencode" },
+    { name: "hermes", root: join(home, ".hermes"), skills: "skills", bin: "hermes" },
+    { name: "cursor", root: join(home, ".cursor"), skills: "skills", bin: "cursor" },
+    { name: "openclaw", root: join(home, ".openclaw"), skills: "skills", bin: "openclaw" },
   ];
+  const hasBin = (c: (typeof candidates)[number]) => !!tryExec(`command -v ${c.bin}`);
+  const info = (c: (typeof candidates)[number], confidence: HarnessInfo["confidence"]): HarnessInfo => ({
+    name: c.name,
+    configRoot: c.root,
+    skillsDir: join(c.root, c.skills),
+    confidence,
+  });
   for (const c of candidates) {
-    if (existsSync(c.root)) {
-      return { name: c.name, configRoot: c.root, skillsDir: join(c.root, c.skills) };
-    }
+    if (existsSync(c.root) && hasBin(c)) return info(c, "detected");
+  }
+  for (const c of candidates) {
+    if (existsSync(c.root)) return info(c, "assumed");
+  }
+  for (const c of candidates) {
+    if (hasBin(c)) return info(c, "detected");
   }
   // Default assumption when nothing is present yet (a clean machine pre-bootstrap).
-  return { name: "claude-code", configRoot: join(home, ".claude"), skillsDir: join(home, ".claude", "skills") };
+  return { name: "claude-code", configRoot: join(home, ".claude"), skillsDir: join(home, ".claude", "skills"), confidence: "assumed" };
 }
 
 /**
@@ -311,7 +332,7 @@ import { cpSync, lstatSync, mkdirSync, readdirSync, readlinkSync, renameSync, sy
 import { dirname } from "node:path";
 
 const TEMPLATE_EXTENSIONS = new Set([".md", ".json", ".txt", ".ts", ".toml", ".yaml", ".yml", ".sh"]);
-const SKIP_DIRS = new Set(["node_modules", ".git", "LIFEOS_INSTALL", "MEMORY"]);
+const SKIP_DIRS = new Set(["node_modules", ".git", "MEMORY"]);
 
 /**
  * Recursive, existsSync-GUARDED copy. Copies only files/dirs absent at dst —

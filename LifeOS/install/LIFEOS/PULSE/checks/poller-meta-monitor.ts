@@ -1,4 +1,11 @@
 #!/usr/bin/env bun
+// Normalize env path vars Claude Code may inject unexpanded — literal $HOME/${HOME}
+// in LIFEOS_DIR/LIFEOS_CONFIG_DIR/PROJECTS_DIR resolves to a shadow dir (#1404 / PR #1451, author jbmml).
+for (const __k of ["LIFEOS_DIR", "LIFEOS_CONFIG_DIR", "PROJECTS_DIR"]) {
+  const __v = process.env[__k];
+  if (__v && /^\$\{?HOME\}?(\/|$)/.test(__v)) process.env[__k] = __v.replace(/^\$\{?HOME\}?/, process.env.HOME ?? "~");
+}
+
 
 /**
  * poller-meta-monitor — watches every other Pulse monitoring job for silent failure.
@@ -18,6 +25,13 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
+// Normalize env path vars that Claude Code injects without shell expansion (LifeOS#1404)
+for (const k of ["LIFEOS_DIR", "LIFEOS_CONFIG_DIR", "PROJECTS_DIR"]) {
+  const v = process.env[k];
+  if (v && /^\$\{?HOME\}?(\/|$)/.test(v)) process.env[k] = v.replace(/^\$\{?HOME\}?/, process.env.HOME ?? "~");
+}
+
+
 const HOME = process.env.HOME || "";
 const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LIFEOS");
 const PULSE_STATE = join(LIFEOS_DIR, "PULSE", "state", "state.json");
@@ -25,14 +39,14 @@ const PULSE_TOML = join(LIFEOS_DIR, "PULSE", "PULSE.toml");
 
 // Jobs we specifically monitor — the Current→Ideal pipeline ones.
 const WATCHED_JOBS = [
-  "monitor-band-tours",
-  "monitor-author-tours",
-  "monitor-meetups-ai-sec",
-  "monitor-toofless",
-  "monitor-amazon-orders",
-  "monitor-bills",
-  "monitor-civic-permits",
-  "monitor-civic-council",
+  "monitor-example-a",
+  "monitor-example-b",
+  "monitor-example-c",
+  "monitor-example-d",
+  "monitor-example-e",
+  "monitor-example-h",
+  "monitor-example-f",
+  "monitor-example-g",
   "apple-health-export-ingest",
   "compute-gap",
   "lifelog-digest",
