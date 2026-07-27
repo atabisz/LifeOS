@@ -21,7 +21,9 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 
-const input = JSON.parse(readFileSync("/dev/stdin", "utf-8"));
+// fd 0, not "/dev/stdin": the path form is ENOENT on Windows (Bun/git-bash has no /dev/stdin
+// node), which made this hook fail to launch at all. fd 0 is portable across all three OSes.
+const input = JSON.parse(readFileSync(0, "utf-8"));
 
 const { task_description } = input;
 

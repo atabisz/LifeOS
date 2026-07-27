@@ -207,7 +207,9 @@ async function main(): Promise<void> {
 
   let input: HookInput;
   try {
-    input = JSON.parse(readFileSync("/dev/stdin", "utf-8"));
+    // fd 0, not "/dev/stdin": the path form is ENOENT on Windows, and this read is inside a
+    // catch-and-exit(0), so on Windows the hook silently never saw its input rather than failing.
+    input = JSON.parse(readFileSync(0, "utf-8"));
   } catch {
     process.exit(0);
   }

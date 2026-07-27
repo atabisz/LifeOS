@@ -20,9 +20,18 @@
  * mirror of validate.ts's false green). So this tool spawns via `sh -c`, which is
  * correct on Windows (Git Bash), macOS, and Linux alike.
  *
- * To test the EXACT string the installer writes, it imports the installer's own
- * `normalizeHookCommand` / `collectHookAllowlist` rather than reimplementing the
- * per-OS interpreter rewrite.
+ * It tests the EXACT string the installer writes, VERBATIM — no per-OS rewrite.
+ * That is a deliberate change from the tool's first version (2026-07-02), which
+ * imported `normalizeHookCommand`/`collectHookAllowlist` from the retired
+ * `PAI-Install` engine to reproduce a win32 `bun.exe`-prefix rewrite. The
+ * shipping payload does not do that: `InstallHooks.ts` merges the command
+ * strings from `LifeOS/install/hooks/hooks.json` into settings.json unchanged
+ * (`InstallEngine.normalizeCommand` is only a dedup key, not a rewrite), and
+ * nothing in the payload emits `bun.exe` on any platform. Launching verbatim is
+ * therefore what faithfully tests the installed shape — proven by a differential
+ * run on Windows: normalized and verbatim produced identical verdict tallies.
+ * If per-OS hook rewriting is ever reintroduced to the installer, this tool must
+ * grow the same rewrite back; that would be a deliberate change, not a silent gap.
  *
  * Verdicts, per hook:
  *   FIRED       — launched via `sh -c`, exited 0.
@@ -31,30 +40,26 @@
  *   LAUNCH-FAIL — the OS could not launch the command string: interpreter not
  *                 found (exit 127 / "No such file" / "not recognized"), or the
  *                 resolved script file does not exist on disk.
- *   SKIPPED     — no launch surface: HTTP hook (type:http), or an entry the
- *                 installer drops on this OS (normalize returned null, e.g. a
- *                 .sh hook with no bash on Windows).
+ *   SKIPPED     — no launch surface: HTTP hook (type:http / url).
  *
  * Exit code: nonzero iff >=1 LAUNCH-FAIL. Otherwise 0.
  *
+ * A settings source is REQUIRED — there is no default. The tool used to default to
+ * a checked-in release snapshot; that snapshot is retired, and silently defaulting
+ * to a path that may not exist is how a harness reports a green it never earned.
+ *
  * Usage:
- *   bun Tools/smoke-hook-launch.ts                 # default release settings.json
- *   bun Tools/smoke-hook-launch.ts --live          # ~/.claude/settings.json (the installed tree)
- *   bun Tools/smoke-hook-launch.ts --settings <path>
+ *   bun Tools/smoke-hook-launch.ts --settings <path>   # e.g. a CI-generated fixture
+ *   bun Tools/smoke-hook-launch.ts --live              # ~/.claude/settings.json (the installed tree)
  *   bun Tools/smoke-hook-launch.ts --events UserPromptSubmit,PreToolUse   # only these events
- *   bun Tools/smoke-hook-launch.ts --timeout 8000  # per-hook launch timeout (ms)
- *   bun Tools/smoke-hook-launch.ts --self-test     # prove the tool can go RED (synthetic broken hook)
+ *   bun Tools/smoke-hook-launch.ts --timeout 8000      # per-hook launch timeout (ms)
+ *   bun Tools/smoke-hook-launch.ts --self-test         # prove the tool can go RED (synthetic broken hook)
  */
 
 import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
-import { join, dirname, basename } from "path";
-
-import {
-  normalizeHookCommand,
-  collectHookAllowlist,
-} from "../Releases/v5.0.0/.claude/PAI/PAI-Install/engine/actions";
+import { join, basename } from "path";
 
 type Verdict = "FIRED" | "RAN" | "LAUNCH-FAIL" | "SKIPPED";
 
@@ -133,14 +138,14 @@ function expandHome(s: string): string {
 
 // ---- settings enumeration ----------------------------------------------
 
-function resolveSettingsPath(args: ReturnType<typeof parseArgs>): string {
+function resolveSettingsPath(args: ReturnType<typeof parseArgs>): string | null {
   if (args.settings) return args.settings;
   // Use homeDir() (env $HOME first), NOT homedir(): --live must read settings from the SAME home
   // the precheck resolves hook script paths against, else on a box where $HOME != USERPROFILE the
   // two diverge — settings from one home, hook-existence checks against another (Cato finding).
   if (args.live) return join(homeDir(), ".claude", "settings.json");
-  // Default: the release snapshot this tool ships alongside.
-  return join(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "..", "Releases", "v5.0.0", ".claude", "settings.json");
+  // No default. Callers name the settings they mean; see the header note on earned greens.
+  return null;
 }
 
 interface CommandHook {
@@ -308,6 +313,13 @@ function main(): number {
 
   const platform = process.platform as Platform;
   const settingsPath = resolveSettingsPath(args);
+  if (!settingsPath) {
+    console.error(
+      "no settings source given. Pass --settings <path> (e.g. an installer-generated fixture) " +
+      "or --live to test the installed tree at $HOME/.claude/settings.json.",
+    );
+    return 2;
+  }
   if (!existsSync(settingsPath)) {
     console.error(`settings.json not found: ${settingsPath}`);
     return 2;
@@ -321,7 +333,6 @@ function main(): number {
     return 2;
   }
 
-  const allowlist = collectHookAllowlist(settings);
   const bunPath = resolveBunPath();
   const bashPath = resolveBashPath();
   const { commands, httpCount } = enumerateHooks(settings, args.events);
@@ -337,15 +348,12 @@ function main(): number {
     // http hooks have no local launch surface — counted, reported once in summary.
   }
 
+  // Verbatim: the command string is launched exactly as settings.json carries it, because that is
+  // exactly what the installer wrote there. See the header note on the retired per-OS rewrite.
   for (const { event, command } of commands) {
-    const normalized = normalizeHookCommand(command, { platform, bunPath, bashPath, allowlist });
-    if (normalized === null) {
-      results.push({ event, label: scriptTokenOf(command) ? basename(expandHome(scriptTokenOf(command)!)) : "(dropped)", verdict: "SKIPPED", detail: "installer drops this hook on this OS (no interpreter available)" });
-      continue;
-    }
-    const token = scriptTokenOf(normalized);
+    const token = scriptTokenOf(command);
     const label = token ? basename(expandHome(token)) : "(inline)";
-    const { verdict, detail } = launchOne(event, normalized, args.timeout);
+    const { verdict, detail } = launchOne(event, command, args.timeout);
     results.push({ event, label, verdict, detail });
   }
 

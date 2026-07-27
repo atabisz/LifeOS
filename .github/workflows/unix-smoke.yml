@@ -1,29 +1,37 @@
 name: Unix hook launch-parity smoke test
 
 # The mac/linux parity leg of the Windows launch-parity smoke test
-# (.github/workflows/windows-smoke.yml). The per-OS hook normalization in the
-# installer is proven at the function level (normalizeHookCommand unit tests) and
-# end-to-end on Windows (windows-smoke.yml). This job upgrades the Unix arm from
-# "unit-proven" to "CI-proven": it confirms the SAME committed release settings.json
-# launches every hook through a POSIX shell on real macOS and Linux runners.
+# (.github/workflows/windows-smoke.yml). Together they confirm that every hook the
+# installer wires into settings.json can actually be LAUNCHED by the OS the way
+# Claude Code launches it — through a POSIX shell — on real macOS and Linux runners.
 #
-# On Unix the installed hook commands keep their bare `$HOME/.claude/hooks/X.hook.ts`
-# form (shebang + exec bit — no `bun.exe` prefix). So staging differs from Windows:
-# no bun.exe shim is needed, but the staged hook scripts must carry the exec bit and
-# `bun` must be first on PATH so the shebang resolves. smoke-hook-launch.ts spawns
-# each command via `sh -c` exactly as Claude Code does on every OS.
+# The fixture is GENERATED, not committed: InstallSettings.ts + InstallHooks.ts run
+# against a scratch config root, exactly as they do on a user's machine, and the
+# smoke test then runs over their output. That makes this job cover the install path
+# too — a settings.system.json or hooks.json change that produces an unlaunchable
+# command string fails here, at the same seam a real install would break.
+#
+# On Unix the wired hook commands are bare `$HOME/.claude/hooks/X.hook.ts`
+# (shebang-launched), so the staged scripts need the exec bit and `bun` must be
+# first on PATH for `#!/usr/bin/env bun` to resolve. smoke-hook-launch.ts spawns
+# each command verbatim via `sh -c`, as Claude Code does on every OS.
 
 on:
   push:
     paths:
-      - "Releases/**/.claude/**"
-      - "scripts/build-release.ts"
+      # The payload surfaces that decide what gets wired and whether it can launch.
+      - "LifeOS/install/hooks/**"
+      - "LifeOS/install/settings.system.json"
+      - "LifeOS/Tools/Install*.ts"
+      - "LifeOS/Tools/InstallEngine.ts"
       - "Tools/smoke-hook-launch.ts"
       - ".github/workflows/unix-smoke.yml"
   pull_request:
     paths:
-      - "Releases/**/.claude/**"
-      - "scripts/build-release.ts"
+      - "LifeOS/install/hooks/**"
+      - "LifeOS/install/settings.system.json"
+      - "LifeOS/Tools/Install*.ts"
+      - "LifeOS/Tools/InstallEngine.ts"
       - "Tools/smoke-hook-launch.ts"
       - ".github/workflows/unix-smoke.yml"
   workflow_dispatch: {}
@@ -51,18 +59,30 @@ jobs:
       - name: Self-test (tool must be able to fail)
         run: bun Tools/smoke-hook-launch.ts --self-test
 
-      # Stage the checked-out release .claude under a scratch HOME. On Unix the hook
-      # commands are bare `$HOME/.claude/hooks/X.hook.ts` (shebang-launched), so make
-      # the staged scripts executable and put the real bun first on PATH so the
-      # `#!/usr/bin/env bun` shebang resolves. Then run the smoke test against the
-      # committed release settings.json. Fails the job on any LAUNCH-FAIL.
-      - name: Hook launch-parity smoke (checked-out release tree)
+      # Generate the fixture with the payload's OWN installer tools, then launch every
+      # wired hook. HOME is the scratch dir for BOTH steps: InstallSettings expands
+      # leading $HOME in env values at write time, so it must see the same home the
+      # launcher will expand $HOME to, or the fixture points outside the scratch tree.
+      - name: Hook launch-parity smoke (installer-generated fixture)
         run: |
           set -euo pipefail
           SCRATCH="$(mktemp -d)"
-          cp -r "$GITHUB_WORKSPACE/Releases/v5.0.0/.claude" "$SCRATCH/.claude"
+          mkdir -p "$SCRATCH/.claude"
+
+          # settings.system.json → settings.json (env values expanded), then hooks.json
+          # merged in. InstallHooks also copies the hooks/ tree into the config root, so
+          # each wired `$HOME/.claude/hooks/X.hook.ts` resolves to a real file.
+          HOME="$SCRATCH" bun LifeOS/Tools/InstallSettings.ts --config-root "$SCRATCH/.claude" --skill-root LifeOS --apply
+          HOME="$SCRATCH" bun LifeOS/Tools/InstallHooks.ts    --config-root "$SCRATCH/.claude" --skill-root LifeOS --apply
+
+          # Three wired commands point at $HOME/.claude/LIFEOS/TOOLS/*.ts. DeployCore would
+          # stage these, but it also copies every skill and runs `bun install` in the config
+          # root — minutes of CI for coverage this job does not claim. Copy just that tree.
+          cp -r "$GITHUB_WORKSPACE/LifeOS/install/LIFEOS" "$SCRATCH/.claude/LIFEOS"
+
           # Shebang-launched hooks need the exec bit on Unix.
-          find "$SCRATCH/.claude/hooks" -name '*.hook.ts' -exec chmod +x {} + 2>/dev/null || true
-          find "$SCRATCH/.claude/hooks" -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
-          echo "scratch HOME: $SCRATCH (release .claude staged, bun on PATH: $(command -v bun))"
+          find "$SCRATCH/.claude" -name '*.hook.ts' -exec chmod +x {} + 2>/dev/null || true
+          find "$SCRATCH/.claude" -name '*.sh' -exec chmod +x {} + 2>/dev/null || true
+
+          echo "scratch HOME: $SCRATCH (installer-generated fixture, bun on PATH: $(command -v bun))"
           HOME="$SCRATCH" bun Tools/smoke-hook-launch.ts --settings "$SCRATCH/.claude/settings.json"

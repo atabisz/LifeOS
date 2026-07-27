@@ -3,29 +3,34 @@ name: Windows hook launch-parity smoke test
 # Guards the Windows-support BLOCKER: on a fresh native Windows install, Claude Code
 # launches every hook through a POSIX shell (Git Bash `sh`). If the installed command
 # string can't launch, EVERY hook is silently dead — security pipeline, memory, context
-# loading, all of it. This job re-runs Tools/smoke-hook-launch.ts against the committed
-# release settings.json so that regression can never return unnoticed.
+# loading, all of it. This job proves that can never return unnoticed.
 #
-# It tests the CHECKED-OUT release tree (no install step): it stages the release
-# `.claude` under a scratch HOME so the hook commands' `$HOME/.claude/...` paths resolve
-# to committed files, and drops a `bun.exe` shim under `$HOME/.bun/bin` so the exact
-# installed interpreter string (`"$HOME/.bun/bin/bun.exe" ...`) launches. Proven locally
-# 2026-07-02: 41 FIRED, 2 RAN, 0 LAUNCH-FAIL, exit 0.
+# The fixture is GENERATED, not committed: InstallSettings.ts + InstallHooks.ts run
+# against a scratch config root exactly as they do on a user's machine, and the smoke
+# test runs over their output. So this job covers the install path too — a hooks.json
+# or settings.system.json change that yields an unlaunchable command fails here.
+#
+# No bun.exe shim: the payload wires bare `$HOME/.claude/hooks/X.hook.ts` and never
+# emits a win32 interpreter prefix, so the commands launch via their shebang on Git
+# Bash just as they do on Unix. (An earlier, retired installer DID rewrite commands to
+# `"$HOME/.bun/bin/bun.exe" ...`, which is why a shim used to be staged here.)
 
 on:
   push:
     paths:
-      # The whole staged release .claude tree — a symlink (or any staging-breaking artifact)
-      # can be reintroduced anywhere in it by a regen, so the guard must trigger on the whole tree.
-      - "Releases/**/.claude/**"
-      # The ingestion point: a build-release.ts change is exactly what could re-emit a symlink.
-      - "scripts/build-release.ts"
+      # The payload surfaces that decide what gets wired and whether it can launch.
+      - "LifeOS/install/hooks/**"
+      - "LifeOS/install/settings.system.json"
+      - "LifeOS/Tools/Install*.ts"
+      - "LifeOS/Tools/InstallEngine.ts"
       - "Tools/smoke-hook-launch.ts"
       - ".github/workflows/windows-smoke.yml"
   pull_request:
     paths:
-      - "Releases/**/.claude/**"
-      - "scripts/build-release.ts"
+      - "LifeOS/install/hooks/**"
+      - "LifeOS/install/settings.system.json"
+      - "LifeOS/Tools/Install*.ts"
+      - "LifeOS/Tools/InstallEngine.ts"
       - "Tools/smoke-hook-launch.ts"
       - ".github/workflows/windows-smoke.yml"
   workflow_dispatch: {}
@@ -50,20 +55,27 @@ jobs:
         shell: bash
         run: bun Tools/smoke-hook-launch.ts --self-test
 
-      # Stage the checked-out release .claude under a scratch HOME and shim bun.exe so the
-      # exact installed command strings launch. Then run the smoke test against the
-      # committed release settings.json. Fails the job on any LAUNCH-FAIL (tool exits 1).
-      - name: Hook launch-parity smoke (checked-out release tree)
+      # Generate the fixture with the payload's OWN installer tools, then launch every
+      # wired hook. HOME is the scratch dir for BOTH steps: InstallSettings expands
+      # leading $HOME in env values at write time, so it must see the same home the
+      # launcher will expand $HOME to, or the fixture points outside the scratch tree.
+      - name: Hook launch-parity smoke (installer-generated fixture)
         shell: bash
         run: |
           set -euo pipefail
           SCRATCH="$(mktemp -d)"
-          mkdir -p "$SCRATCH/.bun/bin"
-          # $HOME/.claude/... in the installed hook commands must resolve to committed files.
-          cp -r "$GITHUB_WORKSPACE/Releases/v5.0.0/.claude" "$SCRATCH/.claude"
-          # The hook commands hardcode "$HOME/.bun/bin/bun.exe"; provide a shim to the real bun.
-          BUN_BIN="$(command -v bun)"
-          printf '#!/bin/sh\nexec "%s" "$@"\n' "$BUN_BIN" > "$SCRATCH/.bun/bin/bun.exe"
-          chmod +x "$SCRATCH/.bun/bin/bun.exe"
-          echo "scratch HOME: $SCRATCH (release .claude staged, bun.exe shim -> $BUN_BIN)"
+          mkdir -p "$SCRATCH/.claude"
+
+          # settings.system.json → settings.json (env values expanded), then hooks.json
+          # merged in. InstallHooks also copies the hooks/ tree into the config root, so
+          # each wired `$HOME/.claude/hooks/X.hook.ts` resolves to a real file.
+          HOME="$SCRATCH" bun LifeOS/Tools/InstallSettings.ts --config-root "$SCRATCH/.claude" --skill-root LifeOS --apply
+          HOME="$SCRATCH" bun LifeOS/Tools/InstallHooks.ts    --config-root "$SCRATCH/.claude" --skill-root LifeOS --apply
+
+          # Three wired commands point at $HOME/.claude/LIFEOS/TOOLS/*.ts. DeployCore would
+          # stage these, but it also copies every skill and runs `bun install` in the config
+          # root — minutes of CI for coverage this job does not claim. Copy just that tree.
+          cp -r "$GITHUB_WORKSPACE/LifeOS/install/LIFEOS" "$SCRATCH/.claude/LIFEOS"
+
+          echo "scratch HOME: $SCRATCH (installer-generated fixture, bun: $(command -v bun))"
           HOME="$SCRATCH" bun Tools/smoke-hook-launch.ts --settings "$SCRATCH/.claude/settings.json"
