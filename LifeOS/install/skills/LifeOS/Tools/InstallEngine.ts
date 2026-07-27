@@ -1,9 +1,9 @@
 /**
  * InstallEngine — shared install logic for the LifeOS bare-skill installer.
  *
- * This is a standalone, adapted subset of the legacy installer engine at
- * `LIFEOS/LIFEOS_INSTALL/engine/` (detect.ts + the relevant types), reshaped for the
- * bare-skill context: no web/electron wizard, no separate types module, plus
+ * This is a standalone install engine, reshaped for the bare-skill context
+ * from the now-retired pre-6.x GUI installer engine (detect logic + types):
+ * no web/electron wizard, no separate types module, plus
  * the bare-skill extras the wizard never needed — harness detection (the skill
  * installs into Claude Code / Hermes / Cursor / OpenClaw) and dev-tree refusal
  * (never mutate the author's source repo).
