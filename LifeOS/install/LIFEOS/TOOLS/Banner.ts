@@ -187,7 +187,7 @@ function getStats(): SystemStats {
   // Only `skills` and `hooks` are rendered by any banner design, so we use
   // `--single` mode (~20ms each) instead of the full multi-key walk which
   // recursed into LIFEOS/USER/ (123k files) for keys nothing displays.
-  let skills = 0, hooks = 0, sessions = 0;
+  let skills = 0, hooks = 0;
   const getCountsPath = join(CLAUDE_DIR, "LIFEOS", "TOOLS", "GetCounts.ts");
   try {
     const r = spawnSync("bun", [getCountsPath, "--single", "skills"], { encoding: "utf-8", timeout: 1000 });
