@@ -6,7 +6,7 @@
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { join, relative, basename } from 'path';
+import { join, relative, basename, isAbsolute } from 'path';
 import { getLifeosDir } from './paths';
 
 // ============================================================================
@@ -54,6 +54,46 @@ export interface IntegrityState {
 
 const LIFEOS_DIR = getLifeosDir();
 const STATE_FILE = join(LIFEOS_DIR, 'MEMORY', 'STATE', 'integrity-state.json');
+
+// The core system docs — the files that define how a LifeOS subsystem behaves.
+//
+// Matched against the LIFEOS-RELATIVE form, which isCoreSystemDoc derives before
+// testing. Both rules are ^-anchored, so there is exactly one accepted shape per
+// population and no substring can drift in:
+//
+//   1. DOCUMENTATION/[Subsystem/]<Name>System*.md — the canonical set.
+//      DOCUMENTATION/ alone is NOT the rule: IsaFormat.md, LifeOsThesis.md and
+//      PulseMetadata.md live there too and are ordinary 'documentation'. The
+//      basename family is what makes it a subsystem contract.
+//   2. <NAME>System*.md at depth 1 — the root-level constitutional docs
+//      (LIFEOS_SYSTEM_PROMPT.md), with no separator permitted.
+//
+// Deliberately NOT a *System*.md basename test applied to the raw input. That
+// form-based rule sweeps the 238 skills/Fabric/Patterns/*/system.md prompt files,
+// none of which are system docs. What keeps the match honest is that
+// isCoreSystemDoc rejects anything not under LIFEOS_DIR *before* the pattern
+// runs, so rule 2 can be a bare-basename rule without becoming a basename sweep.
+//
+// This replaces a dead anchor. The original keyed on a `PAI/` path segment; the
+// 2026-07-05 rename deleted that directory, so it matched nothing — and it sat
+// inside the skills/ branch of categorizeChange, where no core doc can reach it
+// anyway. The lesson is in the derivation, not the pattern: normalizeToRelativePath
+// STRIPS the LIFEOS_DIR prefix, so the funnel emits `DOCUMENTATION/Hooks/HookSystem.md`
+// with no framework segment at all. Derive one canonical shape, then anchor on it.
+// Never guess the caller's prefix.
+const CORE_SYSTEM_DOC_PATTERN = new RegExp(
+  [
+    // 1. canonical subsystem docs, at DOCUMENTATION/ depth 1 or 2.
+    //    [Ss]ystem, not System: DaSubsystem.md spells it lowercase. Case-relaxing
+    //    the basename is safe HERE only because the DOCUMENTATION/ anchor sits
+    //    inside a proven-LIFEOS-relative path, which excludes the Fabric prompts.
+    '^DOCUMENTATION/(?:[^/]+/)?[A-Za-z]*[Ss]ystem[A-Za-z]*\\.md$',
+    // 2. root-level docs, depth 1 only — no separator may appear. The capital S
+    //    in (?:SYSTEM|System) is what keeps a lowercase `system.md` out even if
+    //    one ever landed at LIFEOS depth 1.
+    '^[A-Za-z_]*(?:SYSTEM|System)[A-Za-z_]*\\.md$',
+  ].join('|'),
+);
 
 // Paths that are excluded from integrity checks
 const EXCLUDED_PATHS = [
@@ -183,6 +223,43 @@ function normalizeToRelativePath(absolutePath: string): string {
 }
 
 /**
+ * Reduce a path to its LIFEOS-relative, forward-slashed form, or null when it
+ * does not lie under LIFEOS_DIR.
+ *
+ * `path.relative` handles the separator and drive-letter-case differences for us;
+ * what it does NOT do is tell us the child escaped the parent, so the `..` and
+ * absolute-result tests are load-bearing. Without them a sibling directory whose
+ * name merely starts with the parent's (`…/LIFEOSEXTRA/HookSystem.md`) would
+ * resolve to a plausible-looking relative path and match the pattern.
+ */
+function lifeosRelative(inputPath: string): string | null {
+  const absolutePath = isAbsolute(inputPath) ? inputPath : join(LIFEOS_DIR, inputPath);
+  const rel = relative(LIFEOS_DIR, absolutePath);
+  if (rel === '') return '';
+  if (rel.startsWith('..') || isAbsolute(rel)) return null;
+  return rel.split(/[\\/]/).join('/');
+}
+
+/**
+ * True when the path is one of the core system docs.
+ *
+ * Extracted so ONE rule serves categorizeChange and generateDescriptiveTitle. The
+ * dead pattern this replaces was pasted at three sites, which is how the category
+ * and the title could have drifted apart.
+ *
+ * Two accepted inputs, because two exist in production: the LIFEOS-relative form
+ * the transcript funnel emits (`DOCUMENTATION/Hooks/HookSystem.md`), and an
+ * absolute path as a direct caller supplies it. Containment is enforced here
+ * rather than being inherited from the caller — see the note at categorizeChange's
+ * root check for why relying on that would be unsafe.
+ */
+function isCoreSystemDoc(path: string): boolean {
+  const rel = lifeosRelative(path);
+  if (rel === null) return false;
+  return CORE_SYSTEM_DOC_PATTERN.test(rel);
+}
+
+/**
  * Create a FileChange object with categorization.
  */
 function createFileChange(tool: 'Write' | 'Edit', path: string): FileChange {
@@ -210,11 +287,29 @@ export function categorizeChange(path: string): ChangeCategory | null {
     }
   }
 
-  // Check if path is within LifeOS directory
+  // Check if path is within LifeOS directory.
+  //
+  // KNOWN GAP (not widened here): this test is POSIX-only. `startsWith('/')` is
+  // false for a Windows absolute path like `D:\other\x.md`, so such a path is
+  // join()ed onto LIFEOS_DIR and then trivially satisfies its own prefix check —
+  // on Windows every path on every drive reads as in-tree. Narrowing it changes
+  // the emitted category for out-of-tree input, which is a behaviour change owed
+  // its own before/after census, so it is recorded rather than ridden in on an
+  // unrelated repair. isCoreSystemDoc therefore enforces containment itself and
+  // does not inherit it from here.
   const absolutePath = path.startsWith('/') ? path : join(LIFEOS_DIR, path);
   if (!absolutePath.startsWith(LIFEOS_DIR)) {
     return null;
   }
+
+  // Core system docs are tested FIRST, ahead of every location branch. The test
+  // used to sit inside the skills/ branch below, where no core doc can reach it —
+  // so even with a working pattern, categorizeChange could not emit 'core-system'.
+  // Hoisting is provably non-conflicting: every path the pattern matches is a
+  // LIFEOS/*.md or LIFEOS/DOCUMENTATION/**.md file, and none of those lie under
+  // skills/, hooks/ or MEMORY/. Top position also means a future branch cannot
+  // silently steal a core doc back.
+  if (isCoreSystemDoc(path)) return 'core-system';
 
   // Categorize by path pattern
   if (path.includes('skills/')) {
@@ -222,7 +317,6 @@ export function categorizeChange(path: string): ChangeCategory | null {
     const skillMatch = path.match(/skills\/(_[^/]+)/);
     if (skillMatch) return null;
     if (path.includes('/Workflows/')) return 'workflow';
-    if (path.match(/PAI\/(?:DOCUMENTATION\/)?(?:PAISYSTEM|THEHOOKSYSTEM|THEDELEGATION|MEMORYSYSTEM)/)) return 'core-system';
     return 'skill';
   }
 
@@ -509,8 +603,14 @@ export function generateDescriptiveTitle(changes: FileChange[]): string {
   const hasTools = paths.some(p => p.includes('/Tools/') && p.endsWith('.ts'));
   const hasHooks = paths.some(p => p.includes('hooks/'));
   const hasConfig = paths.some(p => p.endsWith('settings.json'));
-  const hasCoreSystem = paths.some(p => p.match(/PAI\/(?:DOCUMENTATION\/)?(?:PAISYSTEM|THEHOOKSYSTEM|THEDELEGATION|MEMORYSYSTEM)/));
+  const hasCoreSystem = paths.some(p => isCoreSystemDoc(p));
   const hasCoreUser = paths.some(p => p.includes('LIFEOS/USER/'));
+
+  // A shared topic word across 2+ filenames, for change sets none of the location
+  // branches claim. Ranked below hasCoreSystem — see the branch comment below.
+  const commonWords = extractCommonPatterns(
+    paths.map(p => basename(p, '.md').replace(/\.ts$/, ''))
+  );
 
   let title = '';
 
@@ -546,6 +646,20 @@ export function generateDescriptiveTitle(changes: FileChange[]): string {
     const skills = [...skillNames].slice(0, 3).join(' and ');
     title = `${skills} Skills Updated`;
   }
+  // Core system changes. Tested BEFORE hasHooks: `DOCUMENTATION/Hooks/HookSystem.md`
+  // satisfies the bare `hooks/` substring test below and was being titled as a
+  // hook-code change. Core-system first also matches categorizeChange's precedence,
+  // so the title and the category can never disagree about what the change was.
+  else if (hasCoreSystem) {
+    const docNames = paths
+      .filter(p => isCoreSystemDoc(p))
+      .map(p => basename(p, '.md'));
+    if (docNames.length === 1) {
+      title = `${docNames[0]} Documentation Updated`;
+    } else {
+      title = 'LifeOS System Documentation Updated';
+    }
+  }
   // Hook changes
   else if (hasHooks) {
     const hookNames = paths
@@ -563,17 +677,6 @@ export function generateDescriptiveTitle(changes: FileChange[]): string {
   else if (hasConfig) {
     title = 'System Configuration Updated';
   }
-  // Core system changes
-  else if (hasCoreSystem) {
-    const docNames = paths
-      .filter(p => p.match(/PAI\/(?:DOCUMENTATION\/)?(?:PAISYSTEM|THEHOOKSYSTEM|THEDELEGATION|MEMORYSYSTEM)/))
-      .map(p => basename(p, '.md'));
-    if (docNames.length === 1) {
-      title = `${docNames[0]} Documentation Updated`;
-    } else {
-      title = 'LifeOS System Documentation Updated';
-    }
-  }
   // Core user changes
   else if (hasCoreUser) {
     const docNames = paths
@@ -584,6 +687,13 @@ export function generateDescriptiveTitle(changes: FileChange[]): string {
     } else {
       title = 'User Configuration Updated';
     }
+  }
+  // Shared topic word. Ranked BELOW hasCoreSystem deliberately: when a change set
+  // is a pair of core docs, naming the document beats naming the word they happen
+  // to share ('LifeOS System Documentation Updated' over 'System Updates'). Ranking
+  // it higher degrades every core-doc pair to a generic word.
+  else if (commonWords.length > 0) {
+    title = `${commonWords.join(' ')} Updates`;
   }
   // Fallback
   else {
@@ -605,6 +715,32 @@ export function generateDescriptiveTitle(changes: FileChange[]): string {
   }
 
   return title;
+}
+
+/**
+ * Words appearing in 2+ of the given filenames, as title-cased topic words.
+ * Splits camelCase/PascalCase and hyphen/underscore, ignores words of <=2 chars,
+ * returns the 3 most frequent. Empty for a single file — a "shared" word needs
+ * two names to be shared between.
+ */
+function extractCommonPatterns(names: string[]): string[] {
+  if (names.length === 0) return [];
+
+  const allWords = names.flatMap(n =>
+    n.split(/(?=[A-Z])|[-_]/).filter(w => w.length > 2)
+  );
+
+  const freq = new Map<string, number>();
+  for (const w of allWords) {
+    const lower = w.toLowerCase();
+    freq.set(lower, (freq.get(lower) || 0) + 1);
+  }
+
+  return [...freq.entries()]
+    .filter(([_, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([word]) => capitalize(word));
 }
 
 function capitalize(s: string): string {
