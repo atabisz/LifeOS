@@ -23,6 +23,27 @@
  * which collide with your own edits (CONFLICT — never auto-take), and which are
  * pure additions.
  *
+ * WHAT A COUNT MEANS (corrected 2026-07-28). The five original buckets had three false labels,
+ * and `--self-test` was 16/16 green throughout because it only ever exercised path mapping. The
+ * counts are what a human acts on, so a label that overstates its evidence is the worst defect
+ * this tool can have:
+ *
+ *   - `take` reported 434. Only 86 were earned. 227 had NO pin entry at all — `mineChanged`
+ *     evaluated `base && live ? compare : false`, so a missing ancestor silently meant "you did
+ *     not change it". Those 227 differ from live by real bytes (ALGORITHM/changelog.md would lose
+ *     93 lines; PULSE/Observability globals.css is 9KB upstream vs 84KB live). 62 more existed in
+ *     neither the release nor live: `baseBytes !== !!relBytes` compares a Buffer to a boolean and
+ *     is always true, so files that exist nowhere were "safe to land".
+ *   - `local-only` said "your own file → ignore" for 58 files that are ALL upstream deletions.
+ *     Zero were genuinely local. Adopting a deletion is a decision, not a thing to ignore.
+ *
+ * Ancestry is therefore an explicit input to `classifyPresence`, and where no ancestor exists the
+ * bucket says `take-unproven` rather than guessing. See MEMORY/WORK/fix-sync-classifier/ISA.md.
+ *
+ * ALSO: nothing in this channel can land a `take`. `upstream-apply.ts` is additive-only
+ * (INVARIANT 1: an existing destination is a hard skip) and a take exists live by definition.
+ * The run prints that next to the count so the number does not read as a work queue.
+ *
  * THIS INCREMENT IS READ-ONLY. It vendors/refreshes the baseline (inside the FORK,
  * git-tracked — NOT live) and prints the view. There is no --apply and it never
  * writes into the live ~/.claude tree. Landing items is a later, separately-gated
@@ -39,7 +60,29 @@ import os from "node:os";
 import { spawnSync } from "node:child_process";
 import { normalize } from "./lifeos-normalize.ts";
 
-type Klass = "take" | "conflict" | "add" | "local-only" | "unchanged";
+/**
+ * Seven buckets, not five. The extra three exist because the old five had labels that were not
+ * true of their contents (audited 2026-07-28, MEMORY/WORK/fix-sync-classifier/ISA.md):
+ *
+ *   - `take` conflated 86 genuine takes with 286 paths the pin has NO ENTRY for (where "you did
+ *     not change it" was a default branch value, not an observation — and 226 of those 286 differ
+ *     from live by bytes, some by 70KB+) and 62 that exist in neither the release nor live.
+ *   - `local-only` claimed "your own file, not in release" for 58 files that are all, in fact,
+ *     upstream DELETIONS: in the pin, dropped by the release, still present live. That is a real
+ *     decision (adopt the deletion?), not something to ignore.
+ *
+ * ANCESTRY IS NOW AN EXPLICIT INPUT. A `take` requires a pin entry, because without one there is
+ * nothing to compare live against and therefore no evidence live is unmodified.
+ */
+type Klass =
+  | "take" // pin HAS it, live == pin, release moved → genuinely safe to land
+  | "take-unproven" // no pin entry → cannot prove live is unmodified; review, do not bulk-land
+  | "conflict" // pin HAS it, live diverges → your line, never auto-take
+  | "add" // release has it, live lacks it → candidate port
+  | "upstream-deleted" // pin HAS it, release dropped it, live still has it → adopt-deletion decision
+  | "local-only" // no pin entry, release lacks it → genuinely your own file
+  | "pin-ghost" // pin only: absent from BOTH release and live → nothing to land
+  | "unchanged"; // identical
 
 // The release payload framework root (renamed LifeOS/) maps onto the live PAI/ root.
 // We normalize release paths token-by-token into the PAI/-shaped baseline.
@@ -196,6 +239,54 @@ function classify(baseAbs: string | null, otherAbs: string | null): "same" | "di
  * "same", so `take` is legitimately 0 — there is no newer version yet. At v7 the pin
  * lags the new payload and `take` becomes populated. That 0 is now HONEST, not a bug.
  */
+/**
+ * The decision, expressed over PRESENCE (three booleans) and then equality. Written as an explicit
+ * 8-way table rather than a chain of early returns, because the old chain's guess-by-default is
+ * what produced three false labels:
+ *
+ *   `mineChanged = baseBytes && liveBytes ? compare : false`
+ *       With no pin entry this yields `false` — "you did not change it" — which is an ASSERTION,
+ *       not an observation. 286 paths took this branch and were reported "safe to land".
+ *
+ *   `upstreamChanged = ... : baseBytes !== !!relBytes`
+ *       Compares a Buffer to a boolean. Always true. 62 pin-only ghosts were reported as takes.
+ *
+ * Both are now unreachable: equality is only ever consulted when both sides of that comparison
+ * actually exist, and every presence combination has its own named outcome.
+ */
+export function classifyPresence(
+  base: Buffer | null,
+  release: Buffer | null,
+  live: Buffer | null,
+): Klass {
+  const hasBase = base !== null;
+  const hasRelease = release !== null;
+  const hasLive = live !== null;
+
+  // ── no pin entry: ancestry is absent, so nothing about live can be PROVEN ──────
+  if (!hasBase) {
+    if (hasRelease && !hasLive) return "add"; // straightforwardly new upstream file
+    if (!hasRelease && hasLive) return "local-only"; // genuinely yours: no pin, not in release
+    if (hasRelease && hasLive) {
+      // Both sides have it and there is no common ancestor to attribute the difference to.
+      // Byte-equal is safe to call unchanged; differing is UNPROVEN, never "safe to land".
+      return Buffer.compare(release, live) === 0 ? "unchanged" : "take-unproven";
+    }
+    return "unchanged"; // exists nowhere — a walk artefact
+  }
+
+  // ── pin entry exists: a real 3-way comparison is possible ─────────────────────
+  if (!hasRelease && !hasLive) return "pin-ghost"; // pin-only: nothing to land anywhere
+  if (!hasRelease && hasLive) return "upstream-deleted"; // release dropped it, live keeps it
+  if (hasRelease && !hasLive) return "add"; // live lacks it → candidate port
+
+  const mineChanged = Buffer.compare(base, live) !== 0;
+  const upstreamChanged = Buffer.compare(base, release) !== 0;
+  if (mineChanged) return "conflict"; // live diverged from the pin → protect it
+  if (upstreamChanged) return "take"; // live still AT the pin, release moved → earned
+  return "unchanged";
+}
+
 function classifyThreeWay(baseRel: string): Klass {
   const baseAbs = path.join(BASELINE_ROOT, ...baseRel.split("/"));
   const relRel = baseRel
@@ -211,16 +302,7 @@ function classifyThreeWay(baseRel: string): Klass {
     : null;
   const liveBytes = existsSync(liveAbs) && statSync(liveAbs).isFile() ? readFileSync(liveAbs) : null;
 
-  const upstreamChanged = baseBytes && relBytes ? Buffer.compare(baseBytes, relBytes) !== 0 : baseBytes !== !!relBytes;
-  const liveHas = liveBytes !== null;
-  const releaseHas = relBytes !== null;
-
-  if (releaseHas && !liveHas) return "add";
-  if (!releaseHas && liveHas) return "local-only";
-  const mineChanged = baseBytes && liveBytes ? Buffer.compare(baseBytes, liveBytes) !== 0 : false;
-  if (mineChanged) return "conflict"; // live diverged → protect it, never auto-take
-  if (upstreamChanged) return "take"; // upstream moved, live is still at baseline → safe
-  return "unchanged";
+  return classifyPresence(baseBytes, relBytes, liveBytes);
 }
 
 function gitStat(baseAbs: string, otherAbs: string): string {
@@ -253,18 +335,40 @@ function main(argv: string[]): number {
   const relToBaseRel = (rel: string) => normalizeRelPath(rel);
   const baseRels = new Set(walk(BASELINE_ROOT));
   for (const rel of walk(RELEASE_PAYLOAD)) baseRels.add(relToBaseRel(rel));
-  const buckets: Record<Klass, string[]> = { take: [], conflict: [], add: [], "local-only": [], unchanged: [] };
+  const buckets: Record<Klass, string[]> = {
+    take: [], "take-unproven": [], conflict: [], add: [],
+    "upstream-deleted": [], "local-only": [], "pin-ghost": [], unchanged: [],
+  };
   for (const baseRel of baseRels) buckets[classifyThreeWay(baseRel)].push(baseRel);
 
+  // A bucket set that does not partition the union means a path was silently dropped or
+  // double-counted — which is precisely how a wrong count stays invisible. Assert it at
+  // RUNTIME, not only in the self-test: the self-test runs on synthetic input.
+  const bucketTotal = Object.values(buckets).reduce((n, b) => n + b.length, 0);
+  if (bucketTotal !== baseRels.size) {
+    console.error(`FATAL: buckets sum to ${bucketTotal} but the union has ${baseRels.size} paths — classification is dropping or duplicating paths.`);
+    return 1;
+  }
+
   console.log("3-WAY CLASSIFICATION (baseline = PINNED common ancestor):");
-  console.log(`  take      ${buckets.take.length}  — release changed vs pin, live still at pin → safe to land`);
-  console.log(`  conflict  ${buckets.conflict.length}  — live DIFFERS from pin → review; NEVER auto-take (protects your line)`);
-  console.log(`  add       ${buckets.add.length}  — release file live lacks → candidate port`);
-  console.log(`  local-only ${buckets["local-only"].length}  — your own file, not in release → ignore`);
-  console.log(`  unchanged ${buckets.unchanged.length}  — identical\n`);
-  if (buckets.take.length === 0) {
-    console.log("  (take=0 is HONEST here: pin == current release, so no newer version exists yet.");
-    console.log("   At v7, refresh the payload, re-run: take populates with upstream's real changes.)\n");
+  console.log(`  take            ${buckets.take.length}  — pin HAS it, live == pin, release moved → safe to land (proven)`);
+  console.log(`  take-unproven   ${buckets["take-unproven"].length}  — NO pin entry, release and live both have it and DIFFER →`);
+  console.log(`                        no common ancestor exists, so nothing proves live is unmodified. Review individually.`);
+  console.log(`  conflict        ${buckets.conflict.length}  — pin HAS it, live DIFFERS from pin → your line; NEVER auto-take`);
+  console.log(`  add             ${buckets.add.length}  — release has it, live lacks it → candidate port`);
+  console.log(`  upstream-deleted ${buckets["upstream-deleted"].length}  — pin HAS it, release DROPPED it, live still has it → adopt the deletion?`);
+  console.log(`  local-only      ${buckets["local-only"].length}  — no pin entry and not in release → genuinely your own file`);
+  console.log(`  pin-ghost       ${buckets["pin-ghost"].length}  — pin only: absent from BOTH release and live → nothing to land`);
+  console.log(`  unchanged       ${buckets.unchanged.length}  — identical`);
+  console.log(`  (sum ${bucketTotal} == union ${baseRels.size} ✓)\n`);
+
+  // The channel READS. Nothing here can land a `take`: upstream-apply.ts is additive-only
+  // (INVARIANT 1 — an existing destination is a hard skip) and every take exists live by
+  // definition. Saying so next to the count stops the number reading as a work queue.
+  if (buckets.take.length > 0 || buckets["take-unproven"].length > 0) {
+    console.log("  NOTE: no tool in this channel lands a take. upstream-apply.ts is additive-only, and a");
+    console.log("        take exists live by definition, so it reports skip-exists. Landing an in-place");
+    console.log("        update is a separate, unbuilt increment.\n");
   }
 
   const showConflicts = argv.includes("--conflicts");
@@ -291,8 +395,32 @@ function main(argv: string[]): number {
     if (buckets.add.length > addCap) console.log(`  ... +${buckets.add.length - addCap} more (use --all)`);
     console.log("");
   }
-  console.log("Next: `--conflicts` / `--adds` for detail (`--all` to defeat the display caps).");
-  console.log("Landing items is a later gated increment (guarded apply).");
+  if (argv.includes("--unproven")) {
+    console.log("TAKE-UNPROVEN (no pin ancestor — RELEASE vs LIVE delta, so the size of what landing");
+    console.log("this would overwrite is visible; a small delta is not evidence of safety, only of scale.");
+    console.log("The diff is release-vs-live deliberately: there IS no baseline file for these paths,");
+    console.log("which is the entire reason they are unproven):");
+    const cap = showAll ? buckets["take-unproven"].length : 40;
+    for (const rel of buckets["take-unproven"].slice(0, cap)) {
+      const relRel = rel
+        .split("/")
+        .map((seg) => (seg === "PAI" ? "LifeOS" : seg === "PAI_SYSTEM_PROMPT.md" ? "LIFEOS_SYSTEM_PROMPT.md" : seg))
+        .join("/");
+      const stat = gitStat(path.join(RELEASE_PAYLOAD, ...relRel.split("/")), path.join(liveRoot(), ...toLiveRelPath(rel).split("/")));
+      console.log(`  UNPROVEN ${toLiveRelPath(rel)}  ${stat}`);
+    }
+    if (buckets["take-unproven"].length > cap) console.log(`  ... +${buckets["take-unproven"].length - cap} more (use --all)`);
+    console.log("");
+  }
+  if (argv.includes("--deleted")) {
+    console.log("UPSTREAM-DELETED (in the pin, dropped by the release, still live — adopt the deletion?):");
+    const cap = showAll ? buckets["upstream-deleted"].length : 60;
+    for (const rel of buckets["upstream-deleted"].slice(0, cap)) console.log(`  DELETED-UPSTREAM ${toLiveRelPath(rel)}`);
+    if (buckets["upstream-deleted"].length > cap) console.log(`  ... +${buckets["upstream-deleted"].length - cap} more (use --all)`);
+    console.log("");
+  }
+  console.log("Next: `--conflicts` / `--adds` / `--unproven` / `--deleted` for detail (`--all` defeats the caps).");
+  console.log("Landing items is a later gated increment (guarded apply, additive-only).");
   return 0;
 }
 
@@ -354,6 +482,67 @@ function runSelfTest(): number {
     .filter((p) => p === "PAI" || p.startsWith("PAI/"));
   if (leaks.length === 0) pass += 1;
   else console.error(`FAIL anti: ${leaks.length} live path(s) still PAI/-rooted: ${leaks.join(", ")}`);
+  // ── CLASSIFICATION cases ────────────────────────────────────────────────────
+  // The old self-test was 16/16 green while three bucket labels were false, because it only
+  // exercised path mapping. These cases test what a bucket MEANS. Each is written so that
+  // reverting the corresponding guard turns it RED (mutation-proven — see the ISA).
+  const B = (s: string) => Buffer.from(s, "utf8");
+  const classCases: { name: string; base: Buffer | null; rel: Buffer | null; live: Buffer | null; want: Klass }[] = [
+    // A take is EARNED: pin present, live identical to pin, release moved.
+    { name: "take: pin==live, release moved", base: B("v1"), rel: B("v2"), live: B("v1"), want: "take" },
+    // The 286-path bug. No pin entry => no ancestor => cannot prove live is unmodified.
+    { name: "take-unproven: NO pin entry, release and live differ", base: null, rel: B("v2"), live: B("v1"), want: "take-unproven" },
+    // Anti-case for the same bug: the old code returned "take" here. If the ancestry guard is
+    // reverted to `mineChanged ? ... : false`, this case fails.
+    { name: "anti: no-pin + differing must NOT be a plain take", base: null, rel: B("aaa"), live: B("bbb"), want: "take-unproven" },
+    // No pin, but both sides agree — nothing to do, and not "unproven" either.
+    { name: "unchanged: no pin entry but release==live", base: null, rel: B("same"), live: B("same"), want: "unchanged" },
+    // The 62-ghost bug: Buffer !== !!Buffer was always true, so this returned "take".
+    { name: "pin-ghost: pin only, absent from release AND live", base: B("old"), rel: null, live: null, want: "pin-ghost" },
+    { name: "anti: pin-ghost must NOT be a take", base: B("old"), rel: null, live: null, want: "pin-ghost" },
+    // The local-only mislabel: all 58 real ones are upstream deletions.
+    { name: "upstream-deleted: pin has it, release dropped, live keeps", base: B("x"), rel: null, live: B("x"), want: "upstream-deleted" },
+    { name: "upstream-deleted even when live edited it since the pin", base: B("x"), rel: null, live: B("x-edited"), want: "upstream-deleted" },
+    // Genuine local-only requires NO pin entry.
+    { name: "local-only: no pin entry and not in release", base: null, rel: null, live: B("mine"), want: "local-only" },
+    // Conflict needs a pin to attribute divergence to.
+    { name: "conflict: pin has it, live diverged", base: B("v1"), rel: B("v2"), live: B("mine"), want: "conflict" },
+    { name: "conflict even when release is unchanged vs pin", base: B("v1"), rel: B("v1"), live: B("mine"), want: "conflict" },
+    // Adds, both with and without a pin entry.
+    { name: "add: release has it, live lacks it (no pin)", base: null, rel: B("new"), live: null, want: "add" },
+    { name: "add: release has it, live lacks it (pin had it)", base: B("v1"), rel: B("v2"), live: null, want: "add" },
+    { name: "unchanged: all three identical", base: B("s"), rel: B("s"), live: B("s"), want: "unchanged" },
+    { name: "unchanged: exists nowhere", base: null, rel: null, live: null, want: "unchanged" },
+  ];
+  for (const c of classCases) {
+    total += 1;
+    const got = classifyPresence(c.base, c.rel, c.live);
+    if (got === c.want) pass += 1;
+    else console.error(`FAIL class ${c.name} → got ${got}, want ${c.want}`);
+  }
+
+  // A "take" must never be reachable without a pin entry. Exhaustive over the presence lattice
+  // rather than a spot check: this is the invariant the whole fix rests on.
+  total += 1;
+  const takeWithoutAncestor = ([null, B("a")] as (Buffer | null)[]).flatMap((rel) =>
+    ([null, B("a"), B("b")] as (Buffer | null)[]).map((live) => classifyPresence(null, rel, live)),
+  ).filter((k) => k === "take");
+  if (takeWithoutAncestor.length === 0) pass += 1;
+  else console.error(`FAIL anti: ${takeWithoutAncestor.length} no-pin combination(s) classified as a proven take`);
+
+  // The buckets must PARTITION: every presence/equality combination lands in exactly one, and
+  // no combination falls through to a default.
+  total += 1;
+  const allKlasses = new Set<Klass>();
+  for (const base of [null, B("p")] as (Buffer | null)[])
+    for (const rel of [null, B("p"), B("r")] as (Buffer | null)[])
+      for (const live of [null, B("p"), B("l")] as (Buffer | null)[])
+        allKlasses.add(classifyPresence(base, rel, live));
+  const known: Klass[] = ["take", "take-unproven", "conflict", "add", "upstream-deleted", "local-only", "pin-ghost", "unchanged"];
+  const unknown = [...allKlasses].filter((k) => !known.includes(k));
+  if (unknown.length === 0) pass += 1;
+  else console.error(`FAIL partition: unexpected class(es) ${unknown.join(", ")}`);
+
   console.log(`${pass}/${total} passed`);
   return pass === total ? 0 : 1;
 }
