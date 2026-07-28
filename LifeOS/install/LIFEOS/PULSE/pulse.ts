@@ -14,7 +14,7 @@
  * One process. One port. One launchd plist. One log file.
  */
 
-import { join } from "path"
+import { join, isAbsolute } from "path"
 import { readFileSync, existsSync } from "fs"
 import { parse } from "smol-toml"
 import { loadLifeosConfig } from "../TOOLS/LifeosConfig"
@@ -398,7 +398,10 @@ function msUntilNextDue(jobs: PulseConfig["jobs"], state: DaemonState): number {
 // /healthz reported "ok". The dashboard asset check makes /healthz truthful.
 function dashboardDir(config: PulseConfig): string {
   const dir = config.observability?.dashboard_dir ?? "Observability/out"
-  return dir.startsWith("/") ? dir : join(PULSE_DIR, dir)
+  // isAbsolute, not startsWith("/") — the POSIX literal is false for `C:\...`,
+  // so on Windows an absolute dashboard_dir got joined onto PULSE_DIR and
+  // /healthz reported "missing" for a dashboard that was present.
+  return isAbsolute(dir) ? dir : join(PULSE_DIR, dir)
 }
 
 function dashboardHealth(config: PulseConfig): { status: "ok" | "missing"; indexPath: string } {
@@ -878,7 +881,10 @@ async function main() {
   for (const job of config.jobs) {
     if (!job.enabled || job.type === "claude" || !job.command) continue
     const scriptRefs = job.command.match(/[^\s'"]+\.(?:ts|js|sh)\b/g) ?? []
-    const missing = scriptRefs.filter((p) => !existsSync(p.startsWith("/") ? p : join(PULSE_DIR, p)))
+    // isAbsolute, not startsWith("/"): on Windows an absolute script path was
+    // joined onto PULSE_DIR, the existsSync failed, and the preflight disabled
+    // a perfectly healthy cron job.
+    const missing = scriptRefs.filter((p) => !existsSync(isAbsolute(p) ? p : join(PULSE_DIR, p)))
     if (missing.length > 0) {
       missingScriptJobs.add(job.name)
       log("warn", `Disabling cron job ${job.name}: script not present on this install`, {

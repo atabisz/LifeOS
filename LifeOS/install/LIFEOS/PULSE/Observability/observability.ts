@@ -29,7 +29,7 @@ for (const __k of ["LIFEOS_DIR", "LIFEOS_CONFIG_DIR", "PROJECTS_DIR"]) {
  *   GET  /, /work, /telos, /health, etc. — Static Next.js pages (fallback handler)
  */
 
-import { join, extname } from "path"
+import { join, extname, isAbsolute } from "path"
 import { readFileSync, readdirSync, existsSync, realpathSync, statSync, watch, type FSWatcher } from "fs"
 import YAML from "yaml"
 import { effortToCanonicalTierName } from "../../../hooks/lib/effort"
@@ -154,8 +154,11 @@ function existsSafe(path: string): boolean {
 
 function getDashboardDir(): string {
   const dir = config.dashboard_dir ?? DEFAULT_DASHBOARD_DIR
-  // Resolve relative paths against Pulse directory
-  if (!dir.startsWith("/")) {
+  // Resolve relative paths against Pulse directory. isAbsolute, not
+  // startsWith("/"): join() does NOT discard its base for an absolute second
+  // argument the way resolve() does, so on Windows a configured absolute
+  // dashboard_dir was appended to the Pulse dir and every asset 404'd.
+  if (!isAbsolute(dir)) {
     return join(HOME, ".claude", "LIFEOS", "PULSE", dir)
   }
   return dir

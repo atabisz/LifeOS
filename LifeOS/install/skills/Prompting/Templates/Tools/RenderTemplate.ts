@@ -16,7 +16,7 @@
 import Handlebars from 'handlebars';
 import { parse as parseYaml } from 'yaml';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { resolve, dirname, basename } from 'path';
+import { resolve, dirname, basename, isAbsolute } from 'path';
 import { parseArgs } from 'util';
 
 // ============================================================================
@@ -137,7 +137,13 @@ interface RenderOptions {
 
 function resolveTemplatePath(path: string): string {
   // If absolute, use as-is
-  if (path.startsWith('/')) return path;
+  // isAbsolute, not startsWith('/'): the POSIX literal is false for a Windows
+  // absolute path, so `C:\tpl\x.md` fell through to the resolve() below. That
+  // happens to yield the same target here (resolve discards its base for an
+  // absolute second argument), so this is a correctness-of-intent fix rather
+  // than a behaviour change — but the literal is wrong and reads as a platform
+  // assumption the rest of the tool does not make.
+  if (isAbsolute(path)) return path;
 
   // Resolve relative to Templates directory
   const templatesDir = dirname(dirname(import.meta.path));

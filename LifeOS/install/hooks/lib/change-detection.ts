@@ -287,20 +287,26 @@ export function categorizeChange(path: string): ChangeCategory | null {
     }
   }
 
-  // Check if path is within LifeOS directory.
+  // Check if path is within LifeOS directory, via the same helper isCoreSystemDoc
+  // uses — one containment rule, not two.
   //
-  // KNOWN GAP (not widened here): this test is POSIX-only. `startsWith('/')` is
-  // false for a Windows absolute path like `D:\other\x.md`, so such a path is
-  // join()ed onto LIFEOS_DIR and then trivially satisfies its own prefix check —
-  // on Windows every path on every drive reads as in-tree. Narrowing it changes
-  // the emitted category for out-of-tree input, which is a behaviour change owed
-  // its own before/after census, so it is recorded rather than ridden in on an
-  // unrelated repair. isCoreSystemDoc therefore enforces containment itself and
-  // does not inherit it from here.
-  const absolutePath = path.startsWith('/') ? path : join(LIFEOS_DIR, path);
-  if (!absolutePath.startsWith(LIFEOS_DIR)) {
+  // This site used to read `path.startsWith('/') ? path : join(LIFEOS_DIR, path)`
+  // followed by a raw `startsWith(LIFEOS_DIR)` test. The POSIX literal was false
+  // for a Windows absolute path like `D:\other\x.md`, so such a path was join()ed
+  // onto LIFEOS_DIR and then trivially satisfied its own prefix check: on Windows
+  // every path on every drive read as in-tree, and the check was decorative.
+  //
+  // Fixing the is-absolute test makes the containment check load-bearing, which
+  // exposed the second half of the defect: a raw prefix `startsWith` also admits
+  // a SIBLING whose name merely begins with the parent's (`…/LIFEOSEXTRA/x.md`).
+  // lifeosRelative already handles both — it derives the relative form and
+  // rejects the `..`/absolute escapes a prefix test cannot see. The census this
+  // narrowing was owed is in the ISA: the only category change is out-of-tree
+  // absolute input, which now returns null instead of a bogus category.
+  if (lifeosRelative(path) === null) {
     return null;
   }
+  const absolutePath = isAbsolute(path) ? path : join(LIFEOS_DIR, path);
 
   // Core system docs are tested FIRST, ahead of every location branch. The test
   // used to sit inside the skills/ branch below, where no core doc can reach it —

@@ -33,7 +33,7 @@
  *   bun MutationTier.ts test                       (smoke test — exit 0 on pass)
  */
 
-import { resolve as pathResolve } from "node:path";
+import { resolve as pathResolve, isAbsolute, sep } from "node:path";
 import { homedir } from "node:os";
 
 // ── Constants ──
@@ -55,9 +55,15 @@ const TIER_B_FILES: ReadonlySet<string> = new Set([
 ]);
 
 /** Tier B: append-with-audit prefixes (any file beneath these dirs is Tier B). */
+// Directory prefixes, terminated with the platform separator so the membership
+// test can't match a sibling whose name merely starts the same way
+// (…/KNOWLEDGEEXTRA/x.md, …/KNOWLEDGE.md). `sep`, not a literal "/": the
+// subject of the test is a pathResolve() output, which emits "\" on Windows, so
+// a hard-coded "/" could never match there and both prefixes were dead.
+// On POSIX `sep === "/"`, so these bytes are unchanged.
 const TIER_B_PREFIXES: readonly string[] = [
-  pathResolve(CLAUDE_ROOT, "LIFEOS/MEMORY/KNOWLEDGE") + "/",
-  pathResolve(CLAUDE_ROOT, "LIFEOS/MEMORY/IDEAS") + "/",
+  pathResolve(CLAUDE_ROOT, "LIFEOS/MEMORY/KNOWLEDGE") + sep,
+  pathResolve(CLAUDE_ROOT, "LIFEOS/MEMORY/IDEAS") + sep,
 ];
 
 /** Tier C: propose-only identity-doctrine files (exact-match paths). */
@@ -86,9 +92,14 @@ const TIER_C_FILES: ReadonlySet<string> = new Set([
  * explicitly raises its tier.
  */
 export function getTier(absolutePath: string): Tier {
-  if (!absolutePath.startsWith("/")) {
+  if (!isAbsolute(absolutePath)) {
     // Defensive: relative paths are always Tier D. The reviewer dispatcher
     // should resolve before classification, but we don't trust the caller.
+    //
+    // isAbsolute, not startsWith("/"): the literal is POSIX-only, so on Windows
+    // EVERY path — including a correctly-resolved C:\Users\...\.claude\... —
+    // failed this test and fell through to Tier D. The allowlist below was
+    // unreachable and the whole four-tier model collapsed to default-deny.
     return "D";
   }
 

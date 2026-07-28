@@ -14,7 +14,7 @@ import { SessionStore, type Message as SessionMessage } from "../lib/session-sto
 import { needsCompression, compressSession, buildCompressionHolder } from "../lib/context-compression"
 import { sanitize, analyzeForInjection } from "../lib/sanitize"
 import { disambiguateHomographs } from "../lib/homographs"
-import { join, resolve, sep } from "path"
+import { join, resolve, sep, isAbsolute } from "path"
 import { appendFile, mkdir, readFile, rm, stat as statFile, unlink, writeFile } from "fs/promises"
 import { inference } from "../../TOOLS/Inference"
 import { loadLifeosConfig } from "../../TOOLS/LifeosConfig"
@@ -877,7 +877,11 @@ export async function startTelegram(config: TelegramConfig): Promise<void> {
   // in the chat; they never take down the turn.
   async function sendOutboundImage(ctx: { reply: (text: string) => Promise<unknown>; replyWithPhoto: (photo: InputFile) => Promise<unknown> }, ref: string): Promise<void> {
     try {
-      if (!ref.startsWith("/")) throw new Error("only absolute local paths are allowed")
+      // isAbsolute, not startsWith("/"): the POSIX literal rejected every valid
+      // Windows path, so outbound images were unusable there. The guard is a
+      // reject-relative check, and the validation below (exists, regular file,
+      // extension, size cap) is what actually constrains what gets sent.
+      if (!isAbsolute(ref)) throw new Error("only absolute local paths are allowed")
       const resolved = resolve(ref)
       const ext = (resolved.split(".").pop() || "").toLowerCase()
       if (!PHOTO_EXTS.has(ext)) throw new Error(`unsupported extension .${ext} — png/jpg/jpeg/webp/gif only`)

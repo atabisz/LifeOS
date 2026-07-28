@@ -25,7 +25,7 @@
  */
 
 import { readFileSync, statSync, existsSync, readdirSync, realpathSync } from 'fs';
-import { join, resolve, dirname, relative, extname, sep } from 'path';
+import { join, resolve, dirname, relative, extname, sep, isAbsolute } from 'path';
 import { execSync } from 'child_process';
 
 const HOME = process.env.HOME || '';
@@ -419,7 +419,13 @@ function extractRefs(content: string, referringFile: string): RefHit[] {
       // Resolve
       let resolved: string | null = null;
       const candidates: string[] = [];
-      if (raw.startsWith('/')) {
+      // isAbsolute, not startsWith('/'): the POSIX literal is false for a
+      // Windows absolute reference, which then fell through to the
+      // CLAUDE_DIR/LIFEOS_DIR/refDir candidates below. Those all run through
+      // resolve(), which discards its base for an absolute second argument, so
+      // the reference still resolved to the same place — the fix removes a
+      // platform assumption rather than changing an outcome.
+      if (isAbsolute(raw)) {
         candidates.push(raw);
       } else if (raw.startsWith('./') || raw.startsWith('../')) {
         candidates.push(resolve(refDir, raw));
