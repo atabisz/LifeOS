@@ -287,7 +287,42 @@ const REFUSED_ADDS: Record<string, string> = {
   // absent from live .env and no cron/hook invokes HealthSync, so nothing is degraded.
   // To adopt: set EIGHTSLEEP_CLIENT_ID/SECRET in .env, replace the two literals with the
   // env reads, then land the file — i.e. port content, don't lift the refusal.
+  //
+  // DISCHARGED 2026-07-31 by exactly that route (live 60bd037): the module is in live with
+  // both constants read from ctx.env, zero hardcoded literals (probed — no 40+ hex run in the
+  // file), and the ggshield pre-commit passed on the real commit rather than being bypassed.
+  // The refusal is KEPT, not deleted: it still governs the payload copy, which is unchanged
+  // and still carries the literal, so lifting the entry would re-open a straight `--apply` to
+  // write the hardcoded version over a clean live file. The `refusalDischarged` set below is
+  // what stops AUDIT A from reporting this as a by-hand landing.
   "LIFEOS/TOOLS/healthsync/eightsleep.ts": "secret: ggshield flags a Generic High Entropy Secret (APP_CLIENT_SECRET, eightsleep.ts:30); upstream calls it a public app constant but this channel cannot verify that, and the live pre-commit would block it — port it with env reads instead of landing hardcoded",
+};
+
+/**
+ * Refusals whose live copy arrived through the refusal's OWN prescribed remedy, not by hand.
+ *
+ * AUDIT A exists because a refused path sitting in live means INVARIANT 8 has stopped
+ * protecting anything, and that must never read as coverage. But its message names a cause
+ * ("landed before the gate existed, or by hand — review the live copy") that is wrong when the
+ * refusal note said "port the content" and someone did precisely that. A permanent warning
+ * with a false cause is worse than no warning: it trains the reader to skip the whole block,
+ * including the entries that are real.
+ *
+ * An entry here is a CLAIM ABOUT LIVE, so it is re-probed at runtime rather than trusted —
+ * see verifyDischarged(). A discharge whose condition no longer holds reverts to a violation.
+ */
+const REFUSAL_DISCHARGED: Record<string, { landedIn: string; why: string; probe: (liveAbs: string) => boolean }> = {
+  "LIFEOS/TOOLS/healthsync/eightsleep.ts": {
+    landedIn: "60bd037",
+    why: "ported with env reads per this refusal's own remedy; no hardcoded credential remains",
+    // The refusal's grounds were a hardcoded high-entropy literal. The discharge holds only
+    // while live has none — so probe for it instead of taking the commit message's word.
+    probe: (liveAbs) => {
+      let text: string;
+      try { text = readFileSync(liveAbs, "utf8"); } catch { return false; }
+      return !/[0-9a-f]{40,}/i.test(text) && /env\.EIGHTSLEEP_CLIENT_SECRET/.test(text);
+    },
+  },
 };
 
 type Plan = {
@@ -425,12 +460,40 @@ function main(argv: string[]): number {
   // (truthfully), which means the refusal is silently doing nothing; that must not read as
   // coverage. Advisory only: it never changes the exit code, because the run itself is safe.
   const planned = new Set(plans.map((p) => p.liveRel));
-  const violated = plans.filter((p) => p.status === "skip-exists" && REFUSED_ADDS[p.liveRel] !== undefined);
+  const refusedInLive = plans.filter((p) => p.status === "skip-exists" && REFUSED_ADDS[p.liveRel] !== undefined);
+  // A discharge is a claim about live, so re-probe it here. Trusting the table would let a
+  // stale entry mute a real violation — the same failure mode AUDIT B guards for stale keys.
+  const discharged = refusedInLive.filter((p) => {
+    const d = REFUSAL_DISCHARGED[p.liveRel];
+    return d !== undefined && d.probe(path.join(liveRoot(), ...p.liveRel.split("/")));
+  });
+  const dischargedSet = new Set(discharged.map((p) => p.liveRel));
+  const violated = refusedInLive.filter((p) => !dischargedSet.has(p.liveRel));
   if (violated.length) {
     console.log("");
     console.log("⚠ VIOLATED REFUSAL — refused path already present in live (INVARIANT 8 no longer protecting):");
     for (const p of violated) console.log(`  live ${p.liveRel} — decided against: ${REFUSED_ADDS[p.liveRel]}`);
     console.log("  Someone landed these before the gate existed, or by hand. Review the live copy.");
+  }
+  if (discharged.length) {
+    console.log("");
+    console.log("✓ REFUSAL DISCHARGED — live copy arrived via the refusal's own remedy (re-probed this run):");
+    for (const p of discharged) {
+      const d = REFUSAL_DISCHARGED[p.liveRel]!;
+      console.log(`  live ${p.liveRel} — ${d.why} (${d.landedIn})`);
+    }
+    console.log("  The refusal stays in force for the PAYLOAD copy, which still carries the original.");
+  }
+  // A discharge entry whose probe FAILS is the dangerous case: it means live no longer matches
+  // the condition that justified the discharge, so the path must fall back to a violation —
+  // which the filter above already does. Say so, rather than letting it vanish from the report.
+  const dischargeStale = Object.keys(REFUSAL_DISCHARGED).filter(
+    (k) => refusedInLive.some((p) => p.liveRel === k) && !dischargedSet.has(k),
+  );
+  if (dischargeStale.length) {
+    console.log("");
+    console.log("⚠ DISCHARGE NO LONGER HOLDS — reverted to a violation above:");
+    for (const k of dischargeStale) console.log(`  ${k} — the live copy stopped satisfying the discharge probe`);
   }
 
   // AUDIT B — a refusal key matching no payload file. Exact keys are brittle to an upstream
