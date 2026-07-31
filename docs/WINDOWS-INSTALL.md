@@ -1,5 +1,11 @@
 # Running LifeOS (PAI) natively on Windows
 
+> **⚠️ HISTORICAL field report (2026-06-30, v5.0.0-era).** Still useful as the account of what the
+> seams were, but it is not current state: the repo is at 7.1.1 and the Windows fixes it describes
+> as branch-local have since landed on `main`. Its `Releases/v5.0.0/.claude` paths are dead — that
+> tree was deleted in `ea1dd8f0` — and the fork it names (`atabisz/Personal_AI_Infrastructure`) is
+> now `atabisz/LifeOS`.
+
 What it actually took to get LifeOS running on Windows 11 - Pulse daemon, voice, hooks, and all. This is a field report from a working install, not a plan. Every file cited here was verified on the live machine.
 
 > **Status (2026-06-30).** The repo-side changes described below are now committed on branch `docs/windows-install` of `atabisz/Personal_AI_Infrastructure`: the literal-`~` fallback fix as `2946389`, the cross-platform installer as `6519307`, the BugBountyTool config-path fix as `c7444f6`, and this field report as `f77f44c`. The "left uncommitted pending review" phrasing further down predates those commits — wherever it refers to repo-source files under `Releases/v5.0.0/.claude`, treat them as committed. Edits to the live `~/.claude` tree are a separate repo (`atabisz/claude-config`) and their commit status is not tracked here.

@@ -1,5 +1,10 @@
 # Windows support — recommended implementation plan
 
+> **⚠️ SUPERSEDED — historical record, do not execute.** Dated 2026-06-30 against v5.0.0; the repo
+> is at 7.1.1 and Windows support has since shipped (per-OS hook normalization in the installer,
+> launch-parity smoke tests on both platforms in CI). The staged plan below is the route that was
+> taken, not work outstanding. `Releases/` paths are dead (`ea1dd8f0`). Read for rationale.
+
 This is the plan for making LifeOS (PAI) work on a fresh native Windows install. It builds on the triage in [WINDOWS-SUPPORT-AUDIT.md](WINDOWS-SUPPORT-AUDIT.md) and the conclusions of a four-member council debate (Hale, Vance, Reese, Quill). The audit is the map; this is the route.
 
 **Date:** 2026-06-30

@@ -1,5 +1,10 @@
 # TELOS page — implementation requirements & plan
 
+> **⚠️ SUPERSEDED — historical record, do not execute.** Dated 2026-07-04 against v5.0.0; the repo
+> is at 7.1.1. Phases 1–4 shipped, so "No code is changed by this document" and the 65%/90% score
+> below are both stale. Remaining known gaps (owner identity null, fixture-blend on null fields,
+> metric sparklines) are tracked in `PROJECTS.md`, not here. `Releases/` paths are dead (`ea1dd8f0`).
+>
 > **Subject:** Finish the Pulse `/telos` page so it faithfully realizes Daniel Miessler's TELOS framework.
 > **Status:** `/telos` scored **65% completion / 90% maturity** in `docs/PULSESECTIONREPORT.md` — "UI-complete, partially data-wired."
 > **Generated:** 2026-07-04 · **Method:** codebase audit (`observability.ts`, `_v7/*`, `USER/TELOS/*`) + web research on Miessler's original TELOS (repo, Fabric patterns, danielmiessler.com), cross-checked against the fork's `data.ts`.

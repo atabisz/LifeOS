@@ -1,5 +1,10 @@
 # DA Personality - requirements and implementation plan
 
+> **⚠️ SUPERSEDED — historical record, do not execute.** Written against v5.0.0; the repo is at
+> 7.1.1. The Personality tab was built and enabled on 2026-07-04 (live `dd82be3`), so the
+> "Status: requirements + plan only" line below is no longer true. Paths naming `Releases/` are
+> dead — that tree was deleted in `ea1dd8f0`. Read for intent, not for instructions.
+>
 > Scope: the **Personality tab** of Pulse's `/assistant` page (identity, traits, preferences, anchors, companion, autonomy display, and the opinions/growth that feed personality). Sibling surfaces - heartbeat, scheduled tasks, diary mechanics - are already documented in `PAI/DOCUMENTATION/Pulse/DaSubsystem.md` and are out of scope here except where they feed the Personality view.
 >
 > Status: requirements + plan only. No feature code is written or committed by the task that produced this doc.

@@ -1,5 +1,11 @@
 # Windows support audit — files that assume macOS/Linux
 
+> **⚠️ HISTORICAL — v5.0.0-era audit, do not use as current state.** Dated 2026-06-30; the repo
+> is at 7.1.1. Its central comparison is against `Releases/v5.0.0`, a tree deleted in `ea1dd8f0`,
+> so every `Releases/` path below is dead and the "the release still ships these bugs" framing no
+> longer has a referent. Windows parity has since been fixed and CI-proven. Read for the failure
+> taxonomy, not for the status flags.
+
 This is a triage audit of where the LifeOS (PAI) codebase assumes a macOS or Linux environment and would break or degrade on Windows. It is a map for further work, not a set of fixes. Six parallel search agents swept the current code surface; this report consolidates what they found, ranks it by severity, and lists the files to analyze next.
 
 **Date:** 2026-06-30

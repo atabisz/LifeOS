@@ -1,5 +1,11 @@
 # LifeOS State — how it should update: requirements & plan
 
+> **⚠️ SUPERSEDED — Phase 1 landed, do not execute.** Dated 2026-07-04; the repo is at 7.1.1.
+> Live now satisfies this plan: `LIFEOS/TOOLS/UpdateLifeosState.ts` exists with all three hardening
+> items, `LIFEOS_STATE.json` is **not** empty (1612 bytes of scored per-dimension data), and the
+> recompute trigger is wired cross-platform via `DerivedSync.ts` (Pulse cron + SessionStart), which
+> settles the "macOS-only" premise in the line below.
+>
 > **Question that started this:** why is `LIFEOS_STATE.json` empty after `/interview`, and how *should* it update?
 > **Answer in one line:** the state updater isn't missing — an entire on-edit "managing state" pipeline exists in the canonical fork, but it's **macOS-only and absent from the live Windows tree**, `/interview` never seeds it, and the score it computes measures *"have you written your ideal"* not *"how close are you to it."*
 > **Generated:** 2026-07-04 · **Method:** 3-source web research (danielmiessler.com, github.com/danielmiessler, youtube.com/@unsupervised-learning) + code audit of the fork + live trees. **No code changed by this document** — implementation is a separate approved session.

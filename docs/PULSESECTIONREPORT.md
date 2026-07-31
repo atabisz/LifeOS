@@ -1,5 +1,11 @@
 # Pulse Web Interface — Section Goals & Completion Report
 
+> **⚠️ HISTORICAL SNAPSHOT (2026-06-30, v5.0.0-era) — the percentages are stale.** The repo is at
+> 7.1.1. This is a point-in-time completion report, so every score below aged the moment Pulse
+> changed; `/telos` in particular has since shipped Phases 1–4 against the 65%/90% recorded here,
+> and the DA `/assistant` subsystem was built 2026-07-03→04. Two other docs cite these numbers as
+> their baseline — treat them as the baseline they *were*, not current state.
+>
 > **Subject:** PAI Pulse ("PAI Observatory") — the Life Dashboard, a Next.js app on `http://localhost:31337`.
 > **Generated:** 2026-06-30 · **Pulse build:** `build_1778733456794` · **Probe:** all routes live, HTTP 200.
 > **Method:** Source read (`LIFEOS/PULSE/Observability/src/app/<route>/page.tsx`) + live HTTP probe, fanned out across 3 parallel `Explore` subagents grouped by nav cluster. Read-only — no Pulse files were modified.
