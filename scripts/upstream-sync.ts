@@ -99,12 +99,35 @@ function liveRoot(): string {
   return override ? path.resolve(override) : path.join(home, ".claude");
 }
 
-/** Rewrite a release-relative path into its PAI/-shaped baseline path. */
+/**
+ * Rewrite a release-relative path into its PAI/-shaped baseline path.
+ *
+ * Position-anchored, and case-folded ONLY at the framework root. Both halves of that
+ * sentence are load-bearing:
+ *
+ *   Case-folded at the root, because git records the payload framework root as `LIFEOS`
+ *   while this map only ever handled `LifeOS`. 532 release paths therefore entered the
+ *   classification union un-normalized under `LIFEOS/` AND again under `PAI/` from the
+ *   baseline walk — 269 live paths landed in both `conflict` and `take-unproven` with
+ *   contradicting verdicts, and 14 of 196 `add` rows were the same 14 files twice. The
+ *   runtime partition check (`sum == union`) cannot see this: it asserts every ENTRY
+ *   received a class, not that entries are distinct files.
+ *
+ *   NOT folded anywhere else, because a blanket case-insensitive match would rewrite
+ *   `LIFEOS/DOCUMENTATION/LifeOs/` into `PAI/DOCUMENTATION/PAI/`, while the baseline
+ *   really holds `PAI/DOCUMENTATION/LifeOs/`. The payload census is what makes the
+ *   anchoring safe: `LIFEOS` occurs only at depth 1 (532x), `LifeOS` only at depth 2
+ *   under `skills/` (23x), `LifeOs` only at depth 3 (4x, documentation).
+ */
 export function normalizeRelPath(rel: string): string {
   return rel
     .split("/")
-    .map((seg) => {
-      if (seg === "LifeOS") return "PAI"; // framework root dir rename
+    .map((seg, i) => {
+      // Framework root: fold case. Current payloads spell it LIFEOS, older ones LifeOS.
+      if (i === 0 && seg.toLowerCase() === "lifeos") return "PAI";
+      // A skill DIRECTORY named LifeOS is the installer skill; its baseline twin is
+      // skills/PAI. Exact-case on purpose — see the LifeOs caveat above.
+      if (i > 0 && seg === "LifeOS") return "PAI";
       if (seg === "LIFEOS_SYSTEM_PROMPT.md") return "PAI_SYSTEM_PROMPT.md";
       return seg;
     })
@@ -134,6 +157,28 @@ export function normalizeRelPath(rel: string): string {
  * with no live counterpart, and correctly read as "add"): `install.sh`,
  * `CLAUDE.template.md`, `settings.system.json`, `settings.enhancements.json`.
  */
+/**
+ * Rewrite a PAI/-shaped BASELINE path back into its path in the RELEASE payload.
+ *
+ * Extracted from two byte-identical inline `.map()` chains (classifyThreeWay and the
+ * --unproven renderer) so there is one place where the release spelling is decided.
+ * Both copies emitted `LifeOS` for the framework root; git records it as `LIFEOS`, so
+ * every release read resolved only because NTFS is case-insensitive and would miss
+ * silently on a case-sensitive checkout. The exact inverse of `normalizeRelPath`, so
+ * `toReleaseRelPath(normalizeRelPath(p)) === p` for every real payload path.
+ */
+export function toReleaseRelPath(baseRel: string): string {
+  return baseRel
+    .split("/")
+    .map((seg, i) => {
+      if (i === 0 && seg === "PAI") return "LIFEOS"; // framework root, as git spells it
+      if (i > 0 && seg === "PAI") return "LifeOS"; // the installer skill dir
+      if (seg === "PAI_SYSTEM_PROMPT.md") return "LIFEOS_SYSTEM_PROMPT.md";
+      return seg;
+    })
+    .join("/");
+}
+
 export function toLiveRelPath(baseRel: string): string {
   if (baseRel === "PAI/PAI_SYSTEM_PROMPT.md") return "LIFEOS/LIFEOS_SYSTEM_PROMPT.md";
   if (baseRel === "PAI" || baseRel.startsWith("PAI/")) return "LIFEOS" + baseRel.slice("PAI".length);
@@ -289,10 +334,7 @@ export function classifyPresence(
 
 function classifyThreeWay(baseRel: string): Klass {
   const baseAbs = path.join(BASELINE_ROOT, ...baseRel.split("/"));
-  const relRel = baseRel
-    .split("/")
-    .map((seg) => (seg === "PAI" ? "LifeOS" : seg === "PAI_SYSTEM_PROMPT.md" ? "LIFEOS_SYSTEM_PROMPT.md" : seg))
-    .join("/");
+  const relRel = toReleaseRelPath(baseRel);
   const releaseAbs = path.join(RELEASE_PAYLOAD, ...relRel.split("/"));
   const liveAbs = path.join(liveRoot(), ...toLiveRelPath(baseRel).split("/"));
 
@@ -402,10 +444,7 @@ function main(argv: string[]): number {
     console.log("which is the entire reason they are unproven):");
     const cap = showAll ? buckets["take-unproven"].length : 40;
     for (const rel of buckets["take-unproven"].slice(0, cap)) {
-      const relRel = rel
-        .split("/")
-        .map((seg) => (seg === "PAI" ? "LifeOS" : seg === "PAI_SYSTEM_PROMPT.md" ? "LIFEOS_SYSTEM_PROMPT.md" : seg))
-        .join("/");
+      const relRel = toReleaseRelPath(rel);
       const stat = gitStat(path.join(RELEASE_PAYLOAD, ...relRel.split("/")), path.join(liveRoot(), ...toLiveRelPath(rel).split("/")));
       console.log(`  UNPROVEN ${toLiveRelPath(rel)}  ${stat}`);
     }
@@ -482,6 +521,59 @@ function runSelfTest(): number {
     .filter((p) => p === "PAI" || p.startsWith("PAI/"));
   if (leaks.length === 0) pass += 1;
   else console.error(`FAIL anti: ${leaks.length} live path(s) still PAI/-rooted: ${leaks.join(", ")}`);
+
+  // ── CASE-SHAPE cases ────────────────────────────────────────────────────────
+  // The union double-count bug: git says the payload framework root is spelled LIFEOS,
+  // but the map only handled LifeOS, so 532 release paths entered the union
+  // un-normalized under LIFEOS/ AND again under PAI/ from the baseline walk — 269 live
+  // paths landed in both `conflict` and `take-unproven` with contradicting verdicts.
+  // Invisible to every fixture above because none used the real spelling, and invisible
+  // to the runtime partition check because that asserts every ENTRY got a class, not
+  // that entries are distinct files.
+  //
+  // The obvious fix is a trap: a blanket case-insensitive fold also rewrites
+  // LIFEOS/DOCUMENTATION/LifeOs/ into PAI/DOCUMENTATION/PAI/, where the baseline really
+  // has PAI/DOCUMENTATION/LifeOs/. The payload census is what makes the anchoring safe:
+  // LIFEOS appears only at position 1 (532x), LifeOS only at position 2 under skills/
+  // (23x, and skills/PAI is a real baseline dir), LifeOs only at position 3 (4x).
+  const caseCases: { name: string; in: string; want: string }[] = [
+    // The bug itself: the spelling git actually records for the payload root.
+    { name: "release root LIFEOS/ normalizes", in: "LIFEOS/ALGORITHM/LATEST", want: "PAI/ALGORITHM/LATEST" },
+    { name: "release root bare LIFEOS", in: "LIFEOS", want: "PAI" },
+    // Both spellings must converge, or the same logical file classifies twice.
+    { name: "LIFEOS and LifeOS converge", in: "LIFEOS/TOOLS/Inference.ts", want: normalizeRelPath("LifeOS/TOOLS/Inference.ts") },
+    // No regression on the pre-existing mappings.
+    { name: "no regression: LifeOS root still maps", in: "LifeOS/PULSE/pulse.ts", want: "PAI/PULSE/pulse.ts" },
+    { name: "no regression: system prompt basename", in: "LIFEOS/LIFEOS_SYSTEM_PROMPT.md", want: "PAI/PAI_SYSTEM_PROMPT.md" },
+    // The trap: a nested dir named LifeOs is documentation, NOT the framework root.
+    { name: "anti: nested LifeOs is NOT the framework root", in: "LIFEOS/DOCUMENTATION/LifeOs/LifeOsThesis.md", want: "PAI/DOCUMENTATION/LifeOs/LifeOsThesis.md" },
+    { name: "anti: nested lowercase lifeos untouched", in: "LIFEOS/TOOLS/lifeos/x.ts", want: "PAI/TOOLS/lifeos/x.ts" },
+    // skills/LifeOS is a SKILL name at position 2, and its baseline twin is skills/PAI.
+    { name: "skills/LifeOS maps to skills/PAI", in: "skills/LifeOS/SKILL.md", want: "skills/PAI/SKILL.md" },
+    // Reverse direction (baseline -> release payload). Duplicated inline at two call
+    // sites before this fix, both emitting LifeOS for the root — resolving only because
+    // NTFS is case-insensitive, and silently broken on a case-sensitive checkout.
+    { name: "reverse: PAI root emits the real LIFEOS spelling", in: "@rev:PAI/ALGORITHM/LATEST", want: "LIFEOS/ALGORITHM/LATEST" },
+    { name: "reverse: bare PAI root", in: "@rev:PAI", want: "LIFEOS" },
+    { name: "reverse: skills/PAI emits skills/LifeOS", in: "@rev:skills/PAI/SKILL.md", want: "skills/LifeOS/SKILL.md" },
+    { name: "reverse: system prompt basename", in: "@rev:PAI/PAI_SYSTEM_PROMPT.md", want: "LIFEOS/LIFEOS_SYSTEM_PROMPT.md" },
+    { name: "reverse anti: nested LifeOs untouched", in: "@rev:PAI/DOCUMENTATION/LifeOs/LifeOsThesis.md", want: "LIFEOS/DOCUMENTATION/LifeOs/LifeOsThesis.md" },
+    // Round-trip closure: every real payload path must survive both maps unchanged.
+    { name: "round-trip: LIFEOS root", in: "@rt:LIFEOS/ALGORITHM/LATEST", want: "LIFEOS/ALGORITHM/LATEST" },
+    { name: "round-trip: skills/LifeOS", in: "@rt:skills/LifeOS/SKILL.md", want: "skills/LifeOS/SKILL.md" },
+    { name: "round-trip: nested LifeOs docs", in: "@rt:LIFEOS/DOCUMENTATION/LifeOs/RenameMap.json", want: "LIFEOS/DOCUMENTATION/LifeOs/RenameMap.json" },
+    { name: "round-trip: system prompt", in: "@rt:LIFEOS/LIFEOS_SYSTEM_PROMPT.md", want: "LIFEOS/LIFEOS_SYSTEM_PROMPT.md" },
+  ];
+  for (const c of caseCases) {
+    total += 1;
+    const got = c.in.startsWith("@rev:")
+      ? toReleaseRelPath(c.in.slice(5))
+      : c.in.startsWith("@rt:")
+        ? toReleaseRelPath(normalizeRelPath(c.in.slice(4)))
+        : normalizeRelPath(c.in);
+    if (got === c.want) pass += 1;
+    else console.error(`FAIL case-shape ${c.name} → got ${got}, want ${c.want}`);
+  }
   // ── CLASSIFICATION cases ────────────────────────────────────────────────────
   // The old self-test was 16/16 green while three bucket labels were false, because it only
   // exercised path mapping. These cases test what a bucket MEANS. Each is written so that
