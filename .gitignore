@@ -67,5 +67,13 @@ credentials/
 .claude/pai_backups/
 .claude/.pai-sync-history
 
+# Per-run Algorithm ISAs. Matches the live ~/.claude convention, where
+# LIFEOS/MEMORY/WORK/ is ignored: an ISA is the system of record for ONE run,
+# written to disk and never committed. Three complete ISAs sat untracked here
+# for weeks reading as uncommitted work. Consequence worth knowing: an ISA is
+# NOT recoverable from git history, so anything durable belongs in the commit
+# message or in MEMORY/, not only in the ISA.
+MEMORY/WORK/
+
 # Added by ggshield
 .cache_ggshield
