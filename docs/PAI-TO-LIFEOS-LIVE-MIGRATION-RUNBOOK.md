@@ -3,9 +3,10 @@
 > A reusable, trap-first runbook for renaming a **running** PAI-shaped framework install
 > (`~/.claude/PAI/`) to the LIFEOS identity (`~/.claude/LIFEOS/`) on any machine.
 >
-> Written from a completed live migration, not a forecast. It supersedes the pre-execution
-> `LIVE-PAI-TO-LIFEOS-MIGRATION-PLAN.md`, whose forecasts were partly wrong — the corrections
-> are called out inline (see "Corrections to the pre-execution plan"). **Probe your own tree;
+> Written from a completed live migration, not a forecast. It supersedes the pre-execution plan
+> (deleted once executed; recoverable at `git show ced07251:docs/LIVE-PAI-TO-LIFEOS-MIGRATION-PLAN.md`),
+> whose forecasts were partly wrong — the corrections are called out inline (see "Corrections to
+> the pre-execution plan"). **Probe your own tree;
 > do not trust any count, path, or process id in this document as a constant — yours will differ.**
 
 ## What this is (and is not)
@@ -319,7 +320,8 @@ in that repo** — it's a different repo with its own risk profile; do not fold 
 
 ## Corrections to the pre-execution plan
 
-If you're reading the older `LIVE-PAI-TO-LIFEOS-MIGRATION-PLAN.md`, note these forecasts that execution
+The pre-execution plan was deleted once the cut was done — it is recoverable at
+`git show ced07251:docs/LIVE-PAI-TO-LIFEOS-MIGRATION-PLAN.md`. These are the forecasts execution
 refuted (probe your own tree — the point is that plans mis-estimate; runbooks encode what actually held):
 
 - **"52 `@PAI/` imports in CLAUDE.md."** The plan conflated `@PAI/` imports with total `PAI/` path

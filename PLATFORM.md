@@ -130,7 +130,7 @@ This document tracks all platform-specific code and dependencies across PAI, pro
     - **Auto-start:** `PULSE/start-pulse-hidden.vbs` starts the Pulse daemon hidden at logon (the Windows equivalent of the LaunchAgent/systemd unit).
     - **Shell scripts / hooks:** the installer normalizes each hook's interpreter per-OS at config-generation time (`PAI-Install/engine/actions.ts` `normalizePaiHookCommands` — Windows adds a `bun.exe`/`bash` prefix; mac/Linux is a byte-identical no-op). Claude Code launches hooks through Git Bash `sh`, which is required on Windows.
     - **CI:** `.github/workflows/windows-smoke.yml` runs the hook launch-parity smoke test on `windows-latest`; the first live run is green (`0 LAUNCH-FAIL`).
-    - **How it was done:** see the field report [WINDOWS-INSTALL.md](docs/WINDOWS-INSTALL.md) and the implementation plan [WINDOWS-SUPPORT-PLAN.md](docs/WINDOWS-SUPPORT-PLAN.md).
+    - **How it was done:** see the field report [WINDOWS-INSTALL.md](docs/WINDOWS-INSTALL.md). The v5.0.0-era audit and staged implementation plan were retired once the work shipped — recoverable at `git show ced07251:docs/WINDOWS-SUPPORT-PLAN.md` and `git show ced07251:docs/WINDOWS-SUPPORT-AUDIT.md`.
 
     **Remaining gaps (community contributions welcome):**
     - **Notifications:** no native Windows Toast integration yet (voice + Pulse dashboard work; toast is the open item).

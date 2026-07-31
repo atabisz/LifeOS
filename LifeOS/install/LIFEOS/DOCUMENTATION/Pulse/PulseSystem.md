@@ -24,7 +24,7 @@ Every Pulse module is a sub-surface of the Dashboard: real-time observability, v
 
 ## Design intent & section mapping
 
-Pulse's sections are not an arbitrary set of tabs — each one is a surface of the **Current State → Ideal State** hill-climb the OS exists to run (see `LifeOsThesis.md` → "The Core Loop" and its DOM lineage). This section records the design intent that governs *which* sections exist and *what "done" means* for each, so the dashboard can be validated against Daniel Miessler's design rather than only against "does it render." The detailed, per-section, sourced reconstruction lives in the validation report `docs/PULSESECTIONREPORT.md`; this is the canonical summary of its frame.
+Pulse's sections are not an arbitrary set of tabs — each one is a surface of the **Current State → Ideal State** hill-climb the OS exists to run (see `LifeOsThesis.md` → "The Core Loop" and its DOM lineage). This section records the design intent that governs *which* sections exist and *what "done" means* for each, so the dashboard can be validated against Daniel Miessler's design rather than only against "does it render." This is the canonical summary of that frame; the point-in-time validation report it was distilled from was retired once its completion percentages went stale (recoverable at `git show ced07251:docs/PULSESECTIONREPORT.md`).
 
 ### Two ceilings — "displays data" vs "the DA acts"
 
