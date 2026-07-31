@@ -275,7 +275,7 @@ function classify(baseAbs: string | null, otherAbs: string | null): "same" | "di
  *   mine     = did LIVE    change vs BASELINE?   (your divergence)
  *
  * => add        : release has it, live lacks it            → candidate port
- *    local-only : live has it, release doesn't             → your own file, ignore
+ *    local-only : STRUCTURALLY UNREACHABLE here — see the note at the count
  *    take        : upstream changed, you did NOT            → safe to land
  *    conflict    : BOTH changed (or live differs + upstream also moved) → review, never auto-take
  *    unchanged   : neither changed
@@ -399,7 +399,16 @@ function main(argv: string[]): number {
   console.log(`  conflict        ${buckets.conflict.length}  — pin HAS it, live DIFFERS from pin → your line; NEVER auto-take`);
   console.log(`  add             ${buckets.add.length}  — release has it, live lacks it → candidate port`);
   console.log(`  upstream-deleted ${buckets["upstream-deleted"].length}  — pin HAS it, release DROPPED it, live still has it → adopt the deletion?`);
-  console.log(`  local-only      ${buckets["local-only"].length}  — no pin entry and not in release → genuinely your own file`);
+  // This count is STRUCTURALLY 0 and must be read as "not measured", never as "live has no
+  // files of its own". `local-only` needs no-base AND no-release, but the classified set is
+  // walk(BASELINE) ∪ walk(RELEASE) — a live-only path is not a member, so classifyThreeWay is
+  // never called on it. The bucket is kept because classifyPresence is a total function over
+  // all eight presence combinations and the self-test asserts that branch; only the production
+  // union cannot reach it. Measured 2026-07-31: 1443 live files under LIFEOS/ skills/ hooks/
+  // agents/ sit outside the union. A 0 next to the words "genuinely your own file" invited
+  // exactly the wrong reading — that this channel had audited them and found none.
+  console.log(`  local-only      ${buckets["local-only"].length}  — ALWAYS 0: unreachable, the classified set is baseline ∪ release,`);
+  console.log(`                        so live-only files are never classified. NOT a measurement of your own files.`);
   console.log(`  pin-ghost       ${buckets["pin-ghost"].length}  — pin only: absent from BOTH release and live → nothing to land`);
   console.log(`  unchanged       ${buckets.unchanged.length}  — identical`);
   console.log(`  (sum ${bucketTotal} == union ${baseRels.size} ✓)\n`);
@@ -634,6 +643,33 @@ function runSelfTest(): number {
   const unknown = [...allKlasses].filter((k) => !known.includes(k));
   if (unknown.length === 0) pass += 1;
   else console.error(`FAIL partition: unexpected class(es) ${unknown.join(", ")}`);
+
+  // `local-only` is a total-function branch that the PRODUCTION union cannot reach, and the
+  // printed 0 must never be read as "audited your files, found none". The claim is asserted,
+  // not just commented: the only way to reach the branch is a path absent from BOTH baseline
+  // and release, and the classified set is the union of exactly those two walks. If someone
+  // later adds a live walk to that union, this case fails and forces the label to be revisited.
+  total += 1;
+  {
+    // Reconstruct the membership rule over synthetic roots: a member must exist in >=1 of the
+    // two walked trees, which is precisely the negation of local-only's precondition.
+    const memberOf = (inBase: boolean, inRel: boolean) => inBase || inRel;
+    const reachable = [false, true].flatMap((inBase) =>
+      [false, true].map((inRel) => ({ inBase, inRel })),
+    ).filter(({ inBase, inRel }) => {
+      if (!memberOf(inBase, inRel)) return false; // not classified at all
+      const k = classifyPresence(inBase ? B("p") : null, inRel ? B("r") : null, B("mine"));
+      return k === "local-only";
+    });
+    if (reachable.length === 0) pass += 1;
+    else console.error(`FAIL anti: local-only reachable from the baseline∪release union in ${reachable.length} case(s) — the printed count is no longer structurally 0, so its label must change`);
+  }
+  // Control for the case above: with a live-only path treated as a member (the hypothetical
+  // third walk), the branch MUST become reachable. Without this, the assertion above would
+  // pass just as happily if classifyPresence had stopped returning local-only altogether.
+  total += 1;
+  if (classifyPresence(null, null, B("mine")) === "local-only") pass += 1;
+  else console.error(`FAIL control: local-only is no longer produced for a live-only path, so the unreachability assertion above proves nothing`);
 
   console.log(`${pass}/${total} passed`);
   return pass === total ? 0 : 1;
