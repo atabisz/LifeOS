@@ -199,8 +199,10 @@ const SCAFFOLD_ZONES = [
  * path live does not read, while live holds its own copy elsewhere. Landing one adds a
  * second source of truth silently — no overwrite, no conflict, no diff against anything
  * live consumes. Adjudicated in docs/DIVERGENT-DUPE-DISPOSITIONS.md, evidence in
- * MEMORY/WORK/resolve-divergent-dupes/ISA.md (24/24). Live consumers of each of the four
- * payload locations: ZERO, probed.
+ * MEMORY/WORK/resolve-divergent-dupes/ISA.md (24/24). Live consumers of each of those
+ * payload locations: ZERO, probed. The 2026-07-31 voice-pair rows were adjudicated
+ * separately (MEMORY/WORK/20260731-execute-recommended-next-steps/ISA.md) on live's own
+ * VoiceSummary.hook.ts docblock, which records absorbing both.
  *
  * Keys are EXACT, not prefixes: an exact key cannot silently over-refuse a sibling that
  * upstream later adds to the same directory. The cost of exactness is brittleness to an
@@ -262,6 +264,22 @@ const REFUSED_ADDS: Record<string, string> = {
   // is a claim this channel cannot verify. Refused rather than committed with a bypass —
   // never disable a scanner to land a file.
   //
+  // Upstream's ORIGINAL Stop voice pair. Live absorbed both into a single replacement hook
+  // on 2026-07-28 and says so in its own docblock (hooks/VoiceSummary.hook.ts): "THE SINGLE
+  // Stop VOICE HOOK. This absorbed VoiceCompletion.hook.ts + handlers/VoiceNotification.ts
+  // ... Those were the original upstream pair, never wired here; this hook is the later local
+  // replacement that took their place on Stop. Wiring both would have spoken every turn
+  // twice, so the four things the old pair did better were ported in instead" — subagent gate,
+  // content validation, OSC-9 desktop fallback, and event logging, plus the previously-orphaned
+  // isDesktopChannel guard. So the content is already live at a path live actually dispatches;
+  // these two are the pre-absorption originals. Landing them is worse than inert: settings.json
+  // registers neither (probed, rg exit 1 with a passing positive control), so they arrive
+  // dormant — and the moment anyone "fixed" that by wiring them, every turn would be spoken
+  // twice. Refused rather than landed-and-left-dormant, which would leave a second source of
+  // truth for Stop voice sitting one settings.json edit away from a regression.
+  "hooks/VoiceCompletion.hook.ts": "divergent: live's hooks/VoiceSummary.hook.ts absorbed this on 2026-07-28 and is the registered Stop voice hook; landing it re-splits Stop voice and wiring both would speak every turn twice",
+  "hooks/handlers/VoiceNotification.ts": "divergent: absorbed into live's hooks/VoiceSummary.hook.ts (2026-07-28) along with its VoiceCompletion caller; landing the handler alone adds an unreferenced second voice path",
+
   // Safe to hold back: HealthSync.ts reaches sources through a DYNAMIC import
   // (`await import("./healthsync/${source}.ts")`, line 152), so the absent file breaks only
   // `--source eightsleep`, not the tool — probed, `--help` exits 0 with the file removed.
@@ -534,11 +552,17 @@ function runSelfTest(): number {
   // ── INVARIANT 8: decided refusals are ENFORCED, not documented ───────────────
   // The failure this guards is a decision that survives only in a markdown table: the
   // original 12 rows were adjudicated, and before this gate existed the plan still reported
-  // all 12 as will-add. Now 18: +5 USER_TEMPLATES siblings (the rename refactor was refused
+  // all 12 as will-add. Then 18: +5 USER_TEMPLATES siblings (the rename refactor was refused
   // only in part) and +1 hardcoded-credential refusal, which is a SECOND refusal class —
-  // faithful, not divergent, and still wrong to write into live.
+  // faithful, not divergent, and still wrong to write into live. Now 20: +2 for upstream's
+  // original Stop voice pair, which live's VoiceSummary.hook.ts absorbed on 2026-07-28.
+  //
+  // This count alone is a WEAK guard — a bare total goes green on a half-finished edit, so it
+  // is the class check below (every reason tagged divergent:/secret:) and the STALE-key report
+  // at plan time that do the structural work. The count's only job is to make a silent DROP of
+  // an adjudicated row loud.
   const refusedKeys = Object.keys(REFUSED_ADDS);
-  checks.push({ name: "refuse: REFUSED_ADDS holds exactly 18 adjudicated rows", got: refusedKeys.length === 18, want: true });
+  checks.push({ name: "refuse: REFUSED_ADDS holds exactly 20 adjudicated rows", got: refusedKeys.length === 20, want: true });
   // Every row states its class, so a reader can tell a divergence refusal from a secret one
   // without reading the surrounding comment block.
   checks.push({
