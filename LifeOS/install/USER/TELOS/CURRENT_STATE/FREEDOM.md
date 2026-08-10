@@ -1,4 +1,5 @@
 ---
+provenance: template
 dimension: freedom
 classification: private
 auto_populated: partial
@@ -9,9 +10,9 @@ convention: pai-freshness-v1
 
 # Current State — Freedom
 
-> 🎯 SAMPLE TEMPLATE — placeholder. Pulse reads the `status:` rows below to compute your freedom coverage %. Run `/interview` to replace `missing` with your real state.
+> 🎯 SAMPLE TEMPLATE — placeholder. Pulse reads the `status:` rows below to compute your freedom coverage %. Run `/interview` to replace `missing` with your real state. Values: `have` | `partial` | `missing`.
 
-- Meeting load: status: missing
-- Deep work: status: missing
-- Time boundaries: status: missing
-- Autonomy: status: missing
+- Time control: status: missing
+- Location: status: missing
+- Commitments: status: missing
+- Optionality: status: missing

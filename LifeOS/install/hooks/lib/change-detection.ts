@@ -7,7 +7,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join, relative, basename, isAbsolute } from 'path';
-import { getLifeosDir } from './paths';
+import { getLifeosDir, getClaudeDir } from './paths';
 
 // ============================================================================
 // Types
@@ -53,6 +53,10 @@ export interface IntegrityState {
 // ============================================================================
 
 const LIFEOS_DIR = getLifeosDir();
+// LifeOS spans TWO roots. CLAUDE_DIR (~/.claude) holds hooks, skills,
+// settings.json, agents and CLAUDE.md; LIFEOS_DIR (~/.claude/LIFEOS) holds the
+// data tree. Containment must accept both — see categorizeChange().
+const CLAUDE_DIR = getClaudeDir();
 const STATE_FILE = join(LIFEOS_DIR, 'MEMORY', 'STATE', 'integrity-state.json');
 
 // The core system docs — the files that define how a LifeOS subsystem behaves.
@@ -223,21 +227,36 @@ function normalizeToRelativePath(absolutePath: string): string {
 }
 
 /**
- * Reduce a path to its LIFEOS-relative, forward-slashed form, or null when it
- * does not lie under LIFEOS_DIR.
+ * Reduce a path to its root-relative, forward-slashed form, or null when it does
+ * not lie under `root`.
  *
  * `path.relative` handles the separator and drive-letter-case differences for us;
  * what it does NOT do is tell us the child escaped the parent, so the `..` and
  * absolute-result tests are load-bearing. Without them a sibling directory whose
  * name merely starts with the parent's (`…/LIFEOSEXTRA/HookSystem.md`) would
  * resolve to a plausible-looking relative path and match the pattern.
+ *
+ * Parameterized over the root because LifeOS spans two of them — see
+ * categorizeChange(). A relative input is resolved against the same root it is
+ * being tested for containment in, which is what makes the two-root check at that
+ * site symmetric.
  */
-function lifeosRelative(inputPath: string): string | null {
-  const absolutePath = isAbsolute(inputPath) ? inputPath : join(LIFEOS_DIR, inputPath);
-  const rel = relative(LIFEOS_DIR, absolutePath);
+function rootRelative(inputPath: string, root: string): string | null {
+  const absolutePath = isAbsolute(inputPath) ? inputPath : join(root, inputPath);
+  const rel = relative(root, absolutePath);
   if (rel === '') return '';
   if (rel.startsWith('..') || isAbsolute(rel)) return null;
   return rel.split(/[\\/]/).join('/');
+}
+
+/** LIFEOS_DIR-relative form. The core-system-doc pattern is written against this. */
+function lifeosRelative(inputPath: string): string | null {
+  return rootRelative(inputPath, LIFEOS_DIR);
+}
+
+/** True when `inputPath` lies under `root` — sibling-prefix safe, unlike startsWith. */
+function withinRoot(inputPath: string, root: string): boolean {
+  return rootRelative(inputPath, root) !== null;
 }
 
 /**
@@ -287,26 +306,36 @@ export function categorizeChange(path: string): ChangeCategory | null {
     }
   }
 
-  // Check if path is within LifeOS directory, via the same helper isCoreSystemDoc
-  // uses — one containment rule, not two.
+  // Check if path is within LifeOS. Two independent defects met on these lines
+  // and the fix needs BOTH halves.
   //
-  // This site used to read `path.startsWith('/') ? path : join(LIFEOS_DIR, path)`
-  // followed by a raw `startsWith(LIFEOS_DIR)` test. The POSIX literal was false
-  // for a Windows absolute path like `D:\other\x.md`, so such a path was join()ed
-  // onto LIFEOS_DIR and then trivially satisfied its own prefix check: on Windows
-  // every path on every drive read as in-tree, and the check was decorative.
+  // (1) TWO ROOTS, not one. Transcripts record ABSOLUTE paths, and hooks /
+  //     skills / settings.json live under CLAUDE_DIR, not LIFEOS_DIR — so
+  //     testing LIFEOS_DIR alone returned null for every hook, skill and config
+  //     edit. That silently emptied the `category !== null` filter in
+  //     isSignificantChange() and shouldDocumentChanges(), and the integrity and
+  //     documentation pipelines never fired for hook or skill work, which is
+  //     most system work. Measured on a live transcript: 9 file changes, 6 of
+  //     them hooks, all categorized null and reported "not significant".
+  //     Routing this through lifeosRelative() — which is LIFEOS_DIR-only by
+  //     construction — reproduces that same defect, so containment is tested
+  //     against both roots rather than delegated to that helper.
   //
-  // Fixing the is-absolute test makes the containment check load-bearing, which
-  // exposed the second half of the defect: a raw prefix `startsWith` also admits
-  // a SIBLING whose name merely begins with the parent's (`…/LIFEOSEXTRA/x.md`).
-  // lifeosRelative already handles both — it derives the relative form and
-  // rejects the `..`/absolute escapes a prefix test cannot see. The census this
-  // narrowing was owed is in the ISA: the only category change is out-of-tree
-  // absolute input, which now returns null instead of a bogus category.
-  if (lifeosRelative(path) === null) {
+  // (2) isAbsolute, NOT startsWith('/'). The POSIX literal is false for a
+  //     Windows absolute path like `D:\other\x.md`, so such a path was join()ed
+  //     onto the root and then trivially satisfied its own prefix check: on
+  //     Windows every path on every drive read as in-tree and the check was
+  //     decorative. A relative input still joins onto CLAUDE_DIR, which is the
+  //     wider of the two roots and therefore the correct default.
+  //
+  // A raw prefix `startsWith` cannot express (1) safely on its own: it also
+  // admits a SIBLING whose name merely begins with the root's
+  // (`…/.claudeEXTRA/x.md` passes `startsWith('…/.claude')`). withinRoot derives
+  // the relative form instead, so both roots are accepted and neither root's
+  // prefix-siblings are.
+  if (!withinRoot(path, CLAUDE_DIR) && !withinRoot(path, LIFEOS_DIR)) {
     return null;
   }
-  const absolutePath = isAbsolute(path) ? path : join(LIFEOS_DIR, path);
 
   // Core system docs are tested FIRST, ahead of every location branch. The test
   // used to sit inside the skills/ branch below, where no core doc can reach it —

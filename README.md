@@ -69,9 +69,9 @@ Either path needs a capable AI coding harness — we build and run on [Claude Co
 
 ## Core Components
 
-**The unique features** — the parts you won't find anywhere else, plus the subsystems underneath. See them live and click through on **[ourlifeos.ai](https://ourlifeos.ai)**.
+**The unique features** — the parts you won't find anywhere else. Anything a good harness already provides on its own (built-in subagents, for example) isn't listed; this is only what LifeOS adds. See them live and click through on **[ourlifeos.ai](https://ourlifeos.ai)**.
 
-<a href="https://ourlifeos.ai"><img src="images/lifeos-core-components.png" width="100%" alt="LifeOS core components — Current→Ideal State, Intent Engineering, General Hill Climbing, Euphoric Surprise, TELOS, the Algorithm, the ISA System, the Skill System, the Hook System, Pulse, Custom Spinner Verbs, and Custom Tooltips. Click to explore them live on ourlifeos.ai." /></a>
+<a href="https://ourlifeos.ai"><img src="images/lifeos-core-components.png" width="100%" alt="LifeOS core components — Current→Ideal State, Intent Engineering, General Hill Climbing, Euphoric Surprise, TELOS, the Algorithm, Arbol, Bunker, the ISA System, Cortex, Synapse, Atlas, Ledger, the Skill System, the Hook System, Pulse, Voice, Learning, Security, the Hermes Sidecar, Custom Spinner Verbs, and Custom Tooltips. Click to explore them live on ourlifeos.ai." /></a>
 
 ---
 
@@ -258,6 +258,13 @@ badosanjos · benoitdepaire · bnkath2o · brycemagera · catchingknives · DAES
 <summary><strong>📜 Update History</strong></summary>
 
 <br/>
+
+**v7.28.3 — Cortex, Hermes, and hardened releases**
+- **Cortex** — the memory system, named: hot-layer memory, a typed Knowledge Archive (People, Companies, Ideas, Research), learnings, and work history, consolidated across sessions so each one starts smarter than the last.
+- **Hermes sidecar** — an optional second front door: talk to your LifeOS as an agent from a terminal, with the same constitution, identity, and skills. One brain, another way in.
+- **Named subsystems** — Synapse (the input router), Conduit and Feed (the internal and external senses), Atlas (the live asset graph), and Ledger (change tracking), each a product within the product.
+- **Release-security hardening** — three new deterministic gates (sanitizer-residue, licensed-font, dead-legacy-doc-pointer); previously-shipped commercially licensed fonts removed.
+- [Full release notes](https://github.com/danielmiessler/LifeOS/releases)
 
 **v7.1.1 — Install Awareness**
 - **Doctor** — `bun LIFEOS/TOOLS/Doctor.ts` reports the real state of every optional capability (live, broken, declined, stale) and reconciles hooks on disk against what's registered.
