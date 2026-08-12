@@ -70,6 +70,26 @@
  *     because the live repo's ggshield pre-commit would block it and because "the vendor
  *     published this constant" is a claim this channel cannot verify — the fix is to port
  *     the file reading the value from .env, never to bypass the scanner to land it.
+ *  9. PATH IDENTITY IS CASE-EXACT. A payload path whose live twin differs ONLY by case is
+ *     HELD, never written. This is not tidiness — it is the same divergent-duplicate harm
+ *     as INVARIANT 8, arriving through a channel a hand-maintained list cannot cover, and
+ *     it lands DIFFERENTLY on each filesystem:
+ *       - case-insensitive (Windows/APFS): `existsSync` case-folds, so a file-level twin
+ *         is already caught by INVARIANT 1 — but a DIRECTORY-level twin is not. Writing
+ *         `DOCUMENTATION/ISA/ISAFormat.md` when live tracks `DOCUMENTATION/Isa/` puts the
+ *         bytes at `Isa/ISAFormat.md`, a path this tool never printed. INVARIANT 4 promises
+ *         verbatim bytes; without this guard nothing promised the printed PATH.
+ *       - case-sensitive (Linux/case-sensitive volumes): INVARIANT 1 catches NONE of them, so
+ *         this guard is the only thing holding them. Measured 2026-08-12 against live's git
+ *         index (case-sensitive, unlike the FS): 41 payload files differ from a live file by
+ *         case alone. 37 are under `skills/` and INVARIANT 3 holds those on every host; the
+ *         remaining 4 — DOCUMENTATION/ISA/{ISAHierarchy,ISAHtmlMirror,ISASystem}.md and
+ *         TOOLS/ISAReconcile.ts — would land as silent second copies of live's `Isa/`-spelled
+ *         originals. So the tool's behaviour would otherwise depend on the host's FS.
+ *     Fail-closed by construction: an unadjudicated case twin is held with its reason,
+ *     rather than needing someone to have foreseen it in REFUSED_ADDS. Discovered the hard
+ *     way — the ISAFormat refusal below was BYPASSED by exactly this, and upstream itself
+ *     hit the same class (7dd46541 dropped its own case-folded `Isa/` index entries).
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -154,6 +174,44 @@ function realDestWithin(destAbs: string, root: string): { ok: boolean; resolved:
   return { ok: isUnder(resolved, realOrSelf(root)), resolved };
 }
 
+/**
+ * INVARIANT 9. Returns the live path that collides with `rel` only by CASE, or null.
+ *
+ * Walks `rel` segment by segment against the real live tree and stops at the first segment
+ * that is absent under its own spelling but present under another. That is the only case worth
+ * holding: if the segment matches exactly the walk continues, and if nothing matches at all the
+ * subtree is genuinely new and the add is safe.
+ *
+ * `readdirSync` per segment is the point — it reads the spelling the FILESYSTEM stores.
+ * `existsSync` cannot answer this question at all on a case-insensitive host: it returns true
+ * for a path that is not there under that name, which is exactly how the ISAFormat refusal was
+ * bypassed and how a plan row can print a path the write does not use.
+ *
+ * Called only after INVARIANT 1 (skip-exists) has already passed, so an exact full-path match
+ * is not a case this needs to rule on — hence the final `null` for a fully-present path.
+ */
+function caseOnlyCollision(rel: string, root: string): string | null {
+  const parts = rel.split("/");
+  let cur = root;
+  for (let i = 0; i < parts.length; i++) {
+    const want = parts[i]!;
+    let names: string[];
+    try {
+      names = readdirSync(cur);
+    } catch {
+      return null; // parent absent or not a directory: nothing to collide with
+    }
+    if (names.includes(want)) {
+      cur = path.join(cur, want);
+      continue;
+    }
+    const other = names.find((n) => n.toLowerCase() === want.toLowerCase());
+    if (other) return [...parts.slice(0, i), other].join("/");
+    return null; // new from here down
+  }
+  return null;
+}
+
 const TEXT_EXTS = new Set([
   ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".md", ".mdx", ".json", ".jsonc",
   ".toml", ".yaml", ".yml", ".sh", ".bash", ".zsh", ".txt", ".css", ".scss", ".html", ".hbs",
@@ -234,9 +292,30 @@ const REFUSED_ADDS: Record<string, string> = {
   "LIFEOS/TOOLS/llcli/README.md": "divergent: differs from LIFEOS/bin/llcli/README.md only by the new path + upstream anonymizer swaps",
   "LIFEOS/TOOLS/llcli/QUICKSTART.md": "divergent: every changed line vs LIFEOS/bin/llcli/QUICKSTART.md is the Bin/llcli -> TOOLS/llcli path",
 
-  // Upstream nested the ISA spec one level deeper. Live pins DOCUMENTATION/IsaFormat.md
-  // from CLAUDE.md:106, DOCUMENTATION/Isa/IsaSystem.md:7 and :155, skills/ISA/SKILL.md:212.
-  "LIFEOS/DOCUMENTATION/Isa/IsaFormat.md": "divergent: live reads DOCUMENTATION/IsaFormat.md (20+ consumers); payload is spec v2.13.0 for Algorithm v6.25.0 while live runs 6.4.19 — an Algorithm-version decision, not a file add",
+  // RE-KEYED 2026-08-12. This row was `LIFEOS/DOCUMENTATION/Isa/IsaFormat.md` and had gone
+  // STALE — upstream `7dd46541` (2026-07-29) dropped its own case-folded `DOCUMENTATION/Isa/`
+  // index entries as "case-fold collision with ISA/", then `36c6f01e` (release 7.28.3) added
+  // the four `DOCUMENTATION/ISA/*` docs fresh. So the refusal key named a path upstream no
+  // longer ships while its successor sat in the will-add set: a decided refusal, bypassed by a
+  // rename this list is exact about on purpose. INVARIANT 9 now catches the class; this row
+  // keeps the DECISION, which the computed guard cannot state.
+  //
+  // The old reason is also void, and inverted: it said "payload is spec v2.13.0 for Algorithm
+  // v6.25.0 while live runs 6.4.19". Live now runs Algorithm 8.18.0 and its own spec doc still
+  // reads v2.7 (Algorithm v6.3.0), so the PAYLOAD is the fresher document (v2.18.0, Algorithm
+  // v8.12.0, 81,561 B vs live's 50,567 B). The refusal stands anyway, on two grounds that do
+  // not depend on which copy is newer:
+  //   1. 100 live files reference `IsaFormat.md` at the flat DOCUMENTATION/ path. A second copy
+  //      one directory down is read by none of them.
+  //   2. The v8 graft already adjudicated the CONTENT and refused it — `LIFEOS/ALGORITHM/
+  //      v8.18.0.md:84` records that upstream's v2.18.0 drops `DEFERRED-VERIFY` and replaces
+  //      `[FOG]` with a `## Not yet specified` section, while 33 live ISAs use DEFERRED-VERIFY
+  //      and `hooks/lib/isa-utils.ts` exports it in BOX_STATES with ten registered hooks
+  //      depending on it. Landing this file would put a spec that deletes a mechanically
+  //      enforced vocabulary into the tree beside the one that defines it.
+  // So the remedy is a doctrine decision at live's own path, not an add — the same shape as
+  // every other `divergent:` row here.
+  "LIFEOS/DOCUMENTATION/ISA/ISAFormat.md": "divergent: live reads DOCUMENTATION/IsaFormat.md (100 referring files); payload's v2.18.0 deletes DEFERRED-VERIFY and [FOG], which 33 live ISAs and BOX_STATES in hooks/lib/isa-utils.ts mechanically depend on — refused as doctrine by ALGORITHM/v8.18.0.md:84, so adopting it is a port at the live path, not a file add",
 
   // Upstream renamed TEMPLATES/User/ -> USER_TEMPLATES/. The whole directory is the same
   // refactor, so all 6 rows are refused, not just the one the overlap census surfaced.
@@ -325,14 +404,87 @@ const REFUSAL_DISCHARGED: Record<string, { landedIn: string; why: string; probe:
   },
 };
 
+/**
+ * Refusals whose PAYLOAD file upstream has deleted. The decision is kept; the path is gone.
+ *
+ * AUDIT B reports any refusal key matching no payload file, because an exact key is brittle to
+ * an upstream rename and a key protecting nothing must never read as coverage. That arm is
+ * correct and stays. What it could not do is tell the two causes apart, and they need opposite
+ * responses:
+ *   - upstream MOVED the file -> the refusal is BYPASSED. Its successor is in the write set
+ *     right now. Act immediately.
+ *   - upstream DELETED the file -> the refusal is DORMANT. Nothing can land, nothing to do.
+ * Reported identically, 11 rows deep, the second kind drowns the first: that is precisely how
+ * the ISAFormat row above sat bypassed while its warning printed every run. An entry here is
+ * the second case, adjudicated, so the loud arm is left holding only rows that need a human.
+ *
+ * The keys stay in REFUSED_ADDS deliberately rather than being deleted. Upstream restoring a
+ * path is a real event (release 7.28.3 both deleted and re-added files), and a deleted key
+ * would let the restored file land silently. Retiring RE-ARMS: the moment the path reappears in
+ * the payload, the refusal is enforced again and the retirement is reported as no longer holding.
+ *
+ * Like REFUSAL_DISCHARGED, an entry here is a CLAIM — "upstream does not ship this" — so it is
+ * re-probed against the payload every run instead of trusted.
+ */
+const RETIRED_REFUSALS: Record<string, { droppedIn: string; why: string }> = {
+  // Upstream deleted all six in release 7.28.3. Live's copies are untouched at skills/Agents/,
+  // which is the path live's 10 agent definitions and LoadAgentContext.ts already read — i.e.
+  // the divergence the refusal was protecting against no longer has a payload side.
+  "agents/ForgeContext.md": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps skills/Agents/ForgeContext.md" },
+  "agents/CodexResearcherContext.md": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps skills/Agents/CodexResearcherContext.md" },
+  "agents/GrokResearcherContext.md": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps skills/Agents/GrokResearcherContext.md" },
+  "agents/ClaudeResearcherContext.md": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps skills/Agents/ClaudeResearcherContext.md" },
+  "agents/GeminiResearcherContext.md": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps skills/Agents/GeminiResearcherContext.md" },
+  "agents/PerplexityResearcherContext.md": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps skills/Agents/PerplexityResearcherContext.md" },
+
+  // Same release deleted the whole TOOLS/llcli/ directory, and upstream now ships no LIFEOS/bin/
+  // either — so llcli has left the payload entirely. The port these rows protected is intact:
+  // live LIFEOS/bin/llcli/ still holds all four files, and it is now the only copy anywhere.
+  "LIFEOS/TOOLS/llcli/llcli.ts": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3, and upstream ships no LIFEOS/bin/ either; the ported live copy at LIFEOS/bin/llcli/llcli.ts is now the only one" },
+  "LIFEOS/TOOLS/llcli/package.json": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps LIFEOS/bin/llcli/package.json" },
+  "LIFEOS/TOOLS/llcli/README.md": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps LIFEOS/bin/llcli/README.md" },
+  "LIFEOS/TOOLS/llcli/QUICKSTART.md": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps LIFEOS/bin/llcli/QUICKSTART.md" },
+};
+
+/**
+ * Split refusal keys that match no payload file into the three cases that need different
+ * responses. Pure and exported so the self-test can grade it on synthetic inputs: this is the
+ * arm that FAILED — 11 undifferentiated rows hid one bypassed refusal for eleven days — and an
+ * arm whose logic lives inline in a report block cannot be tested except by reading it.
+ *
+ * `bypassed` is found by case-folding the payload's own path set, so it catches the exact
+ * relationship that defeated the old single list: upstream re-spelled a path, the key stopped
+ * matching, and the successor entered the write set. Anything neither bypassed nor recorded as
+ * retired stays in `stale`, which is the loud default — absence with no explanation is a finding.
+ */
+export function classifyAbsentRefusals(
+  absentKeys: string[],
+  payloadPaths: Iterable<string>,
+  retired: Record<string, unknown>,
+): { bypassed: [string, string][]; retired: string[]; stale: string[] } {
+  const byLower = new Map<string, string>();
+  for (const p of payloadPaths) byLower.set(p.toLowerCase(), p);
+  const bypassed: [string, string][] = [];
+  const retiredOut: string[] = [];
+  const stale: string[] = [];
+  for (const k of absentKeys) {
+    const twin = byLower.get(k.toLowerCase());
+    if (twin !== undefined && twin !== k) bypassed.push([k, twin]);
+    else if (retired[k] !== undefined) retiredOut.push(k);
+    else stale.push(k);
+  }
+  return { bypassed, retired: retiredOut, stale };
+}
+
 type Plan = {
   releaseRel: string; // path within RELEASE_PAYLOAD
   liveRel: string; // path within live root — IDENTICAL to releaseRel (both LIFEOS/-shaped)
   bytes: Buffer;
   flags: number; // count of live-dead PAI tokens
   firstFlag?: { line: number; token: string; context: string };
-  status: "will-add" | "skip-exists" | "skip-skill" | "skip-scaffold" | "skip-flagged" | "skip-escape" | "skip-refused" | "skip-excluded";
+  status: "will-add" | "skip-exists" | "skip-skill" | "skip-scaffold" | "skip-flagged" | "skip-escape" | "skip-refused" | "skip-excluded" | "skip-case";
   refusedReason?: string; // INVARIANT 8: why this add was decided against
+  caseTwin?: string; // INVARIANT 9: the live path this collides with by case alone
 };
 
 /** True if `rel` is held back by a repeatable ad-hoc `--exclude <prefix>`. */
@@ -367,11 +519,18 @@ function buildPlan(only?: string, allowFlagged = false, excludes: string[] = [])
     // both in a scaffold zone and refused reports the structural reason, which is the more
     // informative one, and the refusal counts stay a clean subset of what would otherwise
     // have been written.
+    // INVARIANT 9 sits with the structural gates, above INVARIANT 8's two buckets, for the
+    // reason the block above gives: skip-refused stays a clean subset of what would OTHERWISE
+    // have been written, and a case-colliding file would not have been written either way. The
+    // report re-attaches the refusal reason where both apply, so the human-written decision is
+    // never lost to the computed catch.
     let status: Plan["status"];
+    let caseTwin: string | null = null;
     if (existsSync(destAbs)) status = "skip-exists"; // INVARIANT 1: never overwrite
     else if (SCAFFOLD_ZONES.some((z) => liveRel.startsWith(z))) status = "skip-scaffold"; // INVARIANT 7: USER/MEMORY owned by onboarding
     else if (liveRel.startsWith("skills/")) status = "skip-skill"; // INVARIANT 3: CreateSkill owns these
     else if (!realDestWithin(destAbs, root).ok) status = "skip-escape"; // INVARIANT 2: containment
+    else if ((caseTwin = caseOnlyCollision(liveRel, root)) !== null) status = "skip-case"; // INVARIANT 9: case-only twin
     else if (dead.length > 0 && !allowFlagged) status = "skip-flagged"; // INVARIANT 6: live-dead token
     else if (REFUSED_ADDS[liveRel] !== undefined) status = "skip-refused"; // INVARIANT 8: decided against
     else if (isExcluded(liveRel, excludes)) status = "skip-excluded"; // ad-hoc holdback
@@ -380,6 +539,7 @@ function buildPlan(only?: string, allowFlagged = false, excludes: string[] = [])
     plans.push({
       releaseRel, liveRel, bytes, flags: dead.length, firstFlag: dead[0], status,
       refusedReason: REFUSED_ADDS[liveRel],
+      caseTwin: caseTwin ?? undefined,
     });
   }
   return plans;
@@ -406,7 +566,7 @@ function main(argv: string[]): number {
   const plans = buildPlan(only, allowFlagged, excludes);
   const counts: Record<Plan["status"], number> = {
     "will-add": 0, "skip-exists": 0, "skip-skill": 0, "skip-scaffold": 0, "skip-flagged": 0, "skip-escape": 0,
-    "skip-refused": 0, "skip-excluded": 0,
+    "skip-refused": 0, "skip-excluded": 0, "skip-case": 0,
   };
   for (const p of plans) counts[p.status] += 1;
 
@@ -419,6 +579,14 @@ function main(argv: string[]): number {
       // Re-check containment at write time (TOCTOU-safe: guard immediately precedes write).
       if (!realDestWithin(destAbs, liveRoot()).ok) {
         console.error(`  ABORT: containment escape at write time: ${p.liveRel}`);
+        return 1;
+      }
+      // Same for INVARIANT 9, and for the same reason: an EARLIER write in this very run can
+      // create the colliding directory (the payload index may hold two spellings of one path
+      // even where a case-insensitive checkout cannot). Planned-clean is not written-clean.
+      const twinNow = caseOnlyCollision(p.liveRel, liveRoot());
+      if (twinNow !== null) {
+        console.error(`  ABORT: case-only collision appeared at write time: ${p.liveRel} vs live ${twinNow}`);
         return 1;
       }
       mkdirSync(path.dirname(destAbs), { recursive: true });
@@ -447,6 +615,22 @@ function main(argv: string[]): number {
     console.log("");
     console.log("REFUSED — decided divergent duplicate (INVARIANT 8; edit REFUSED_ADDS to change):");
     for (const p of refusedPlans) console.log(`  hold ${p.liveRel}\n         ${p.refusedReason}`);
+  }
+
+  // INVARIANT 9. Each hold names BOTH paths, because the whole harm is that the two differ by
+  // something a reader skims past. Where a recorded refusal also covers the row, print its
+  // reason too: the computed guard says "these collide", only the adjudication says why the
+  // live copy is the one that stays.
+  const casePlans = plans.filter((p) => p.status === "skip-case");
+  if (casePlans.length) {
+    console.log("");
+    console.log("HELD — case-only path collision (INVARIANT 9; would land at a path this plan did not print):");
+    for (const p of casePlans) {
+      console.log(`  hold ${p.liveRel}\n         live has ${p.caseTwin}`);
+      const decided = REFUSED_ADDS[p.liveRel];
+      if (decided) console.log(`         also a recorded refusal: ${decided}`);
+    }
+    console.log("  Port the content onto the live path, or rename live's copy deliberately — never land both spellings.");
   }
 
   const excludedPlans = plans.filter((p) => p.status === "skip-excluded");
@@ -499,13 +683,51 @@ function main(argv: string[]): number {
   // AUDIT B — a refusal key matching no payload file. Exact keys are brittle to an upstream
   // rename, and a stale entry reads as protection while protecting nothing. Scoped to
   // unfiltered runs: under --only, "absent" just means out of scope.
+  //
+  // Split three ways, because one list of 11 hid the one row that mattered. The BYPASSED arm is
+  // the teeth: it finds the successor by case-folding the payload's own path set, which is the
+  // relationship `existsSync` cannot see and a human skimming two near-identical strings does
+  // not either. RETIRED is adjudicated absence, quiet by design. Anything left is unexplained
+  // and stays loud — that is the default arm, so a NEW rename is never silently retired.
   if (!only && !excludes.length) {
-    const stale = Object.keys(REFUSED_ADDS).filter((k) => !planned.has(k));
+    const absent = Object.keys(REFUSED_ADDS).filter((k) => !planned.has(k));
+    const { bypassed, retired, stale } = classifyAbsentRefusals(absent, planned, RETIRED_REFUSALS);
+
+    if (bypassed.length) {
+      console.log("");
+      console.log("⚠ REFUSAL BYPASSED BY A RENAME — the key is gone but upstream still ships the file under another spelling:");
+      for (const [k, twin] of bypassed) {
+        console.log(`  gone ${k}\n    -> now ${twin} (status: ${plans.find((p) => p.liveRel === twin)?.status ?? "unknown"})`);
+        console.log(`       decided against: ${REFUSED_ADDS[k]}`);
+      }
+      console.log("  RE-KEY the entry onto the new path. Until then the decision is not being enforced.");
+    }
     if (stale.length) {
       console.log("");
       console.log("⚠ STALE REFUSAL — REFUSED_ADDS key matches no payload file (upstream moved or dropped it):");
       for (const k of stale) console.log(`  gone ${k} — ${REFUSED_ADDS[k]}`);
-      console.log("  Re-adjudicate against the new path, or remove the entry. It protects nothing as written.");
+      console.log("  Re-adjudicate against the new path, or record it in RETIRED_REFUSALS. It protects nothing as written.");
+    }
+    if (retired.length) {
+      console.log("");
+      console.log(`RETIRED REFUSALS — ${retired.length} adjudicated absences (upstream deleted the path; the key re-arms if it returns):`);
+      for (const k of retired) {
+        const r = RETIRED_REFUSALS[k]!;
+        console.log(`  gone ${k} — ${r.why} (${r.droppedIn})`);
+      }
+    }
+    // The mirror of DISCHARGE NO LONGER HOLDS: a retirement claims upstream does not ship the
+    // path, so a retired key that IS in the payload means the claim expired. The refusal itself
+    // is already back in force (the ladder never consulted this table) — say so, rather than
+    // leaving a stale annotation asserting the file is gone while the plan holds it.
+    const retirementExpired = Object.keys(RETIRED_REFUSALS).filter((k) => planned.has(k));
+    if (retirementExpired.length) {
+      console.log("");
+      console.log("⚠ RETIREMENT NO LONGER HOLDS — upstream restored a path recorded as deleted (refusal re-armed):");
+      for (const k of retirementExpired) {
+        console.log(`  back ${k} — recorded as ${RETIRED_REFUSALS[k]!.why} (${RETIRED_REFUSALS[k]!.droppedIn})`);
+      }
+      console.log("  Drop the RETIRED_REFUSALS row; the refusal is enforcing again and the note now contradicts the payload.");
     }
   }
 
@@ -514,6 +736,7 @@ function main(argv: string[]): number {
   console.log(`         skip-scaffold ${counts["skip-scaffold"]} (USER/MEMORY — onboarding owns) | skip-skill ${counts["skip-skill"]} (route via CreateSkill)`);
   console.log(`         skip-flagged ${counts["skip-flagged"]} (dead PAI tokens, listed above) | skip-escape ${counts["skip-escape"]}`);
   console.log(`         skip-refused ${counts["skip-refused"]} (decided divergent duplicates — INVARIANT 8) | skip-excluded ${counts["skip-excluded"]} (ad-hoc --exclude)`);
+  console.log(`         skip-case ${counts["skip-case"]} (case-only twin of a live path — INVARIANT 9)`);
   if (apply) {
     console.log(`\nWROTE ${written} files into ${liveRoot()}. NOT committed — review \`git -C ~/.claude diff\` and commit signed yourself.`);
   } else {
@@ -624,6 +847,10 @@ function runSelfTest(): number {
   // is the class check below (every reason tagged divergent:/secret:) and the STALE-key report
   // at plan time that do the structural work. The count's only job is to make a silent DROP of
   // an adjudicated row loud.
+  //
+  // Still 20 after 2026-08-12: the ISA row was RE-KEYED (Isa/IsaFormat.md -> ISA/ISAFormat.md),
+  // not added or dropped. That the total did not move is the point — a count cannot see a
+  // re-key, which is why the bypass arm in AUDIT B and the derived fixture below exist.
   const refusedKeys = Object.keys(REFUSED_ADDS);
   checks.push({ name: "refuse: REFUSED_ADDS holds exactly 20 adjudicated rows", got: refusedKeys.length === 20, want: true });
   // Every row states its class, so a reader can tell a divergence refusal from a secret one
@@ -648,11 +875,17 @@ function runSelfTest(): number {
   //
   // Second to siblings that are DUPLICATES, i.e. that have a live file of the same name at
   // some other path. Without this, the check demands refusal of genuinely-new files that merely
-  // share a directory with a refused one: DOCUMENTATION/Isa/IsaHierarchy.md and IsaHtmlMirror.md
-  // sit beside the refused IsaFormat.md but exist nowhere in live, so landing them creates no
-  // second source of truth. They are the LIFEOS/RULES/ class — new doctrine whose reader is
-  // skip-skill — which is an unread-clutter question, not a divergence one, and refusing them
-  // here would encode the wrong reason.
+  // share a directory with a refused one — the LIFEOS/RULES/ class, new doctrine whose reader is
+  // skip-skill, which is an unread-clutter question rather than a divergence one, and refusing
+  // it here would encode the wrong reason.
+  //
+  // The illustration this comment used to give has EXPIRED and is worth recording as a lesson
+  // rather than quietly swapping: it named DOCUMENTATION/Isa/IsaHierarchy.md and IsaHtmlMirror.md
+  // as siblings that "exist nowhere in live". They exist in live now — landed by live commit
+  // deb8d78 "Land 20 upstream subsystem docs (reference only, nothing wired)", which is this very
+  // channel doing its job. A justification comment that cites the CURRENT contents of another
+  // tree dates the moment it is written; the check itself re-derives liveBasenames every run,
+  // which is why the check stayed correct while the prose explaining it went stale.
   const refusedDirs = new Set(refusedKeys.map((k) => path.posix.dirname(k)));
   const willAddRel = new Set(buildPlan(undefined, true).filter((p) => p.status === "will-add").map((p) => p.liveRel));
   const liveBasenames = new Set(walk(liveRoot()).map((f) => path.posix.basename(f.replace(/\\/g, "/"))));
@@ -679,10 +912,109 @@ function runSelfTest(): number {
     want: true,
   });
   // The port row is still a refusal: its CONTENT went to the live path, so landing the
-  // payload file would re-split the source of truth the port just unified.
+  // payload file would re-split the source of truth the port just unified. Upstream has since
+  // DELETED the payload copy (release 7.28.3), so the row is retired below rather than removed —
+  // the key must survive that, or a restored upstream file would land unrefused.
   checks.push({
     name: "refuse: the ported llcli.ts row is refused too (content went to bin/llcli)",
     got: REFUSED_ADDS["LIFEOS/TOOLS/llcli/llcli.ts"] !== undefined,
+    want: true,
+  });
+
+  // ── RETIREMENT: adjudicated absence, re-probed rather than trusted ───────────
+  // A retirement is a claim about the PAYLOAD ("upstream deleted this"), so the same rule as
+  // REFUSAL_DISCHARGED applies: grade the claim against the payload every run. Case-sensitive
+  // membership in the walked set, NOT existsSync — existsSync case-folds on Windows and would
+  // report a re-spelled path as still present, which is the precise failure that let the
+  // ISAFormat refusal read as live while it was bypassed.
+  const payloadRel = new Set(walk(RELEASE_PAYLOAD));
+  const retiredKeys = Object.keys(RETIRED_REFUSALS);
+  checks.push({
+    name: "retire: every retired key is still a REFUSED_ADDS row (retiring is not deleting)",
+    got: retiredKeys.every((k) => REFUSED_ADDS[k] !== undefined),
+    want: true,
+  });
+  checks.push({
+    name: `retire: every retired key is genuinely absent from the payload (re-probed, ${retiredKeys.length} rows)`,
+    got: retiredKeys.every((k) => !payloadRel.has(k)),
+    want: true,
+  });
+  checks.push({
+    name: "retire: every retirement names the commit that dropped it (checkable claim)",
+    got: retiredKeys.every((k) => /^[0-9a-f]{7,40}$/.test(RETIRED_REFUSALS[k]!.droppedIn)),
+    want: true,
+  });
+  // Anti: a refusal whose payload file is PRESENT must never be retired — that would annotate a
+  // live refusal as gone and mute the report for a file the plan is actively holding.
+  checks.push({
+    name: "anti: no retirement covers a refusal whose payload file is present",
+    got: retiredKeys.some((k) => payloadRel.has(k)),
+    want: false,
+  });
+
+  // ── AUDIT B classification: the arm that failed, graded on synthetic input ────
+  // Discriminating pair. Same absent key, same retirement table; the ONLY difference is whether
+  // the payload holds a re-spelled twin. A classifier that ignored case (or ignored the payload)
+  // would put the key in the same bucket both times, which is exactly the old behaviour.
+  const cBypass = classifyAbsentRefusals(["a/B/Thing.md"], ["a/b/thing.md", "other.md"], {});
+  checks.push({
+    name: "auditB: a case-respelled twin in the payload classifies as BYPASSED, not stale",
+    got: cBypass.bypassed.length === 1 && cBypass.bypassed[0]![1] === "a/b/thing.md" && cBypass.stale.length === 0,
+    want: true,
+  });
+  const cStale = classifyAbsentRefusals(["a/B/Thing.md"], ["other.md"], {});
+  checks.push({
+    name: "auditB: the same key with NO twin in the payload classifies as STALE",
+    got: cStale.stale.length === 1 && cStale.bypassed.length === 0,
+    want: true,
+  });
+  const cRetired = classifyAbsentRefusals(["a/B/Thing.md"], ["other.md"], { "a/B/Thing.md": {} });
+  checks.push({
+    name: "auditB: an absent key with a retirement row classifies as RETIRED (quiet)",
+    got: cRetired.retired.length === 1 && cRetired.stale.length === 0,
+    want: true,
+  });
+  // PRECEDENCE, and it is load-bearing: a retirement row must NOT be able to silence a bypass.
+  // Retiring is a human annotation; a twin in the payload is a fact. If the annotation won, a
+  // wrong retirement would hide an unenforced decision — the failure this whole split addresses.
+  const cBoth = classifyAbsentRefusals(["a/B/Thing.md"], ["a/b/thing.md"], { "a/B/Thing.md": {} });
+  checks.push({
+    name: "auditB: a payload twin OUTRANKS a retirement row (annotation cannot mute a bypass)",
+    got: cBoth.bypassed.length === 1 && cBoth.retired.length === 0,
+    want: true,
+  });
+  checks.push({
+    name: "anti: an exact self-match is not reported as a bypass of itself",
+    got: classifyAbsentRefusals(["a/b/thing.md"], ["a/b/thing.md"], {}).bypassed.length > 0,
+    want: false,
+  });
+  // CASE-EXACTNESS OF THE KEYS THEMSELVES, graded from the other side. A key that existsSync
+  // calls present while the case-sensitive walked set does not is a case-MISMATCHED key — the
+  // precise state the ISAFormat refusal sat in for eleven days, reading as enforced because the
+  // only cheap presence test available on this platform lies about it. Platform note, and it is
+  // the asymmetry INVARIANT 9's docblock describes: on a case-SENSITIVE host both sides return
+  // false and this arm is vacuous. It is a Windows/APFS arm on purpose — that is where the lie
+  // lives, and the bypass arm below is the check that holds on every host.
+  checks.push({
+    name: "refuse: no refusal key is present only under case-folding (existsSync vs walked set)",
+    got: refusedKeys.every(
+      (k) => existsSync(path.join(RELEASE_PAYLOAD, ...k.split("/"))) === payloadRel.has(k),
+    ),
+    want: true,
+  });
+  // The live table must be CLEAN on both loud arms right now — this is the regression guard for
+  // the defect being fixed. It grades the real REFUSED_ADDS against the real payload, so an
+  // upstream rename that bypasses a refusal fails the self-test instead of only printing a line.
+  const liveAbsent = Object.keys(REFUSED_ADDS).filter((k) => !payloadRel.has(k));
+  const liveClass = classifyAbsentRefusals(liveAbsent, payloadRel, RETIRED_REFUSALS);
+  checks.push({
+    name: `auditB: no refusal is currently bypassed by a rename (found ${liveClass.bypassed.length}: ${liveClass.bypassed.map(([k, t]) => `${k} -> ${t}`).join(", ") || "none"})`,
+    got: liveClass.bypassed.length === 0,
+    want: true,
+  });
+  checks.push({
+    name: `auditB: no refusal is stale-and-unexplained (found ${liveClass.stale.length}: ${liveClass.stale.join(", ") || "none"})`,
+    got: liveClass.stale.length === 0,
     want: true,
   });
   // Anti: exact keys, so a sibling upstream later drops into a refused directory is NOT
@@ -699,35 +1031,156 @@ function runSelfTest(): number {
   });
   // No override flag exists (INVARIANT 8 is a record of decisions, not a detector), so the
   // gate must hold with allowFlagged forced ON — the only include-anyway flag in the tool.
+  //
+  // FIXTURE IS DERIVED, NOT NAMED. The previous version of these three checks hardcoded
+  // `agents/ForgeContext.md`, and all three went red the day upstream deleted that file — a
+  // red that said nothing about the refusal gate, only about the fixture. Selection is a
+  // case-sensitive lookup in the walked payload set (`payloadRel`), deliberately NOT
+  // `existsSync`: on Windows existsSync would case-fold a re-spelled key back into "present"
+  // and hand these checks a fixture the plan can never emit as skip-refused. Zones that
+  // outrank INVARIANT 8 in the ladder are excluded so the expectation is unambiguous.
+  //
+  // Honest limit on that choice, measured: substituting existsSync here SURVIVES mutation
+  // today, because no current key is case-mismatched, so the two tests agree on every row.
+  // It is defence against a future key, not a guard with teeth now — the arm that actually
+  // catches a case-mismatched key is the existsSync-vs-walked-set check above.
   const sandbox = path.join(os.tmpdir(), "ua-selftest-refuse-root");
   const savedForRefuse = process.env.LIFEOS_DIR;
   const savedPaiForRefuse = process.env.PAI_DIR;
   delete process.env.PAI_DIR;
   process.env.LIFEOS_DIR = sandbox;
   mkdirSync(sandbox, { recursive: true });
-  const oneRefused = buildPlan("agents/ForgeContext.md", true);
+  const payloadList = [...payloadRel];
+  const refuseFixture = refusedKeys.find(
+    (k) =>
+      payloadRel.has(k) &&
+      REFUSAL_DISCHARGED[k] === undefined &&
+      !k.startsWith("skills/") &&
+      !SCAFFOLD_ZONES.some((z) => k.startsWith(z)),
+  );
+  // Fail LOUD rather than silently skipping: an empty intersection means every adjudicated
+  // refusal has left the payload, which is itself the thing worth knowing.
   checks.push({
-    name: "refuse: enforced by default, and --allow-flagged does not bypass it",
-    got: oneRefused.length === 1 && oneRefused[0]!.status === "skip-refused",
+    name: `refuse: a live refusal fixture is derivable from the payload (got ${refuseFixture ?? "NONE"})`,
+    got: refuseFixture !== undefined,
+    want: true,
+  });
+  if (refuseFixture !== undefined) {
+    const refuseRow = buildPlan(refuseFixture, true).find((p) => p.liveRel === refuseFixture);
+    checks.push({
+      name: "refuse: enforced by default, and --allow-flagged does not bypass it",
+      got: refuseRow?.status === "skip-refused",
+      want: true,
+    });
+    // Assert on IDENTITY with the table, not on a substring of one reason's prose. The old
+    // check looked for "gpt-5.6-sol", which pinned it to one specific entry's wording.
+    checks.push({
+      name: "refuse: the plan row carries that key's own reason through to the caller",
+      got: refuseRow?.refusedReason === REFUSED_ADDS[refuseFixture],
+      want: true,
+    });
+    // LADDER ORDER: skip-exists must WIN over skip-refused. If a refused path has already
+    // landed, the status has to report true live state; the violated-refusal audit is what
+    // makes that case loud, and inverting the ladder would hide it behind a refusal label.
+    const fixtureSegs = refuseFixture.split("/");
+    const fixtureAbs = path.join(sandbox, ...fixtureSegs);
+    mkdirSync(path.dirname(fixtureAbs), { recursive: true });
+    writeFileSync(fixtureAbs, "already landed\n");
+    const alreadyThere = buildPlan(refuseFixture, true).find((p) => p.liveRel === refuseFixture);
+    checks.push({
+      name: "ladder: skip-exists outranks skip-refused (INVARIANT 1 not shadowed)",
+      got: alreadyThere?.status === "skip-exists",
+      want: true,
+    });
+    rmSync(path.join(sandbox, fixtureSegs[0]!), { recursive: true, force: true });
+  }
+
+  // ── INVARIANT 9: case-only path collision ───────────────────────────────────
+  // Direct unit tests first, on the guard itself. The FILE-level twin is the one the plan
+  // ladder can never show on Windows (existsSync case-folds, so INVARIANT 1 claims it), which
+  // is exactly why it needs testing here rather than through buildPlan.
+  mkdirSync(path.join(sandbox, "cs", "inner"), { recursive: true });
+  writeFileSync(path.join(sandbox, "cs", "inner", "thing.md"), "live\n");
+  checks.push({
+    name: "case: a file-level twin differing only in case is reported with live's spelling",
+    got: caseOnlyCollision("cs/inner/Thing.md", sandbox) === "cs/inner/thing.md",
     want: true,
   });
   checks.push({
-    name: "refuse: the plan row carries the reason through to the caller",
-    got: (oneRefused[0]?.refusedReason ?? "").includes("gpt-5.6-sol"),
+    name: "case: a directory-level twin is reported at the colliding SEGMENT, not the leaf",
+    got: caseOnlyCollision("cs/INNER/brand-new.md", sandbox) === "cs/inner",
     want: true,
   });
-  // LADDER ORDER: skip-exists must WIN over skip-refused. If a refused path has already
-  // landed, the status has to report true live state; the violated-refusal audit is what
-  // makes that case loud, and inverting the ladder would hide it behind a refusal label.
-  mkdirSync(path.join(sandbox, "agents"), { recursive: true });
-  writeFileSync(path.join(sandbox, "agents", "ForgeContext.md"), "already landed\n");
-  const alreadyThere = buildPlan("agents/ForgeContext.md", true);
   checks.push({
-    name: "ladder: skip-exists outranks skip-refused (INVARIANT 1 not shadowed)",
-    got: alreadyThere[0]?.status === "skip-exists",
+    name: "anti: an exactly-matching path is not a collision (that is INVARIANT 1's job)",
+    got: caseOnlyCollision("cs/inner/thing.md", sandbox) !== null,
+    want: false,
+  });
+  checks.push({
+    name: "anti: a genuinely new subtree is not a collision",
+    got: caseOnlyCollision("brand/new/thing.md", sandbox) !== null,
+    want: false,
+  });
+  rmSync(path.join(sandbox, "cs"), { recursive: true, force: true });
+
+  // Then through the production entry point, with a derived payload fixture — a guard that
+  // works in isolation but is not reachable from buildPlan would still write the bytes.
+  const flipCase = (s: string) =>
+    s
+      .split("")
+      .map((c) => (c === c.toLowerCase() ? c.toUpperCase() : c.toLowerCase()))
+      .join("");
+  const caseFixture = payloadList.find((r) => {
+    const segs = r.split("/");
+    if (segs.length < 2) return false;
+    const parentLast = segs[segs.length - 2]!;
+    return (
+      flipCase(parentLast) !== parentLast &&
+      REFUSED_ADDS[r] === undefined &&
+      !r.startsWith("skills/") &&
+      !SCAFFOLD_ZONES.some((z) => r.startsWith(z))
+    );
+  });
+  checks.push({
+    name: `case: a payload fixture with a case-flippable parent directory exists (got ${caseFixture ?? "NONE"})`,
+    got: caseFixture !== undefined,
     want: true,
   });
-  rmSync(path.join(sandbox, "agents"), { recursive: true, force: true });
+  if (caseFixture !== undefined) {
+    const segs = caseFixture.split("/");
+    const parent = segs.slice(0, -1);
+    const flippedParent = parent.map((s, i) => (i === parent.length - 1 ? flipCase(s) : s));
+    // CONTROL FIRST, and it is the half that makes the positive meaningful: with nothing in
+    // the sandbox this same path must be a plain will-add. Without it, a guard that held
+    // EVERYTHING back would pass the positive check.
+    const before = buildPlan(caseFixture, true).find((p) => p.liveRel === caseFixture);
+    checks.push({
+      name: "case: control — with no live twin the payload path is a plain will-add",
+      got: before?.status === "will-add",
+      want: true,
+    });
+    mkdirSync(path.join(sandbox, ...flippedParent), { recursive: true });
+    const after = buildPlan(caseFixture, true).find((p) => p.liveRel === caseFixture);
+    checks.push({
+      name: "case: a parent directory differing only in case HOLDS the write (INVARIANT 9)",
+      got: after?.status === "skip-case",
+      want: true,
+    });
+    checks.push({
+      name: "case: the held row names live's spelling so the report can print both paths",
+      got: after?.caseTwin === flippedParent.join("/"),
+      want: true,
+    });
+    rmSync(path.join(sandbox, flippedParent[0]!), { recursive: true, force: true });
+    // Symmetry: removing the twin must return the path to will-add. A guard that latched
+    // would silently freeze the channel after any transient collision.
+    const restored = buildPlan(caseFixture, true).find((p) => p.liveRel === caseFixture);
+    checks.push({
+      name: "case: removing the twin returns the path to will-add (the hold does not latch)",
+      got: restored?.status === "will-add",
+      want: true,
+    });
+  }
 
   // ── ad-hoc --exclude ────────────────────────────────────────────────────────
   checks.push({ name: "exclude: prefix match holds a path back", got: isExcluded("LIFEOS/TOOLS/x.ts", ["LIFEOS/TOOLS/"]), want: true });
