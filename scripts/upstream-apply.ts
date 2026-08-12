@@ -334,6 +334,67 @@ const REFUSED_ADDS: Record<string, string> = {
   "LIFEOS/USER_TEMPLATES/Goals.md": "divergent: same TEMPLATES/User -> USER_TEMPLATES rename; the dir has 0 live consumers, so this template is unreachable — belongs at the live path if wanted, via a port",
   "LIFEOS/USER_TEMPLATES/Pronunciations.md": "divergent: same rename; 0 live consumers of USER_TEMPLATES/, so it lands unreachable — port to LIFEOS/TEMPLATES/User/ if the template is wanted",
 
+  // Upstream RETIRED its own mode/tier doctrine into ALGORITHM/archive/ — the frontmatter on
+  // archive/mode-detection.md reads "RETIRED 2026-07-11 — historical doctrine. Modes/tiers were
+  // abolished with Algorithm v8 ... nothing routes here." Live never made that move: it holds an
+  // ACTIVE file at every un-archived path (LIFEOS/ALGORITHM/{mode-detection,parameter-schema,
+  // target-types}.md and modes/{README,ideate,iterate,loop,native,optimize}.md — all 9 tracked)
+  // and has no archive/ directory at all.
+  //
+  // So these are NOT duplicates of live-active doctrine. They are upstream's retirement RECORDS
+  // for doctrine live still presents as current, which makes landing them worse than either
+  // state alone: live would hold two files per subject with contradictory status headers — its
+  // own mode-detection.md saying "Loaded by the run on demand when ideate, optimize, or
+  // fast-path modes are detected" beside an archive copy saying nothing routes there.
+  //
+  // The coherent end state is retiring LIVE's copies, and that is a MOVE. INVARIANT 1 is
+  // additive-only and never overwrites or relocates, so this channel structurally cannot make
+  // one — "not through here" is the correct answer, and the remedy is a doctrine decision at
+  // live's own paths, the same shape as every other `divergent:` row above.
+  //
+  // Reachability measured with `git grep` against live: live's CURRENT doctrine
+  // ALGORITHM/v8.18.0.md references NONE of these (its only sibling reference is
+  // capabilities.md). Every ALGORITHM-side referrer is a superseded v5.7.0-v6.4.x spec, and a
+  // superseded spec is a frozen record by standing decision. Live's copies are therefore stale
+  // but unreferenced by current doctrine — a live cleanup, not an add.
+  //
+  // parameter-schema.md is byte-identical to live's copy and is refused on the same terms: an
+  // identical file at a DIFFERENT path is still a second source of truth, and the
+  // never-overwrite guard does not fire because the archive path is genuinely absent.
+  "LIFEOS/ALGORITHM/archive/mode-detection.md": "divergent: upstream's RETIRED copy of doctrine live holds ACTIVE at LIFEOS/ALGORITHM/mode-detection.md; landing it puts two files with contradictory status headers in the tree, and adopting the retirement is a live-side MOVE this additive-only channel cannot make",
+  "LIFEOS/ALGORITHM/archive/parameter-schema.md": "divergent: byte-identical to live's ACTIVE LIFEOS/ALGORITHM/parameter-schema.md, so the add is pure relocation into an archive/ dir live does not have — a second source of truth at a path nothing reads",
+  "LIFEOS/ALGORITHM/archive/target-types.md": "divergent: live holds this ACTIVE at LIFEOS/ALGORITHM/target-types.md; the only content delta is the fork's own PAI->LifeOS Inference Tool rename (3 B), so the add is relocation, not an upgrade",
+  "LIFEOS/ALGORITHM/archive/modes/README.md": "divergent: live holds this ACTIVE at LIFEOS/ALGORITHM/modes/README.md; payload says the Pulse mode-tab strip was REMOVED 2026-07-14 while live's copy still names agents/page.tsx:23-30 as runtime truth — landing both leaves the contradiction in the tree instead of resolving it",
+  "LIFEOS/ALGORITHM/archive/modes/ideate.md": "divergent: live holds this ACTIVE at LIFEOS/ALGORITHM/modes/ideate.md; upstream's archive copy differs only by last_updated_by and ../.. link depth",
+  "LIFEOS/ALGORITHM/archive/modes/iterate.md": "divergent: live holds this ACTIVE at LIFEOS/ALGORITHM/modes/iterate.md; archive copy differs only by last_updated_by and relative-link depth",
+  "LIFEOS/ALGORITHM/archive/modes/loop.md": "divergent: live holds this ACTIVE at LIFEOS/ALGORITHM/modes/loop.md; archive copy differs only by last_updated_by and relative-link depth",
+  "LIFEOS/ALGORITHM/archive/modes/native.md": "divergent: live holds this ACTIVE at LIFEOS/ALGORITHM/modes/native.md; archive copy differs only by last_updated_by and relative-link depth",
+  "LIFEOS/ALGORITHM/archive/modes/optimize.md": "divergent: live holds this ACTIVE at LIFEOS/ALGORITHM/modes/optimize.md; archive copy differs by last_updated_by, link depth, and a ../../v6.5.0.md pointer live has no file for",
+
+  // Not an archive file, and a different hazard — a version spec from a lineage live does not
+  // run. Live's LATEST reads 8.18.0: the 8.x shape grafted on while KEEPING the fork's v6.4
+  // gates, which 8.17.3 has no text for, so reading it as current doctrine drops them silently.
+  //
+  // Two consumers were measured and only one is a hazard, stated precisely because the sibling
+  // v8.4.0.md case WAS a resolver hazard and that reasoning does not transfer:
+  //   - ArchitectureSummaryGenerator.ts -> detectAlgorithmVersion() reads ALGORITHM/LATEST first
+  //     and returns early when it matches ^\d+\.\d+\.\d+$. Live's LATEST is well-formed, so the
+  //     readdirSync semver-sort fallback never fires; and 8.18.0 outsorts 8.17.3 even if it did.
+  //     NO resolver hazard.
+  //   - LIFEOS/PULSE/modules/wiki.ts:535 readdirSync's ALGORITHM_DIR with an isFile() filter,
+  //     NON-recursively. A top-level v8.17.3.md WOULD be indexed into the Pulse wiki as a system
+  //     doc beside live's own lineage. (The 9 archive/** files escape this one by being in a
+  //     subdirectory — which is also why they are refused on the duplicate-path grounds above
+  //     rather than this one.)
+  //
+  // Live already has the home and the escape hatch: LIFEOS/ALGORITHM/_inert-upstream/ holds
+  // upstream's v8.4.0.md plus a README stating "parking is the durable form of 'not this one'"
+  // and "kept, not deleted, because it also ships in the upstream install payload — a local
+  // delete is reverted by the next sync." Park it there by hand if it is wanted; a directory
+  // name cannot match ^v\d+\.\d+\.\d+\.md$ and readdirSync does not recurse, so that location
+  // is out of both consumers' reach.
+  "LIFEOS/ALGORITHM/v8.17.3.md": "divergent: upstream 8.17.x is not live's lineage — live's grafted 8.18.0 keeps fork v6.4 gates 8.17.3 has no text for; landing it top-level gets it indexed as a system doc by LIFEOS/PULSE/modules/wiki.ts:535, and live's home for upstream specs it does not run is LIFEOS/ALGORITHM/_inert-upstream/ (park by hand, not via this channel)",
+
   // NOT a divergent duplicate — a hardcoded-credential refusal, the second kind of add that
   // is faithful and still wrong to land. ggshield flags a Generic High Entropy Secret at
   // eightsleep.ts:30 (APP_CLIENT_SECRET, 64 hex chars). Upstream documents it as a public
@@ -848,11 +909,18 @@ function runSelfTest(): number {
   // at plan time that do the structural work. The count's only job is to make a silent DROP of
   // an adjudicated row loud.
   //
-  // Still 20 after 2026-08-12: the ISA row was RE-KEYED (Isa/IsaFormat.md -> ISA/ISAFormat.md),
-  // not added or dropped. That the total did not move is the point — a count cannot see a
-  // re-key, which is why the bypass arm in AUDIT B and the derived fixture below exist.
+  // Still 20 after the first 2026-08-12 pass: the ISA row was RE-KEYED (Isa/IsaFormat.md ->
+  // ISA/ISAFormat.md), not added or dropped. That the total did not move is the point — a count
+  // cannot see a re-key, which is why the bypass arm in AUDIT B and the derived fixture below
+  // exist.
+  //
+  // Now 30 (2026-08-13): +10 for the ALGORITHM adds — 9 `archive/**` retirement records whose
+  // un-archived twin is live and ACTIVE, plus v8.17.3.md from a lineage live does not run. A
+  // THIRD shape of refusal, and worth naming because the first two do not describe it: the
+  // payload file here is not stale, not a secret, and not even necessarily worse than live's —
+  // it is upstream's record of a MOVE live never made, and this channel cannot make a move.
   const refusedKeys = Object.keys(REFUSED_ADDS);
-  checks.push({ name: "refuse: REFUSED_ADDS holds exactly 20 adjudicated rows", got: refusedKeys.length === 20, want: true });
+  checks.push({ name: "refuse: REFUSED_ADDS holds exactly 30 adjudicated rows", got: refusedKeys.length === 30, want: true });
   // Every row states its class, so a reader can tell a divergence refusal from a secret one
   // without reading the surrounding comment block.
   checks.push({
