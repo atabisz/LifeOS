@@ -65,11 +65,17 @@
  *     a reviewable diff that also updates the stated reason. A flag would additionally
  *     let someone do the wrong thing efficiently — for most of these rows the correct
  *     action is to PORT CONTENT onto the live path, which landing the file does not do.
- *     TWO CLASSES live here, each row tagged in its reason. `divergent:` is the above.
- *     `secret:` is a faithful add carrying a hardcoded high-entropy credential: refused
- *     because the live repo's ggshield pre-commit would block it and because "the vendor
- *     published this constant" is a claim this channel cannot verify — the fix is to port
- *     the file reading the value from .env, never to bypass the scanner to land it.
+ *     EACH ROW IS TAGGED WITH ITS CLASS in its reason, and the self-test grades the tag
+ *     against a closed prefix set, so a new class cannot arrive unannounced. `divergent:`
+ *     is the above. `secret:` is a faithful add carrying a hardcoded high-entropy
+ *     credential: refused because the live repo's ggshield pre-commit would block it and
+ *     because "the vendor published this constant" is a claim this channel cannot verify
+ *     — the fix is to port the file reading the value from .env, never to bypass the
+ *     scanner to land it. `false-in-live:` is a faithful add whose CONTENT is untrue of
+ *     the live directory it lands in, with no live twin to port from, so the remedy is
+ *     to land nothing at all. This sentence used to say "TWO CLASSES live here" and had
+ *     to be corrected when the third arrived; the enumeration lives at REFUSED_ADDS and
+ *     is enforced there, which is why this one no longer carries a count.
  *  9. PATH IDENTITY IS CASE-EXACT. A payload path whose live twin differs ONLY by case is
  *     HELD, never written. This is not tidiness — it is the same divergent-duplicate harm
  *     as INVARIANT 8, arriving through a channel a hand-maintained list cannot cover, and
@@ -253,10 +259,22 @@ const SCAFFOLD_ZONES = [
 
 /**
  * INVARIANT 8 — the decided refusals, keyed on the EXACT payload-relative path the
- * plan reports. Every entry is a divergent duplicate: the payload puts the file at a
+ * plan reports. MOST entries are a divergent duplicate: the payload puts the file at a
  * path live does not read, while live holds its own copy elsewhere. Landing one adds a
  * second source of truth silently — no overwrite, no conflict, no diff against anything
- * live consumes. Adjudicated in docs/DIVERGENT-DUPE-DISPOSITIONS.md, evidence in
+ * live consumes.
+ *
+ * Not every entry is that shape, and the reason's PREFIX names which — the self-test
+ * grades the prefix, so a new class cannot arrive unannounced. `divergent:` is the
+ * duplicate case above; `secret:` is a faithful file carrying a hardcoded credential;
+ * `false-in-live:` is a file whose content is simply untrue of the live directory it
+ * would land in, with no live twin anywhere. The ALGORITHM rows wear `divergent:` but
+ * are a further kind, upstream's retirement RECORDS for doctrine live holds ACTIVE, and
+ * say so at their own comment. This paragraph replaced a flat "every entry is a
+ * divergent duplicate", which was already false for the credential row two screens down
+ * — a universal in a docblock rots the moment the second class lands.
+ *
+ * Adjudicated in docs/DIVERGENT-DUPE-DISPOSITIONS.md, evidence in
  * MEMORY/WORK/resolve-divergent-dupes/ISA.md (24/24). Live consumers of each of those
  * payload locations: ZERO, probed. The 2026-07-31 voice-pair rows were adjudicated
  * separately (MEMORY/WORK/20260731-execute-recommended-next-steps/ISA.md) on live's own
@@ -436,6 +454,33 @@ const REFUSED_ADDS: Record<string, string> = {
   // write the hardcoded version over a clean live file. The `refusalDischarged` set below is
   // what stops AUDIT A from reporting this as a by-hand landing.
   "LIFEOS/TOOLS/healthsync/eightsleep.ts": "secret: ggshield flags a Generic High Entropy Secret (APP_CLIENT_SECRET, eightsleep.ts:30); upstream calls it a public app constant but this channel cannot verify that, and the live pre-commit would block it — port it with env reads instead of landing hardcoded",
+
+  // A FOURTH shape, and the first row here that is neither a duplicate nor a secret: a
+  // faithful, harmless-looking file whose CONTENT IS FALSE at the path it would land in.
+  // Upstream's README is titled "Fonts not included" and tells the reader to license the
+  // Butterick families at mbtype.com and "place the woff2 files here". Live's copy of that
+  // exact directory holds 13 of them already (advocate ×3, concourse ×2, equity, heliotrope
+  // ×2, triplicate ×2, valkyrie ×3) — so landing it writes a false statement into the one
+  // directory that disproves it, and the reader most likely to find it is whoever next
+  // wonders why the dashboard's type looks right.
+  //
+  // Nothing to port, which is what separates this from every `divergent:` row: live has NO
+  // FONTS-README.md anywhere (`fd -HI` over ~/.claude, zero hits), so there is no live copy
+  // this would re-split and no content worth moving. The file is correct about UPSTREAM's
+  // tree and about this fork's PUBLIC one — the fork's baseline stopped shipping the
+  // licensed fonts at 3ffb7809 — and wrong only about live. It already sits in the payload,
+  // where it is true. That is the whole disposition.
+  //
+  // CLASS SWEEP (claim 9): the payload ships THREE byte-identical copies, sha256
+  // fb0b6b5a56714c49 — this one, `…/Observability/out/fonts/`, and
+  // `skills/Telos/ReportTemplate/public/Fonts/`. Exactly one key is correct, because the
+  // other two are already unreachable and a key there would read as coverage while guarding
+  // nothing: walk() skips any directory named `out`, so the out/ twin is never enumerated at
+  // all, and the skills/ copy is caught by skip-skill, which sits ABOVE skip-refused in the
+  // ladder. The skills/ one is a RESIDUAL, not a non-issue — live's
+  // skills/Telos/ReportTemplate/public/Fonts/ holds 11 real fonts, so whoever ports that
+  // skill via Skill("CreateSkill") must drop this README rather than carry it across.
+  "LIFEOS/PULSE/Observability/public/fonts/FONTS-README.md": "false-in-live: says \"Fonts not included\" and asks the reader to place woff2 files here, but live's own LIFEOS/PULSE/Observability/public/fonts/ already holds 13 licensed Butterick fonts — the add writes a false statement into the directory that disproves it, and there is no live twin to port from (zero FONTS-README.md in live)",
 };
 
 /**
@@ -796,7 +841,7 @@ function main(argv: string[]): number {
   console.log(`SUMMARY: will-add ${counts["will-add"]} | skip-exists ${counts["skip-exists"]} (conflicts/unchanged — protected)`);
   console.log(`         skip-scaffold ${counts["skip-scaffold"]} (USER/MEMORY — onboarding owns) | skip-skill ${counts["skip-skill"]} (route via CreateSkill)`);
   console.log(`         skip-flagged ${counts["skip-flagged"]} (dead PAI tokens, listed above) | skip-escape ${counts["skip-escape"]}`);
-  console.log(`         skip-refused ${counts["skip-refused"]} (decided divergent duplicates — INVARIANT 8) | skip-excluded ${counts["skip-excluded"]} (ad-hoc --exclude)`);
+  console.log(`         skip-refused ${counts["skip-refused"]} (adjudicated refusals, class per row — INVARIANT 8) | skip-excluded ${counts["skip-excluded"]} (ad-hoc --exclude)`);
   console.log(`         skip-case ${counts["skip-case"]} (case-only twin of a live path — INVARIANT 9)`);
   if (apply) {
     console.log(`\nWROTE ${written} files into ${liveRoot()}. NOT committed — review \`git -C ~/.claude diff\` and commit signed yourself.`);
@@ -919,13 +964,19 @@ function runSelfTest(): number {
   // THIRD shape of refusal, and worth naming because the first two do not describe it: the
   // payload file here is not stale, not a secret, and not even necessarily worse than live's —
   // it is upstream's record of a MOVE live never made, and this channel cannot make a move.
+  //
+  // Now 31 (2026-08-13): +1 for the Observability fonts README — a FOURTH shape, a faithful
+  // file whose content is FALSE at the path it lands in (it says "Fonts not included" into a
+  // live directory holding 13 of them). Two byte-identical payload twins are deliberately NOT
+  // keyed, because they are already unreachable — see that row's comment.
   const refusedKeys = Object.keys(REFUSED_ADDS);
-  checks.push({ name: "refuse: REFUSED_ADDS holds exactly 30 adjudicated rows", got: refusedKeys.length === 30, want: true });
+  checks.push({ name: "refuse: REFUSED_ADDS holds exactly 31 adjudicated rows", got: refusedKeys.length === 31, want: true });
   // Every row states its class, so a reader can tell a divergence refusal from a secret one
-  // without reading the surrounding comment block.
+  // without reading the surrounding comment block. The prefix set is closed on purpose: a new
+  // class fails this arm until someone adds it here AND to the docblock that enumerates them.
   checks.push({
-    name: "refuse: every reason names its class (divergent:/secret:)",
-    got: refusedKeys.every((k) => /^(divergent|secret):/.test(REFUSED_ADDS[k] ?? "")),
+    name: "refuse: every reason names its class (divergent:/secret:/false-in-live:)",
+    got: refusedKeys.every((k) => /^(divergent|secret|false-in-live):/.test(REFUSED_ADDS[k] ?? "")),
     want: true,
   });
   // A bare count is a weak guard: it notices ANY edit but cannot tell a correct addition from
@@ -986,6 +1037,17 @@ function runSelfTest(): number {
   checks.push({
     name: "refuse: the ported llcli.ts row is refused too (content went to bin/llcli)",
     got: REFUSED_ADDS["LIFEOS/TOOLS/llcli/llcli.ts"] !== undefined,
+    want: true,
+  });
+  // Presence in the registry is not the same claim as being STOPPED by it. This row was queued
+  // as will-add when it was adjudicated, so assert the plan's verdict rather than the key: a
+  // reordered ladder, a renamed live path, or a typo in the key all put it back in the write set
+  // while the registry still reads as covering it.
+  const fontsReadmeRel = "LIFEOS/PULSE/Observability/public/fonts/FONTS-README.md";
+  const fontsReadmeRow = buildPlan(undefined, true).find((p) => p.liveRel === fontsReadmeRel);
+  checks.push({
+    name: `refuse: the fonts README is actually STOPPED, not just listed (plan says ${fontsReadmeRow?.status ?? "MISSING"})`,
+    got: fontsReadmeRow?.status === "skip-refused",
     want: true,
   });
 
