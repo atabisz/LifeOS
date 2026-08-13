@@ -54,7 +54,7 @@
  * spawnSync for git, self-test via --self-test.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
@@ -205,6 +205,36 @@ function isText(rel: string): boolean {
   return false; // truly extensionless + unknown → treat as binary (copy verbatim)
 }
 
+/**
+ * Paths the PIN must never vendor, because pinning them redistributes them.
+ *
+ * Upstream removed its licensed webfonts from the release payload and left a `FONTS-README.md`
+ * saying they "cannot be redistributed" — Matthew Butterick's Concourse / Valkyrie / Advocate /
+ * Heliotrope / Equity / Triplicate families, licensed per-user at mbtype.com. THIS REPO IS PUBLIC,
+ * so a font binary sitting in `scripts/upstream-sync/baseline/` is a redistribution no matter what
+ * the payload currently holds. 33 such files were pinned by `38e39b43` (2026-07-04, "pin masked
+ * v6.0.0 baseline") and outlived upstream's own deletion, because `refreshBaseline` only ever
+ * WRITES — it never prunes. That non-pruning is deliberate and stays: the `upstream-deleted` bucket
+ * exists precisely because the pin retains a path the release dropped.
+ *
+ * The rule is FONT BINARIES AS A CLASS, not a list of family names, for two reasons. A name list
+ * silently misses the next family upstream ships. And a pinned font contributes nothing a 3-way
+ * CONTENT diff can use — `normalize()` skips binaries, so the pin can only ever report same/diff
+ * over opaque bytes. Excluding the class costs noticing upstream re-cut a woff2, and buys a
+ * guarantee that no licensed binary reaches a public tree through the pin.
+ *
+ * Scope: `walk()` already skips `out/`, so the two OFL-licensed Geist woff2 files in the payload's
+ * `out/_next/static/media/` were never pinned and this rule does not reach them.
+ *
+ * Live's own copies are a SEPARATE question, adjudicated 2026-08-13 and deliberately KEPT:
+ * `~/.claude` is a private repo with no outbound publish path, and upstream's README tells licence
+ * holders to "place the woff2 files here". This exclusion governs what the PUBLIC pin carries only.
+ */
+const RESTRICTED_PIN_EXTS = new Set([".woff", ".woff2", ".ttf", ".otf", ".eot"]);
+function isRestrictedForPin(rel: string): boolean {
+  return RESTRICTED_PIN_EXTS.has(path.extname(rel).toLowerCase());
+}
+
 /** Normalized bytes for a release file: token-rewritten for text, verbatim for binary. */
 function normalizedReleaseBytes(releaseAbs: string, rel: string): Buffer {
   if (isText(rel)) return Buffer.from(normalize(readFileSync(releaseAbs, "utf8")).text, "utf8");
@@ -226,12 +256,19 @@ function walk(root: string, base = ""): string[] {
 }
 
 /** Vendor/refresh the normalized baseline from the current release payload. */
-function refreshBaseline(): { written: number; totalFlags: number; flagged: string[] } {
+function refreshBaseline(): { written: number; totalFlags: number; flagged: string[]; skippedRestricted: string[] } {
   const relFiles = walk(RELEASE_PAYLOAD);
   let written = 0;
   let totalFlags = 0;
   const flagged: string[] = [];
+  const skippedRestricted: string[] = [];
   for (const rel of relFiles) {
+    // Redistribution invariant, enforced at the only place the pin is written. Counted and
+    // printed rather than skipped silently, so a future payload that ships fonts says so.
+    if (isRestrictedForPin(rel)) {
+      skippedRestricted.push(rel);
+      continue;
+    }
     const srcAbs = path.join(RELEASE_PAYLOAD, ...rel.split("/"));
     const baseRel = normalizeRelPath(rel);
     const destAbs = path.join(BASELINE_ROOT, ...baseRel.split("/"));
@@ -248,7 +285,19 @@ function refreshBaseline(): { written: number; totalFlags: number; flagged: stri
     }
     written += 1;
   }
-  return { written, totalFlags, flagged };
+  return { written, totalFlags, flagged, skippedRestricted };
+}
+
+/**
+ * Enforce the redistribution invariant on an EXISTING pin: remove any restricted file already
+ * vendored. Deliberately separate from `refreshBaseline` and reachable without `--adopt`, because
+ * adopting advances the pin to the current release and rewrites every classification — far too
+ * large a side effect for "delete files that must never have been here". Dry-run unless `write`.
+ */
+function pruneRestrictedFromBaseline(write: boolean): string[] {
+  const hits = walk(BASELINE_ROOT).filter(isRestrictedForPin);
+  if (write) for (const rel of hits) unlinkSync(path.join(BASELINE_ROOT, ...rel.split("/")));
+  return hits;
 }
 
 /** Byte-compare two files; null side = absent. */
@@ -355,6 +404,18 @@ function gitStat(baseAbs: string, otherAbs: string): string {
 
 function main(argv: string[]): number {
   if (argv.includes("--self-test")) return runSelfTest();
+
+  // Enforce the pin's redistribution invariant without touching live and without advancing the
+  // pin. Dry-run by default; `--write` performs the unlink. Returns before the read-only banner
+  // below because this mode DOES write — to the repo's own pin, never to live.
+  if (argv.includes("--prune-restricted")) {
+    const write = argv.includes("--write");
+    const hits = pruneRestrictedFromBaseline(write);
+    console.log(`prune-restricted — ${write ? "WRITE" : "dry-run"}: ${hits.length} restricted file(s) vendored in the pin`);
+    for (const h of hits) console.log(`  ${write ? "removed " : "would remove "}${h}`);
+    if (!hits.length) console.log("  pin is clean — no font binaries vendored");
+    return 0;
+  }
   // The baseline is a PINNED, committed ancestor. Write it only on first bootstrap
   // (absent) or on explicit `--adopt` (advance the pin to the current release AFTER
   // a sync). A plain run NEVER rewrites the pin — that is what keeps `take` real.
@@ -364,8 +425,10 @@ function main(argv: string[]): number {
   console.log("upstream-sync — READ-ONLY 3-way view (no --apply; never writes to live)\n");
   if (bootstrap || adopt) {
     console.log(bootstrap ? "Bootstrapping pinned baseline from current release..." : "Adopting current release as new pinned baseline...");
-    const { written, totalFlags, flagged } = refreshBaseline();
+    const { written, totalFlags, flagged, skippedRestricted } = refreshBaseline();
     console.log(`  baseline: ${written} files written to ${path.relative(REPO_ROOT, BASELINE_ROOT)} (commit this pin)`);
+    console.log(`  skipped as non-redistributable (font binaries — see isRestrictedForPin): ${skippedRestricted.length}`);
+    for (const s of skippedRestricted) console.log(`    SKIP-RESTRICTED ${s}`);
     console.log(`  normalization flags (need human review): ${totalFlags}`);
     for (const f of flagged.slice(0, 20)) console.log(`    FLAG ${f}`);
     if (flagged.length > 20) console.log(`    ... +${flagged.length - 20} more flagged files`);
@@ -670,6 +733,40 @@ function runSelfTest(): number {
   total += 1;
   if (classifyPresence(null, null, B("mine")) === "local-only") pass += 1;
   else console.error(`FAIL control: local-only is no longer produced for a live-only path, so the unreachability assertion above proves nothing`);
+
+  // The pin's redistribution invariant (see isRestrictedForPin). Asserted in BOTH directions,
+  // because a predicate that answered true for everything would satisfy the exclusion cases on
+  // its own and would silently empty the pin on the next --adopt.
+  for (const rel of [
+    "PAI/PULSE/Observability/public/fonts/valkyrie_a_regular.woff2",
+    "skills/Telos/ReportTemplate/Public/Fonts/concourse_3_bold.woff2",
+    "PAI/LIFEOS_INSTALL/public/assets/fonts/equity_text_b_regular-webfont.woff",
+    "PAI/LIFEOS_INSTALL/public/assets/fonts/triplicate_t3_code_regular.ttf",
+  ]) {
+    total += 1;
+    if (isRestrictedForPin(rel)) pass += 1;
+    else console.error(`FAIL restricted: ${rel} would be vendored into the PUBLIC pin`);
+  }
+  for (const rel of [
+    "PAI/TOOLS/Inference.ts",
+    "PAI/PULSE/Observability/public/fonts/FONTS-README.md", // the README must survive the rule
+    "PAI/PULSE/Observability/src/app/globals.css",
+    "install.sh",
+    "PAI/ALGORITHM/LATEST", // extensionless — must not be swept in as "unknown"
+  ]) {
+    total += 1;
+    if (!isRestrictedForPin(rel)) pass += 1;
+    else console.error(`FAIL control: ${rel} is not a font binary but was excluded from the pin`);
+  }
+  // The invariant must hold on the pin AS COMMITTED, not merely on synthetic paths. This is the
+  // arm that was red before the 2026-08-13 prune (33 files), and it goes red again if any future
+  // --adopt or hand-copy re-vendors a font binary into a public tree.
+  total += 1;
+  {
+    const vendored = existsSync(BASELINE_ROOT) ? walk(BASELINE_ROOT).filter(isRestrictedForPin) : [];
+    if (vendored.length === 0) pass += 1;
+    else console.error(`FAIL pin: ${vendored.length} restricted file(s) vendored in the committed baseline — run --prune-restricted --write`);
+  }
 
   console.log(`${pass}/${total} passed`);
   return pass === total ? 0 : 1;
