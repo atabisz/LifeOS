@@ -391,17 +391,32 @@ const REFUSED_ADDS: Record<string, string> = {
 
   // Not an archive file, and a different hazard — a version spec from a lineage live does not
   // run. Live's LATEST reads 8.18.0: the 8.x shape grafted on while KEEPING the fork's v6.4
-  // gates, which 8.17.3 has no text for, so reading it as current doctrine drops them silently.
+  // gates, which upstream's spec has no text for, so reading it as current doctrine drops them
+  // silently. Re-measured 2026-08-16 against the 7.40.4 payload: v8.20.2.md contains ZERO
+  // occurrences of each of the five gate titles ("Base-Change Voids Greens", "Discriminating
+  // Power", "Asymmetric Evidence", "Platform-Shape Preflight", "Deletion-Risk Census") while
+  // live's v8.18.0.md contains each once, so the grounds did not soften across three minor
+  // versions — they are unchanged.
   //
-  // Two consumers were measured and only one is a hazard, stated precisely because the sibling
-  // v8.4.0.md case WAS a resolver hazard and that reasoning does not transfer:
+  // RE-ADJUDICATED 2026-08-16 (release 7.40.4). Upstream be9e8ef8 RENAMED this file
+  // v8.17.3.md -> v8.20.2.md (R079), which retired the old key and put the successor in the
+  // write set. The re-adjudication is NOT a version-number swap: the number crossing live's
+  // own inverts one of the two consumer verdicts below.
+  //
+  // Two consumers were measured. As of 8.20.2 BOTH are hazards, where at 8.17.3 only one was:
   //   - ArchitectureSummaryGenerator.ts -> detectAlgorithmVersion() reads ALGORITHM/LATEST first
   //     and returns early when it matches ^\d+\.\d+\.\d+$. Live's LATEST is well-formed, so the
-  //     readdirSync semver-sort fallback never fires; and 8.18.0 outsorts 8.17.3 even if it did.
-  //     NO resolver hazard.
+  //     readdirSync semver-sort fallback (:59-64, `.sort(compareSemver)` then last element) does
+  //     not fire TODAY. But the old note said "8.18.0 outsorts 8.17.3 even if it did. NO resolver
+  //     hazard" — and that is the sentence this release invalidated. **8.20.2 outsorts 8.18.0.**
+  //     So the file converts a fail-SAFE fallback into a fail-WRONG one: any run with LATEST
+  //     missing, truncated, or malformed would report the architecture summary's Algorithm
+  //     version as 8.20.2, a doctrine live does not run and whose five gates do not exist in it.
+  //     LATENT, CONDITIONAL resolver hazard — not "no hazard".
   //   - LIFEOS/PULSE/modules/wiki.ts:535 readdirSync's ALGORITHM_DIR with an isFile() filter,
-  //     NON-recursively. A top-level v8.17.3.md WOULD be indexed into the Pulse wiki as a system
-  //     doc beside live's own lineage. (The 9 archive/** files escape this one by being in a
+  //     NON-recursively; the filter is isMarkdownFile(), i.e. broader than a v-prefixed pattern.
+  //     A top-level v8.20.2.md WOULD be indexed into the Pulse wiki as a system doc beside
+  //     live's own lineage. (The 9 archive/** files escape this one by being in a
   //     subdirectory — which is also why they are refused on the duplicate-path grounds above
   //     rather than this one.)
   //
@@ -411,7 +426,13 @@ const REFUSED_ADDS: Record<string, string> = {
   // delete is reverted by the next sync." Park it there by hand if it is wanted; a directory
   // name cannot match ^v\d+\.\d+\.\d+\.md$ and readdirSync does not recurse, so that location
   // is out of both consumers' reach.
-  "LIFEOS/ALGORITHM/v8.17.3.md": "divergent: upstream 8.17.x is not live's lineage — live's grafted 8.18.0 keeps fork v6.4 gates 8.17.3 has no text for; landing it top-level gets it indexed as a system doc by LIFEOS/PULSE/modules/wiki.ts:535, and live's home for upstream specs it does not run is LIFEOS/ALGORITHM/_inert-upstream/ (park by hand, not via this channel)",
+  "LIFEOS/ALGORITHM/v8.20.2.md": "divergent: upstream 8.20.x is not live's lineage — live's grafted 8.18.0 keeps five fork v6.4 gates 8.20.2 has no text for (measured: 0 occurrences of each of the five titles, vs 1 each in live's v8.18.0.md); landing it top-level gets it indexed as a system doc by LIFEOS/PULSE/modules/wiki.ts:535, and because 8.20.2 OUTSORTS live's 8.18.0 it also turns ArchitectureSummaryGenerator.ts's LATEST-missing fallback (:59-64) from fail-safe into fail-wrong; live's home for upstream specs it does not run is LIFEOS/ALGORITHM/_inert-upstream/ (park by hand, not via this channel)",
+  // The pre-rename key is KEPT, not replaced. Renaming it in place is the mistake the `retire`
+  // self-test arm exists to catch: it would leave the restoration case unprotected, and upstream
+  // reverting a rename is the same real event as release 7.28.3 both deleting and re-adding files.
+  // Retired (see RETIRED_REFUSALS) so the loud stale-refusal arm stays free of adjudicated rows,
+  // and re-armed automatically by retirementExpired() the moment the old path returns.
+  "LIFEOS/ALGORITHM/v8.17.3.md": "divergent: same grounds as v8.20.2.md above, on the pre-rename path — upstream 8.17.x is not live's lineage and live's grafted 8.18.0 keeps fork v6.4 gates it has no text for; retired as of be9e8ef8 because upstream now ships this spec as v8.20.2.md, and enforced again the moment this exact path reappears in the payload",
 
   // NOT a divergent duplicate — a hardcoded-credential refusal, the second kind of add that
   // is faithful and still wrong to land. ggshield flags a Generic High Entropy Secret at
@@ -550,6 +571,18 @@ const RETIRED_REFUSALS: Record<string, { droppedIn: string; why: string }> = {
   "LIFEOS/TOOLS/llcli/package.json": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps LIFEOS/bin/llcli/package.json" },
   "LIFEOS/TOOLS/llcli/README.md": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps LIFEOS/bin/llcli/README.md" },
   "LIFEOS/TOOLS/llcli/QUICKSTART.md": { droppedIn: "36c6f01e", why: "deleted in release 7.28.3; live keeps LIFEOS/bin/llcli/QUICKSTART.md" },
+
+  // A THIRD case, and the docblock's two-way split above does not name it: upstream MOVED this
+  // one, which is the "act immediately" arm, NOT the dormant arm. It is retireable only because
+  // the action was taken in the same edit — the successor path carries its own re-adjudicated
+  // REFUSED_ADDS row. Do not read this row as "upstream stopped shipping it": upstream ships it
+  // under a new name, and the protection lives at that name now. If that row is ever deleted,
+  // this retirement stops being harmless.
+  //
+  // The classifier reported this as `stale` rather than `bypassed` because it detects a bypassing
+  // twin by CASE-FOLDING the payload path set — which catches a re-spelling but not a version
+  // number. The loud default is what surfaced it; the label undersold it.
+  "LIFEOS/ALGORITHM/v8.17.3.md": { droppedIn: "be9e8ef8", why: "RENAMED, not deleted: be9e8ef8 (release 7.40.4) moved it to LIFEOS/ALGORITHM/v8.20.2.md (git R079), so this key matched no payload path and its successor had entered the write set; the refusal is re-adjudicated at v8.20.2.md, where 8.20.2 outsorting live's 8.18.0 makes the hazard strictly worse than it was" },
 };
 
 /**
@@ -816,7 +849,11 @@ function main(argv: string[]): number {
     }
     if (retired.length) {
       console.log("");
-      console.log(`RETIRED REFUSALS — ${retired.length} adjudicated absences (upstream deleted the path; the key re-arms if it returns):`);
+      // "deleted the path" was true of all 11 rows until 2026-08-16, when a RENAMED row joined
+      // them — accurate only because its successor is refused under its own key. Worded to the
+      // weaker case, so a reader does not infer "nothing can land" from a row that is really
+      // "it lands elsewhere, and that elsewhere is adjudicated".
+      console.log(`RETIRED REFUSALS — ${retired.length} adjudicated absences (upstream no longer ships the path; the key re-arms if it returns):`);
       for (const k of retired) {
         const r = RETIRED_REFUSALS[k]!;
         console.log(`  gone ${k} — ${r.why} (${r.droppedIn})`);
@@ -969,8 +1006,16 @@ function runSelfTest(): number {
   // file whose content is FALSE at the path it lands in (it says "Fonts not included" into a
   // live directory holding 13 of them). Two byte-identical payload twins are deliberately NOT
   // keyed, because they are already unreachable — see that row's comment.
+  //
+  // Now 32 (2026-08-16): +1 for LIFEOS/ALGORITHM/v8.20.2.md, and NOT a new shape — the same
+  // third shape as its predecessor, arrived at by a route worth recording. Release 7.40.4
+  // (be9e8ef8) RENAMED v8.17.3.md to it, which silently voided the existing refusal and put the
+  // successor in the write set. The count did NOT catch that: a rename leaves the row count
+  // unchanged, so this arm stayed green while the protection was gone. What caught it was the
+  // stale-refusal audit arm, and the fix deliberately grew the table rather than editing the key
+  // in place, because the old path must stay refused for the case where upstream reverts.
   const refusedKeys = Object.keys(REFUSED_ADDS);
-  checks.push({ name: "refuse: REFUSED_ADDS holds exactly 31 adjudicated rows", got: refusedKeys.length === 31, want: true });
+  checks.push({ name: "refuse: REFUSED_ADDS holds exactly 32 adjudicated rows", got: refusedKeys.length === 32, want: true });
   // Every row states its class, so a reader can tell a divergence refusal from a secret one
   // without reading the surrounding comment block. The prefix set is closed on purpose: a new
   // class fails this arm until someone adds it here AND to the docblock that enumerates them.
