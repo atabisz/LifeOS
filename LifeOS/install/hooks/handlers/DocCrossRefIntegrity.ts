@@ -193,7 +193,8 @@ function isSystemFileModified(modifiedFiles: Set<string>): boolean {
       if (CLAUDE_EXCLUDED.some(ex => relPath.includes(ex))) continue;
 
       if (relPath.startsWith('hooks/') && (relPath.endsWith('.ts') || relPath.endsWith('.sh'))) return true;
-      if (relPath.startsWith('skills/') && (relPath.endsWith('.md') || relPath.endsWith('.ts') || relPath.endsWith('.yaml') || relPath.endsWith('.yml'))) return true;
+      // .tsx counts as system source too (ported from public PR #1742, @elhoim).
+      if (relPath.startsWith('skills/') && (relPath.endsWith('.md') || relPath.endsWith('.ts') || relPath.endsWith('.tsx') || relPath.endsWith('.yaml') || relPath.endsWith('.yml'))) return true;
       if (relPath === 'settings.json') return true;
       if (relPath === 'CLAUDE.md') return true;
       if (relPath.startsWith('agents/') && relPath.endsWith('.md')) return true;
@@ -207,7 +208,10 @@ function isSystemFileModified(modifiedFiles: Set<string>): boolean {
       const relPath = filePath.slice(LIFEOS_DIR.length + 1);
       if (LIFEOS_EXCLUDED.some(ex => relPath.includes(ex))) continue;
 
-      if ((relPath.startsWith('LIFEOS/') || relPath.includes('skills/')) && (relPath.endsWith('.md') || relPath.endsWith('.ts') || relPath.endsWith('.yaml') || relPath.endsWith('.yml'))) return true;
+      // .tsx counts as system source too (ported from public PR #1742, @elhoim).
+      // The prefix stays LIFEOS/: this tree has no PAI/ directory, so upstream's
+      // token would make the first disjunct dead here.
+      if ((relPath.startsWith('LIFEOS/') || relPath.includes('skills/')) && (relPath.endsWith('.md') || relPath.endsWith('.ts') || relPath.endsWith('.tsx') || relPath.endsWith('.yaml') || relPath.endsWith('.yml'))) return true;
       if (relPath.includes('/Tools/') && relPath.endsWith('.ts')) return true;
       if (relPath.includes('/Workflows/') && relPath.endsWith('.md')) return true;
       continue;

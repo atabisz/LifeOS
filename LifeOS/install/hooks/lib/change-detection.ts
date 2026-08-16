@@ -219,8 +219,18 @@ export function parseToolUseBlocks(transcriptPath: string): FileChange[] {
 /**
  * Normalize an absolute path to relative (to LIFEOS_DIR).
  */
+/**
+ * Path-boundary prefix test: `p` is `root` itself or a descendant. A bare
+ * startsWith is a STRING test, not a path test — `~/.claude-backup` and
+ * `~/.claude/LIFEOS-backup` both passed it and got treated as live system
+ * changes (public issue #1797, @Steffen025).
+ */
+function isUnderDir(p: string, root: string): boolean {
+  return p === root || p.startsWith(root + '/');
+}
+
 function normalizeToRelativePath(absolutePath: string): string {
-  if (absolutePath.startsWith(LIFEOS_DIR)) {
+  if (isUnderDir(absolutePath, LIFEOS_DIR)) {
     return relative(LIFEOS_DIR, absolutePath);
   }
   return absolutePath;
@@ -332,7 +342,12 @@ export function categorizeChange(path: string): ChangeCategory | null {
   // admits a SIBLING whose name merely begins with the root's
   // (`…/.claudeEXTRA/x.md` passes `startsWith('…/.claude')`). withinRoot derives
   // the relative form instead, so both roots are accepted and neither root's
-  // prefix-siblings are.
+  // prefix-siblings are. Upstream reached the same conclusion independently
+  // (public issue #1797, @Steffen025 — "path-boundary test, not string prefix")
+  // and fixed it with isUnderDir(); that helper is a POSIX-separator prefix
+  // test (`p.startsWith(root + '/')`), so it re-opens (2) on win32 where every
+  // path uses `\`. withinRoot/rootRelative is the separator-correct form of the
+  // same fix and is kept here.
   if (!withinRoot(path, CLAUDE_DIR) && !withinRoot(path, LIFEOS_DIR)) {
     return null;
   }

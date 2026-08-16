@@ -38,8 +38,11 @@ for (const __k of ["LIFEOS_DIR", "LIFEOS_CONFIG_DIR", "PROJECTS_DIR"]) {
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
+import { homedir } from "node:os";
 
-const HOME = process.env.HOME || "";
+// Upstream's chain, taken as-is: `|| ""` made every path below relative to cwd
+// when HOME is unset, which is the normal case on Windows (public issue #1729).
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir();
 const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LIFEOS");
 const IDEAL_DIR = join(LIFEOS_DIR, "USER", "TELOS", "IDEAL_STATE");
 const CURRENT_DIR = join(LIFEOS_DIR, "USER", "TELOS", "CURRENT_STATE");

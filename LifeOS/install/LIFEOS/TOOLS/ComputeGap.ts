@@ -29,8 +29,9 @@ for (const __k of ["LIFEOS_DIR", "LIFEOS_CONFIG_DIR", "PROJECTS_DIR"]) {
 
 import { readFileSync, existsSync, appendFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
-import { homedir } from "os";
+import { homedir } from "node:os";
 import { inference } from "./Inference";
+
 
 const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir();
 const LIFEOS_DIR = process.env.LIFEOS_DIR || join(HOME, ".claude", "LIFEOS");

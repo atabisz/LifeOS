@@ -4,7 +4,7 @@ last_updated_by: da
 last_reviewed: 2026-07-16
 last_reviewed_by: da
 convention: pai-freshness-v1
-version: 1.3.0
+version: 1.3.1
 ---
 
 # LifeOS — The Life Operating System Thesis
@@ -95,6 +95,12 @@ Every real assistant does one job: **understand your current state, understand y
 This loop is the purpose of the OS. Memory compounds so the DA understands current state better over time. Skills expand so the DA can take more actions to close the gap. Hooks automate so the system runs even when you're not looking at it. The Algorithm is the systematic version of this loop for every task the DA executes.
 
 This loop is not new — it is the direct descendant of **Desired Outcome Management (DOM)**, named in the 2016 [Real Internet of Things](https://example.com/blog/the-real-internet-of-things): users *"define goals, establish improvement models, capture behavioral data, receive ratings on progress, and get algorithmic recommendations for optimization."* Every current-state surface in the dashboard (the Life cluster) is a DOM surface; every dashboard section should therefore relate a current state to an ideal state and surface the next move that closes the gap — not merely display data. When judging any surface, DOM is the frame: *state → ideal → rating → recommendation.*
+
+### The Meta-Ideal-State — Euphoric Surprise
+
+Every climb has two summits. Each task carries its own specific ideal state — the ISA writes it down as testable criteria — and above every one of them sits the same universal goal: **euphoric surprise** in the human using the system. The moment you say out loud, "OMG, this is brilliant."
+
+This is the meta-ideal-state of every ISA. The specific ideal state says what done means for this task; euphoric surprise is what reaching it feels like when the system truly worked. Every ISA hill-climbs toward both at once — its own criteria, and that feeling — and its `## Vision` section is where the universal target takes specific shape: what euphoric surprise looks like for this particular work. Whatever the task, this is what the OS is for.
 
 ---
 
@@ -242,9 +248,9 @@ The diagram is the thesis in one frame: current state and ideal state are two in
 | `LIFEOS/DOCUMENTATION/LifeosSystemArchitecture.md` | Master architecture — subsystems, pipelines, instruction hierarchy |
 | `LIFEOS/DOCUMENTATION/Pulse/PulseSystem.md` | The Life Dashboard — modules, subsystems, operational details |
 | `LIFEOS/LIFEOS_SYSTEM_PROMPT.md` | Constitutional rules — what the DA must always do |
-| `~/Projects/LIFEOS/README.md` | Public-facing pitch — open-source LifeOS framework |
+| `github.com/danielmiessler/LifeOS` (README) | Public-facing pitch — open-source LifeOS framework |
 | `LIFEOS/USER/TELOS/` | Personal goals, mission, strategies — the ideal-state input |
 
 ---
 
-*Canonical LifeOS LifeOS thesis. Source-of-truth document. 2026-04-11.*
+*Canonical LifeOS thesis. Source-of-truth document. 2026-04-11.*

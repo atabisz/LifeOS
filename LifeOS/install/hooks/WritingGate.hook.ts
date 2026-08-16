@@ -3,7 +3,11 @@
 // in LIFEOS_DIR/LIFEOS_CONFIG_DIR/PROJECTS_DIR resolves to a shadow dir (#1404 / PR #1451, author jbmml).
 for (const __k of ["LIFEOS_DIR", "LIFEOS_CONFIG_DIR", "PROJECTS_DIR"]) {
   const __v = process.env[__k];
-  if (__v && /^\$\{?HOME\}?(\/|$)/.test(__v)) process.env[__k] = __v.replace(/^\$\{?HOME\}?/, process.env.HOME ?? "~");
+  // public issue #1729, @umair-a11y — homedir() instead of "~"/"" (HOME is unset on Windows).
+  // Upstream applied this to its SECOND, duplicate copy of this block, which never
+  // runs (this one rewrites ${HOME} first, so the second's regex no longer matches).
+  // Re-applied here, at the copy that is actually reachable.
+  if (__v && /^\$\{?HOME\}?(\/|$)/.test(__v)) process.env[__k] = __v.replace(/^\$\{?HOME\}?/, process.env.HOME ?? homedir());
 }
 
 /**
@@ -37,8 +41,9 @@ import { readHookInput, parseTranscriptFromInput } from "./lib/hook-io";
 import { appendFileSync, mkdirSync, existsSync, readFileSync } from "fs";
 import { createHash } from "crypto";
 import { dirname, join } from "path";
+import { homedir } from "node:os";
 
-const LIFEOS_DIR = process.env.LIFEOS_DIR || join(process.env.HOME!, ".claude", "LIFEOS");
+const LIFEOS_DIR = process.env.LIFEOS_DIR || join(homedir(), ".claude", "LIFEOS");
 const OBS_PATH = join(LIFEOS_DIR, "MEMORY", "OBSERVABILITY", "writing-gate.jsonl");
 const RUNS_PATH = join(LIFEOS_DIR, "MEMORY", "OBSERVABILITY", "pangram-runs.jsonl");
 const RUN_WINDOW_MS = 30 * 60 * 1000; // a run counts as "this turn" within 30 min
@@ -119,7 +124,7 @@ function freshRuns(): RunRec[] {
 function detectorAvailable(): boolean {
   if (process.env.PANGRAM_API_KEY) return true;
   try {
-    const env = readFileSync(join(process.env.HOME!, ".claude", ".env"), "utf8");
+    const env = readFileSync(join(homedir(), ".claude", ".env"), "utf8");
     return env.split("\n").some((l) => {
       if (!l.startsWith("PANGRAM_API_KEY=")) return false;
       return l.slice("PANGRAM_API_KEY=".length).replace(/^["']|["']$/g, "").trim().length > 0;

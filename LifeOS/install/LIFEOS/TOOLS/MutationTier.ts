@@ -33,8 +33,10 @@
  *   bun MutationTier.ts test                       (smoke test — exit 0 on pass)
  */
 
+// public issue #1747, @umair-a11y — isAbsolute()/sep instead of hardcoded "/"
 import { resolve as pathResolve, isAbsolute, sep } from "node:path";
 import { homedir } from "node:os";
+import { getPrincipalName } from "../../hooks/lib/identity";
 
 // ── Constants ──
 
@@ -165,7 +167,7 @@ function smokeTest(): number {
 
     // Tier B — KNOWLEDGE prefix
     {
-      path: pathResolve(CLAUDE_ROOT, "LIFEOS/MEMORY/KNOWLEDGE/People/{{PRINCIPAL_NAME}}.md"),
+      path: pathResolve(CLAUDE_ROOT, `LIFEOS/MEMORY/KNOWLEDGE/People/${getPrincipalName()}.md`),
       expected: "B",
       why: "KNOWLEDGE/People/* is append-with-audit",
     },
