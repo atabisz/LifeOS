@@ -27,9 +27,31 @@ export default function AppHeader() {
   const system = systemNav.filter(isEnabled);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const { observerMode, toggleObserverMode } = useObserverMode();
 
   useEffect(() => { setMobileMenuOpen(false); }, [pathname]);
+
+  // Publish the header's MEASURED height as --app-header-h, for the panes below that size
+  // themselves against "the viewport minus the header". It cannot be a constant here: Tier 1's
+  // nav is `flex-wrap` and grows a row whenever items wrap (narrow window, or a module list long
+  // enough to overflow), Tier 2 renders only inside System, and the mobile menu adds a block.
+  // globals.css carries a first-paint fallback; this refines it and keeps refining it.
+  // ResizeObserver on the header itself catches all three, so no pathname dependency is needed.
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const publish = () => {
+      const h = el.getBoundingClientRect().height;
+      if (h > 0) document.documentElement.style.setProperty("--app-header-h", `${h}px`);
+    };
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    // The last measured value is deliberately left in place on teardown — the header only
+    // unmounts with the whole tree, and clearing it would flash the fallback height.
+    return () => ro.disconnect();
+  }, []);
 
   // Browser-tab naming: every page reads "Pulse | <Page>" keyed off the first path segment.
   // Next's streamed metadata commit can land AFTER this effect on initial load and reset the
@@ -69,6 +91,7 @@ export default function AppHeader() {
 
   return (
     <header
+      ref={headerRef}
       className="sticky top-0 z-50 backdrop-blur-md"
       style={{ background: "rgba(6, 11, 26, 0.85)" }}
     >
