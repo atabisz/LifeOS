@@ -3280,6 +3280,45 @@ async function handleTelosFilePut(req: Request): Promise<Response> {
 // Anything after `**Detail:**` (or the rest of the body if no Detail marker)
 // becomes `detail`. Both fall back to "" when absent — back-compat preserved
 // because consumers that ignore summary/detail just see body unchanged.
+
+// A TELOS entry's `title` is a LABEL. It heads cards and modals (`.modal-title` is
+// capped at 26ch) and gets spliced mid-sentence into the hero narrative and the
+// graph-analysis summary — 13+ sites assume a short clause. But a one-line bullet
+// entry legitimately carries its whole explanation on the title line, which is how
+// a real GOALS.md is written, so the parser was handing those sites a 680-char
+// paragraph. Split the lead clause off as the label and push the remainder into
+// `summary`, where the detail surfaces already look. NOTHING IS DISCARDED: every
+// character stays in the payload, so shortening the heading is not a deletion.
+const TITLE_LABEL_MAX = 120
+const TITLE_LABEL_MIN = 24
+function splitTitleLabel(title: string): { label: string; rest: string } {
+  if (title.length <= TITLE_LABEL_MAX) return { label: title, rest: "" }
+
+  // Prefer a boundary the author placed. Sentence end requires 3+ word chars before
+  // the period so `e.g. ` and initials don't read as one; em/en dash must be spaced.
+  const cands: number[] = []
+  const sentence = /([A-Za-z0-9)\]"'’]{3,})\.\s/.exec(title)
+  if (sentence && sentence.index + sentence[1].length + 1 >= TITLE_LABEL_MIN) {
+    cands.push(sentence.index + sentence[1].length + 1)
+  }
+  const dash = title.search(/\s+[—–]\s+/)
+  if (dash >= TITLE_LABEL_MIN) cands.push(dash)
+
+  if (cands.length > 0) {
+    const cut = Math.min(...cands)
+    return {
+      label: title.slice(0, cut).trim(),
+      rest: title.slice(cut).replace(/^[\s—–]+/, "").trim(),
+    }
+  }
+
+  // No author boundary: wrap at the last word break inside the budget and mark the
+  // elision, so the label reads as continued rather than as the whole statement.
+  const brk = title.lastIndexOf(" ", TITLE_LABEL_MAX)
+  const cut = brk >= TITLE_LABEL_MIN ? brk : TITLE_LABEL_MAX
+  return { label: `${title.slice(0, cut).trim()}…`, rest: title.slice(cut).trim() }
+}
+
 function parseIdEntries(content: string, prefix: string): Array<{ id: string; title: string; body: string; summary: string; detail: string; references: string[] }> {
   if (!content) return []
   type Raw = { id: string; title: string; body: string }
@@ -3389,7 +3428,17 @@ function parseIdEntries(content: string, prefix: string): Array<{ id: string; ti
     })
     .map((e) => {
       const { summary, detail, references } = extractSummaryDetailRefs(e.body)
-      return { ...e, summary, detail, references }
+      // `rest` leads the summary so the sentence the author wrote stays in reading order.
+      // `body` is deliberately left whole — it is the raw source every detail view falls
+      // back to, so the split must be visible in the label, not in the payload.
+      const { label, rest } = splitTitleLabel(e.title)
+      return {
+        ...e,
+        title: label,
+        summary: rest ? (summary ? `${rest} ${summary}` : rest) : summary,
+        detail,
+        references,
+      }
     })
 }
 
