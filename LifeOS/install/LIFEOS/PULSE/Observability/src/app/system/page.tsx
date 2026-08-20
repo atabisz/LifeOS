@@ -358,7 +358,14 @@ function LifeosPageInner() {
   }
 
   if (!isViewing && indexData) {
-    return <WikiLanding data={indexData} />;
+    // The landing owns its own scrolling. `system/layout.tsx` gives this pane a fixed height and
+    // `overflow-hidden`, so with no scroll container here everything past the fold — most of
+    // Recent Changes — was unreachable. Same shape as the Docs landing.
+    return (
+      <div className="h-full overflow-y-auto">
+        <WikiLanding data={indexData} />
+      </div>
+    );
   }
 
   // Error state — fetch failed (e.g. 404 for an unknown slug)
