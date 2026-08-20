@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { localApiCall } from "@/lib/local-api";
+import { parseOpinions } from "@/lib/opinions";
 import EmptyStateGuide from "@/components/EmptyStateGuide";
 import HermesFiles from "@/components/HermesFiles";
 import {
@@ -245,6 +246,11 @@ export default function AssistantPage() {
   const { data: tasksData } = useQuery<TasksResponse>({ queryKey: ["assistant-tasks"], queryFn: () => localApiCall("/assistant/tasks"), refetchInterval: 15_000 });
   const { data: diaryData } = useQuery<{ entries: DiaryEntry[] }>({ queryKey: ["assistant-diary"], queryFn: () => localApiCall("/assistant/diary"), refetchInterval: 60_000 });
   const { data: opinionsData } = useQuery<{ raw: string }>({ queryKey: ["assistant-opinions"], queryFn: () => localApiCall("/assistant/opinions"), refetchInterval: 60_000 });
+
+  // The endpoint serves YAML as a raw string, so the parse belongs here, once per payload —
+  // not inline in the render, where it re-ran on every unrelated state change. See
+  // `@/lib/opinions` for why a hand parser and what shape it accepts.
+  const opinions = useMemo(() => parseOpinions(opinionsData?.raw ?? ""), [opinionsData?.raw]);
 
   // Cron CRUD — full source-of-truth list (system + user merged), plus
   // patch/delete/post mutations. Refresh via "assistant-cron" key.
@@ -1025,30 +1031,28 @@ export default function AssistantPage() {
             </Section>
 
             <Section title="Formed Opinions" dimension="creative">
-              {!opinionsData?.raw ? (
+              {opinions.length === 0 ? (
                 <div className="text-sm text-ink-3">No opinions yet</div>
               ) : (
                 <div className="space-y-3">
-                  {opinionsData.raw.split(/^\s*- topic:/m).slice(1).slice(0, 10).map((block, i) => {
-                    const topic = block.match(/^\s*"?([^"\n]+)"?\s*$/m)?.[1]?.trim() ?? "";
-                    const position = block.match(/position:\s*"?([^"\n]+)"?/)?.[1]?.trim() ?? "";
-                    const confidence = parseFloat(block.match(/confidence:\s*([\d.]+)/)?.[1] ?? "0");
-                    return (
-                      <div key={i} className="flex items-start gap-3">
-                        <div
-                          className="w-2 h-2 rounded-full mt-2 shrink-0"
-                          style={{ backgroundColor: `rgba(248, 123, 123, ${Math.max(0.2, confidence)})` }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm text-ink-1">{topic}</div>
-                          <div className="text-sm text-ink-2">{position}</div>
-                        </div>
-                        <span className="text-xs shrink-0 mono text-ink-3">
-                          {(confidence * 100).toFixed(0)}%
-                        </span>
+                  {opinions.map((op, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <div
+                        className="w-2 h-2 rounded-full mt-2 shrink-0"
+                        style={{ backgroundColor: `rgba(248, 123, 123, ${Math.max(0.2, op.confidence)})` }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm text-ink-1">{op.topic}</div>
+                        {/* pre-line so a `|` block scalar's own line breaks survive if the writer
+                            ever emits one; plain scalars fold to spaces, so existing content
+                            renders exactly as before. */}
+                        <div className="text-sm text-ink-2" style={{ whiteSpace: "pre-line" }}>{op.position}</div>
                       </div>
-                    );
-                  })}
+                      <span className="text-xs shrink-0 mono text-ink-3">
+                        {(op.confidence * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
             </Section>
