@@ -32,17 +32,27 @@ export default function AppHeader() {
 
   useEffect(() => { setMobileMenuOpen(false); }, [pathname]);
 
-  // Publish the header's MEASURED height as --app-header-h, for the panes below that size
+  // Publish the PERSISTENT rows' MEASURED height as --app-header-h, for the panes below that size
   // themselves against "the viewport minus the header". It cannot be a constant here: Tier 1's
   // nav is `flex-wrap` and grows a row whenever items wrap (narrow window, or a module list long
-  // enough to overflow), Tier 2 renders only inside System, and the mobile menu adds a block.
+  // enough to overflow), and Tier 2 renders only inside System.
   // globals.css carries a first-paint fallback; this refines it and keeps refining it.
-  // ResizeObserver on the header itself catches all three, so no pathname dependency is needed.
+  //
+  // The open mobile menu is subtracted back out rather than measured. It is a ~20-item nav list,
+  // so including it pushed --app-header-h past the viewport height, and the consumers are
+  // `calc(100vh - var())` with no lower clamp — /docs computes a NEGATIVE height there, which CSS
+  // floors at 0, collapsing the pane and resetting its scroll offset, so closing the menu returned
+  // you to the top of the document. Subtracting costs a little transient over-scroll while the menu
+  // is open, which is the strictly better failure. The menu is `md:hidden`, so at md+ it is
+  // `display: none` and its rect height is already 0 — the subtraction is a no-op there rather
+  // than a breakpoint the caller has to know about.
+  // ResizeObserver on the header catches wrap, Tier 2 and the menu, so no pathname dep is needed.
   useEffect(() => {
     const el = headerRef.current;
     if (!el) return;
     const publish = () => {
-      const h = el.getBoundingClientRect().height;
+      const menu = mobileMenuRef.current?.getBoundingClientRect().height ?? 0;
+      const h = el.getBoundingClientRect().height - menu;
       if (h > 0) document.documentElement.style.setProperty("--app-header-h", `${h}px`);
     };
     publish();

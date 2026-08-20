@@ -109,7 +109,14 @@
        `min-h-14` around a `flex-wrap` nav that grows a row when items wrap, and tier 2 renders
        only inside /system. The fallback is tier 1 at its minimum (`min-h-14` + a 1px border-b),
        which is the shortest the header is ever drawn, so a pane is briefly too tall rather
-       than clipped before hydration. */
+       than clipped before hydration.
+
+       Every consumer ALSO repeats this value as a `var()` fallback, and that is not redundancy:
+       an unresolved custom property is invalid at computed-value time, so the whole declaration
+       is dropped and the pane silently reverts to `auto` height with no error anywhere. Repeating
+       it means a tree that takes those components without this stylesheet degrades to a correct
+       constant instead of a collapsed layout. Change this value and the six `var()` fallbacks
+       together — `rg 'var\(--app-header-h' src/` finds them. */
     --app-header-h: calc(3.5rem + 1px);
   }
   html {

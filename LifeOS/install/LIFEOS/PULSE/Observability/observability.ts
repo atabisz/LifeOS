@@ -3294,15 +3294,25 @@ const TITLE_LABEL_MIN = 24
 function splitTitleLabel(title: string): { label: string; rest: string } {
   if (title.length <= TITLE_LABEL_MAX) return { label: title, rest: "" }
 
+  // Only the first MAX+1 characters can contain an acceptable boundary, so the search runs over
+  // that window rather than the whole title. This bounds the regexes below: they are applied to a
+  // fixed-length string, so their cost cannot grow with the title. Titles here come from
+  // user-writable markdown on a single-threaded server, and the sentence pattern's `{3,}` prefix
+  // backtracks, so an unbounded scan is a request-path hazard and not merely wasted work.
+  const window = title.slice(0, TITLE_LABEL_MAX + 1)
+
   // Prefer a boundary the author placed. Sentence end requires 3+ word chars before
   // the period so `e.g. ` and initials don't read as one; em/en dash must be spaced.
+  // Every candidate is bounded on BOTH sides — at least MIN so the label is not a stub, at most
+  // MAX so the declared budget is actually enforced rather than merely documented.
   const cands: number[] = []
-  const sentence = /([A-Za-z0-9)\]"'’]{3,})\.\s/.exec(title)
-  if (sentence && sentence.index + sentence[1].length + 1 >= TITLE_LABEL_MIN) {
-    cands.push(sentence.index + sentence[1].length + 1)
+  const sentence = /([A-Za-z0-9)\]"'’]{3,})\.\s/.exec(window)
+  if (sentence) {
+    const end = sentence.index + sentence[1].length + 1
+    if (end >= TITLE_LABEL_MIN && end <= TITLE_LABEL_MAX) cands.push(end)
   }
-  const dash = title.search(/\s+[—–]\s+/)
-  if (dash >= TITLE_LABEL_MIN) cands.push(dash)
+  const dash = window.search(/\s+[—–]\s+/)
+  if (dash >= TITLE_LABEL_MIN && dash <= TITLE_LABEL_MAX) cands.push(dash)
 
   if (cands.length > 0) {
     const cut = Math.min(...cands)
@@ -3699,7 +3709,7 @@ function parseProjects(raw: string): Array<{
   // Split a Work row's payload into title + trailing `key: value` fields. Only
   // pipe-segments that look like `<knownkey>: value` are treated as fields; any
   // leading segments (incl. ones containing a literal "|") stay part of the
-  // title, so a pipe inside a title isn't silently truncated (Cato F2).
+  // title, so a pipe inside a title isn't silently truncated.
   const WORK_KEYS = new Set(["status", "eta", "owner", "strategy"])
   const splitWorkRow = (payload: string): { title: string; fields: Record<string, string> } => {
     const segs = payload.split("|").map((s) => s.trim())
@@ -3722,7 +3732,7 @@ function parseProjects(raw: string): Array<{
   const workRe = /^\s*[-*]?\s*\*?\*?(W\d+[a-z]?)\*?\*?\s*:\s*(.+?)\s*$/i
   const seenProj = new Set<string>()
   return blocks
-    .filter((b) => { if (seenProj.has(b.id)) return false; seenProj.add(b.id); return true }) // dedupe by id (Cato F4)
+    .filter((b) => { if (seenProj.has(b.id)) return false; seenProj.add(b.id); return true }) // dedupe by id: first block wins
     .map((b) => {
       const bodyStr = b.body.join("\n")
       const status = normStatus(pickLabeledValue(bodyStr, "Status"))
